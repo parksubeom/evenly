@@ -2,9 +2,15 @@
 
 ```
 cd deck
-npm install          # 처음 한 번
-npm run build        # → ../deliverables/언덕위우리동네_기획서_v2.pptx
+npm install              # 처음 한 번 (pptxgenjs)
+npm run build:fake       # 가짜 결과로 시험 → ../deliverables/_test_기획서.pptx (전 장 워터마크)
+npm run build:real       # 실제 반출 결과 → ../deliverables/언덕위우리동네_기획서_final.pptx
 ```
-- `build_deck.js` : 슬라이드 28장 전체. 결과 자리는 `___` 와 주황 점선 박스(ph 함수)로 표시돼 있음
-- `img/` : 등고선 배경, 고도 단면, 예시 지도 등 이미지 (`make_images.py` 로 다시 만들 수 있음, matplotlib 필요)
-- 반출 결과가 들어오면 `___` 자리를 실제 값으로 바꾸는 작업을 여기서 합니다
+- 파이썬 쪽 그림(지도·산점도)은 matplotlib 이 필요합니다: `python3 -m pip install --user matplotlib`
+  (없어도 빌드는 되고, 그림 자리가 주황 점선 박스로 남고 누락 목록에 적힙니다)
+- 흐름: `results/<폴더>` → `tools/prepare_deck_data.py` → `deck/data/results.json` + `deck/img/results/*.png` → `build_deck.js` → pptx
+- 값이 없는 칸은 `___` / 주황 점선 박스로 남고 `deck/data/missing.txt` 에 "누락: 슬라이드, 값, 필요한 파일"이 적힙니다
+- 팀명·방문일은 반출 파일에 없어서 `deck/inputs.json` 에 직접 적습니다
+- 확인: `python3 ../tools/check_deck.py ../deliverables/_test_기획서.pptx` (남은 빈칸이 missing.txt 에 있는 곳뿐인지)
+- `npm run build:fake:partial` : join·parcel·sensitivity 가 없는 경우 시험
+- `build_deck.js` : 29장 (본문 25 + 부록 4). `img/` 의 기본 이미지는 `make_images.py` 로 다시 만들 수 있음

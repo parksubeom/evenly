@@ -1,6 +1,11 @@
 {
   "name": "evenly-deck",
   "private": true,
-  "scripts": { "build": "node build_deck.js" },
+  "scripts": {
+    "build": "node build_deck.js",
+    "build:fake": "python3 ../tools/make_fake_results.py && python3 ../tools/prepare_deck_data.py --src ../results/fake_export && node build_deck.js",
+    "build:fake:partial": "python3 ../tools/make_fake_results.py --partial && python3 ../tools/prepare_deck_data.py --src ../results/fake_export && node build_deck.js",
+    "build:real": "python3 ../tools/prepare_deck_data.py --src ../results/raw_export && node build_deck.js"
+  },
   "dependencies": { "pptxgenjs": "^3.12.0" }
 }

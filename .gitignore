@@ -17,6 +17,6 @@ package-lock.json
 results/fake_export/
 deck/data/
 deck/img/results/
-deliverables/_test_*
+deliverables/_*
 demo/evenly_demo.html
 _render/
