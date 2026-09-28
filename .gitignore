@@ -1,0 +1,15 @@
+# 파이썬 캐시
+__pycache__/
+*.pyc
+# 분석 코드의 중간·결과 폴더 (안심구역 안에서만 생김)
+analysis/*/work/
+analysis/*/output/
+analysis/*/testdata/
+# 반출 결과 원본 (비공개 레포라도 기본 제외. 필요하면 이 줄을 지우세요)
+results/raw_export/*
+!results/raw_export/.gitkeep
+# 노드
+node_modules/
+package-lock.json
+# 맥
+.DS_Store

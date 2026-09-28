@@ -1,0 +1,147 @@
+# -*- coding: utf-8 -*-
+"""
+04_validate.py ─ [4일차] "이 모델 믿을 만한가?" 검증 + "LX 데이터가 얼마나 중요한가?" 기여도 분석
+
+[실행]  python 04_validate.py      (03_hbi.py 다음)
+[하는 일과 결과 파일]  (모두 output/ 에 저장 → 반출 대상. 기획서 17·18장에 들어갈 숫자들)
+  1) 선정지 재현  → validation_sites.csv
+     서울시가 2025년에 고른 5곳(external/sites.csv) 주변 300m 의 평균 HBI 가
+     전체 격자 중 상위 몇 %인지(percentile). 0.9 이상 = 상위 10% 안 = 모델이 전문가 판단을 재현
+     → validation_new_candidates.csv : 선정지보다 HBI 가 높은데 선정 안 된 곳 (= 공모가 놓친 곳)
+  2) 구간 재현    → validation_routes.csv
+     external/od_pairs.csv 의 출발·도착 사이 경로 길이·시간. 대현산배수지공원 휠체어 우회(서울시 발표 약 770m)
+     와 비교하고, 현장실측 시간(measured_min)이 있으면 성인 속도 예측(adult_min)과 상관계수 계산
+  3) 기여도       → validation_ablation.csv
+     데이터를 하나씩 뺐을 때 결과가 얼마나 달라지는지 (DEM 제외 / 계단 제외 / 큰 격자로 집계 / DEM 1m)
+"""
+import os, numpy as np
+import config as C
+from lib.qio import log, csv_points, read_csv, write_csv
+from lib.qgraph import NearestIndex, spearman
+from lib.netload import load
+from lib.bload import load_buildings, targets, usable
+from lib.model import route
+
+os.makedirs(C.OUTPUT, exist_ok=True)
+b = load_buildings()
+net = load()
+nodes, e, s = net["nodes"], net["e"], net["s5"]
+T = "medical" if "medical_hbi" in b else targets(b)[0]    # 기준 목적지: 의료시설 (없으면 첫 번째 종류)
+H = b[f"{T}_hbi"]
+X, Y = b["x"], b["y"]
+log(f"기준 목적지: {T}")
+
+
+def grid(size, mask):
+    """건물들을 size m 격자로 묶어 격자별 평균 HBI.
+    반환: (격자x번호, 격자y번호, 평균, 개수) ← 건물 MIN_COUNT 개 이상 격자만, 그리고 (건물별 격자키, 전체 격자 평균 사전)"""
+    gx = np.floor(X / size).astype(np.int64)
+    gy = np.floor(Y / size).astype(np.int64)
+    key = gx * 10**7 + gy                                   # (gx, gy) 를 숫자 하나로 합친 격자 키
+    u, inv = np.unique(key[mask], return_inverse=True)      # 격자별로 묶기 (SQL의 GROUP BY 와 비슷)
+    cnt = np.bincount(inv)                                  # 격자별 건물 수
+    mean = np.bincount(inv, H[mask]) / cnt                  # 격자별 HBI 합 ÷ 수 = 평균
+    keep = cnt >= C.MIN_COUNT
+    return u[keep] // 10**7, u[keep] % 10**7, mean[keep], cnt[keep], key, dict(zip(u, mean))
+
+U = usable(b)                                               # 데이터 경계 근처 건물 제외 (config.EDGE_BUFFER)
+valid = np.isfinite(H) & U                                  # HBI 가 계산된 + 경계가 아닌 건물만
+cgx, cgy, cmean, ccnt, _, _ = grid(C.GRID, valid)
+
+# ── 1) 선정지 재현 ─────────────────────────────────────────
+rows, sx, sy = csv_points(os.path.join(C.EXTERNAL, "sites.csv"))
+if not rows:
+    log("sites.csv 좌표 없음 → 선정지 검증 건너뜀")
+else:
+    res = []
+    for r, x, y in zip(rows, sx, sy):
+        rad = float(r.get("radius_m") or 300)
+        m = valid & (np.hypot(X - x, Y - y) <= rad)         # 선정지 반경 안의 건물
+        hm = float(np.mean(H[m])) if m.any() else np.nan
+        pct = float(np.mean(cmean < hm)) if np.isfinite(hm) else np.nan   # 이 값보다 낮은 격자의 비율 = 백분위
+        res.append([r["name"], int(m.sum()), round(hm, 3),
+                    round(float(np.mean(H[m] >= C.HBI_BANDS[1])), 3) if m.any() else "",
+                    round(pct, 3), (pct >= 0.9) if np.isfinite(pct) else ""])
+    write_csv(os.path.join(C.OUTPUT, "validation_sites.csv"), ["name", "n_bld", "hbi_mean", "share_high", "percentile", "top10"], res)
+    log("선정지 재현:")
+    for r in res:
+        print("   ", r)
+    # 선정지 중 가장 낮은 HBI 보다 높고, 모든 선정지에서 500m 넘게 떨어진 격자 = 새 후보
+    thr = np.nanmin([r[2] for r in res]) if any(np.isfinite(r[2]) for r in res) else np.nan
+    if np.isfinite(thr):
+        cx, cy = (cgx + 0.5) * C.GRID, (cgy + 0.5) * C.GRID     # 격자 중심 좌표
+        d, _ = NearestIndex(np.c_[sx, sy]).query(np.c_[cx, cy])
+        sel = np.where((cmean > thr) & (d > 500))[0]
+        sel = sel[np.argsort(-cmean[sel])][:30]                   # HBI 높은 순 상위 30개
+        write_csv(os.path.join(C.OUTPUT, "validation_new_candidates.csv"), ["cell_x", "cell_y", "hbi_mean", "n_bld"],
+                  [[cx[i], cy[i], round(cmean[i], 3), int(ccnt[i])] for i in sel])
+        log(f"선정지 최저 HBI({thr:.2f})보다 높은 비선정 격자: {int(((cmean > thr) & (d > 500)).sum())}개")
+
+# ── 2) 구간 재현 / 실측 비교 ───────────────────────────────
+rows = [r for r in read_csv(os.path.join(C.EXTERNAL, "od_pairs.csv"))
+        if all((r.get(k) or "").strip() for k in ("o_lon", "o_lat", "d_lon", "d_lat"))]   # 좌표 4개가 다 있는 행만
+if rows:
+    from lib.qio import transform_xy, transformer
+    tf = transformer("EPSG:4326")
+    ox, oy = transform_xy(tf, [float(r["o_lon"]) for r in rows], [float(r["o_lat"]) for r in rows])
+    dx, dy = transform_xy(tf, [float(r["d_lon"]) for r in rows], [float(r["d_lat"]) for r in rows])
+    gi = np.where(net["giant"])[0]
+    idx = NearestIndex(nodes[gi])
+    oi = gi[idx.query(np.c_[ox, oy])[1]]                  # 출발점에서 가장 가까운 노드
+    di = gi[idx.query(np.c_[dx, dy])[1]]                  # 도착점에서 가장 가까운 노드
+    res = []
+    N = len(nodes)
+    for k, r in enumerate(rows):
+        te, le = route(N, e, s, oi[k], di[k], "elder")                 # 고령자
+        ta, _ = route(N, e, s, oi[k], di[k], "elder", speed=1.1)       # 성인(1.1m/s) — 팀 실측과 비교용
+        tw, lw = route(N, e, s, oi[k], di[k], "wheel")                 # 휠체어 (계단 회피)
+        tf_, lf = route(N, e, s, oi[k], di[k], "flat")                 # 평지 가정 (최단거리와 같음)
+        f = lambda v, d=1: round(v, d) if v == v else ""               # NaN 이면 빈 칸 (NaN != NaN 인 성질 이용)
+        res.append([r["name"], round(float(np.hypot(ox[k] - dx[k], oy[k] - dy[k]))), f(lf, 0), f(te / 60), f(ta / 60),
+                    f(lw, 0), f(tf_ / 60), r.get("measured_min", "")])
+    write_csv(os.path.join(C.OUTPUT, "validation_routes.csv"),
+              ["name", "straight_m", "net_m", "elder_min", "adult_min", "wheel_path_m", "flat_min", "measured_min"], res)
+    # 열 뜻: straight_m 직선거리 / net_m 길 따라 최단거리 / wheel_path_m 휠체어 실제 경로 길이 / *_min 분
+    log("구간 재현:")
+    for r in res:
+        print("   ", r)
+    m = [(float(r[4]), float(r[7])) for r in res if r[4] != "" and str(r[7]).strip()]
+    if len(m) >= 3:                                        # 실측이 3개 이상이면 상관계수
+        a = np.array(m)
+        log(f"실측 vs 예측(성인 기준) 상관 r={np.corrcoef(a[:, 0], a[:, 1])[0, 1]:.3f}, n={len(a)}")
+
+# ── 3) 기여도 분석 ─────────────────────────────────────────
+ab = []
+te, tf = b[f"{T}_t_elder"], b[f"{T}_t_flat"]
+v = valid & np.isfinite(tf)
+# DEM 제외: 평지 기준 순위와 경사 반영 순위를 비교
+top = v & (te >= np.nanquantile(te[v], 0.9))       # 경사 반영 시 가장 오래 걸리는 상위 10%
+ftop = v & (tf >= np.nanquantile(tf[v], 0.9))      # 평지 기준 상위 10%
+ab.append(["DEM 제외(평지 가정)", "경사 반영 상위10% 취약건물 중 평지 기준으로는 상위10%가 아닌 비율",
+           round((top & ~ftop).sum() / max(top.sum(), 1), 3)])
+ab.append(["DEM 제외(평지 가정)", "경사 반영 vs 평지 소요시간 순위상관(Spearman)", round(spearman(te[v], tf[v]), 3)])
+hi = v & (H >= C.HBI_BANDS[1])
+ab.append(["DEM 제외(평지 가정)", "HBI 1.8 이상 건물 중 평지 기준 소요시간이 중앙값 이하('양호')인 비율",
+           round((hi & (tf <= np.nanmedian(tf[v]))).sum() / max(hi.sum(), 1), 3)])
+# 계단 제외: 계단을 지날 수 있다고 잘못 가정하면 휠체어 시간을 얼마나 과소평가하나
+if f"{T}_t_wheel_stairok" in b:
+    w, w2 = b[f"{T}_t_wheel"], b[f"{T}_t_wheel_stairok"]
+    mm = np.isfinite(w) & np.isfinite(w2) & (w2 > 0)
+    ab.append(["계단 레이어 제외", "계단을 통행가능으로 잘못 가정할 때 휠체어 시간 과소추정 비율(평균)",
+               round(1 - 1 / np.mean(w[mm] / w2[mm]), 3) if mm.any() else ""])
+    ab.append(["계단 레이어 제외", "휠체어 도달불가 건물 비율(계단 반영 시)", round(float(np.mean(~np.isfinite(w[U]))), 3)])
+# 큰 격자 집계: 500m 로 뭉뚱그리면 고위험 건물이 평균에 묻히는 비율
+_, _, _, _, key, means = grid(C.GRID_COARSE, v)
+hid = [means.get(k, np.nan) < C.HBI_BANDS[0] for k in key[hi]]
+ab.append([f"{C.GRID_COARSE}m 격자 평균으로 집계", "HBI 1.8 이상 건물 중 평균이 1.3 미만인 격자에 가려진 비율",
+           round(float(np.mean(hid)), 3) if hid else ""])
+# DEM 해상도: 5m 와 1m 결과가 얼마나 같은가
+if f"{T}_hbi_dem1" in b:
+    h1 = b[f"{T}_hbi_dem1"]
+    mm = v & np.isfinite(h1)
+    ab.append(["DEM 5m vs 1m", "HBI 순위상관(Spearman)", round(spearman(H[mm], h1[mm]), 3)])
+    ab.append(["DEM 5m vs 1m", "HBI 평균 절대차", round(float(np.mean(np.abs(H[mm] - h1[mm]))), 3)])
+write_csv(os.path.join(C.OUTPUT, "validation_ablation.csv"), ["scenario", "metric", "value"], ab)
+log("기여도 분석:")
+for r in ab:
+    print("   ", r)

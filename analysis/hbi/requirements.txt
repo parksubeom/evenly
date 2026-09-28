@@ -1,0 +1,3 @@
+numpy
+GDAL (osgeo)  ← QGIS 3.x에 기본 포함
+선택: scipy (빠른 경로계산), matplotlib (지도 이미지)

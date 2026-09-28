@@ -1,0 +1,227 @@
+# 언덕 위 우리동네 – 분석 코드 따라하기 안내서
+
+> **이 문서만 보고 따라 하면 됩니다.** 파이썬을 처음 써도 괜찮습니다.
+> 각 코드 파일 맨 위에도 "이 파일이 뭘 하는지, 결과를 어떻게 보는지"가 적혀 있습니다.
+
+---
+
+## 0. 전체 그림 (5분 읽기)
+
+**무엇을 계산하나**
+집집마다 "가까운 병원·정류장까지 왕복하는 데, 경사 때문에 평지보다 몇 배 오래 걸리나"를 계산합니다.
+이 배수가 **언덕 부담 지수(HBI)** 입니다. 1.0이면 평지와 같고, 1.8 이상이면 고립 위험입니다.
+
+**순서** (각 단계는 파일 하나, 앞 단계의 결과를 다음 단계가 읽습니다)
+
+| 단계 | 파일 | 하는 일 | 걸리는 시간(예상) |
+|---|---|---|---|
+| 1 | `01_inspect.py` | 데이터 구조 확인 (파일 이름·좌표계·속성) | 1분 |
+| 2 | `02_network.py` | 길 네트워크 만들기 + 경사 계산 | 5~30분 |
+| 3 | `03_hbi.py` | 집마다 HBI 계산 | 5~30분 |
+| 4 | `04_validate.py` | 검증·기여도 분석 | 5분 |
+| 5 | `05_export.py` | 반출용 결과 만들기 | 5분 |
+| 6 | `06_parcel.py` | 국토정보필지에 결과 붙이기 (방문 때 센터가 제공) | 10분 |
+| 7 | `07_join_dong.py` | SKT 유동인구·KCB 소득과 행정동 결합·상관분석 (안심구역에서 받으면) | 2분 |
+| 8 | `08_sensitivity.py` | 민감도 분석: 설정을 바꿔도 결론이 유지되나 (질의응답 대비) | 10~30분 |
+
+**폴더 구조**
+```
+hbi/
+├─ config.py          ← 설정 파일. 여기만 고칩니다 (데이터 경로 등)
+├─ 01_inspect.py ~ 06_parcel.py   ← 단계별 실행 파일
+├─ run_all.py         ← 01~05 한 번에 실행
+├─ lib/               ← 계산 부품들 (고칠 필요 없음)
+├─ external/          ← 공개데이터 (선정지 좌표, 행정동 경계, 약국 등)
+├─ work/              ← 중간 결과 (반출 금지: 건물 단위 결과)
+├─ output/            ← 최종 결과 (이 폴더만 반출 신청)
+└─ tools/make_test_data.py  ← 연습용 가짜 데이터 만들기
+```
+
+**프론트엔드 개발자를 위한 대응표**
+
+| 파이썬 | JS / 프론트엔드 |
+|---|---|
+| `python 01_inspect.py` | `node index.js` |
+| `config.py` | `.env` / `config.js` |
+| `import config as C` → `C.GRID` | `import C from './config'` → `C.GRID` |
+| `None`, `True`, `False` | `null`, `true`, `false` |
+| `# 주석` | `// 주석` |
+| `f"{x}개"` | `` `${x}개` `` |
+| `r"C:\data"` | 역슬래시를 그대로 쓰는 문자열 (윈도우 경로는 꼭 `r` 붙이기) |
+| 들여쓰기(스페이스 4칸)로 블록 구분 | `{ }` 로 블록 구분 → **들여쓰기를 함부로 바꾸면 오류** |
+
+---
+
+## 1. 실행 창 여는 법 (안심구역 Windows PC)
+
+안심구역에는 일반 Python 대신 **QGIS 안에 들어 있는 Python**을 씁니다. 방법은 두 가지입니다.
+
+### 방법 A. OSGeo4W Shell (권장)
+1. 윈도우 시작 버튼 → "OSGeo4W Shell" 검색 → 실행 (검은 명령창이 뜸)
+2. 이 폴더로 이동: `cd /d D:\작업폴더\hbi`  (`/d` 는 드라이브가 바뀔 때 필요)
+3. 확인: `python --version` 이 3.x 로 나오면 준비 끝
+4. 이후 `python 01_inspect.py` 처럼 실행
+
+> OSGeo4W Shell이 없으면 QGIS 설치 폴더(예: `C:\Program Files\QGIS 3.32.3\`)의 `OSGeo4W.bat` 를 더블클릭해도 같은 창이 뜹니다.
+
+### 방법 B. QGIS Python 콘솔 (A가 안 될 때)
+1. QGIS 실행 → 메뉴 **플러그인 → Python 콘솔**
+2. 콘솔 아래 입력줄에 다음을 한 줄씩 입력 (경로는 실제 폴더로)
+   ```python
+   import os, sys; os.chdir(r"D:\작업폴더\hbi"); sys.path.insert(0, os.getcwd())
+   exec(open("01_inspect.py", encoding="utf-8").read())
+   ```
+3. 다음 단계는 파일 이름만 바꿔서 `exec(open("02_network.py", encoding="utf-8").read())`
+4. 주의: 콘솔에서는 `run_all.py` 를 쓰지 마세요. `config.py` 를 고친 뒤에는 먼저
+   `import importlib, config; importlib.reload(config)` 를 입력하세요 (안 하면 예전 설정으로 돎).
+
+---
+
+## 2. 방문 전 준비 (집에서, 내 PC)
+
+1. 번들 풀기: `hbi_code_bundle_v4.txt` 가 있는 폴더에서 `python hbi_code_bundle_v4.txt`
+   → `hbi/` 와 `hbi_geopandas/` 폴더가 생깁니다.
+2. 연습용 가짜 데이터 만들기: `cd hbi` → `python tools/make_test_data.py`
+3. `config.py` 를 메모장(또는 VS Code)으로 열어 두 줄 수정
+   ```python
+   DATA_ROOT_MAP = r"testdata/map"
+   DATA_ROOT_DEM = r"testdata/dem"
+   ```
+4. `python run_all.py` → 마지막에 `완료 → output/ (반출 신청 대상)` 이 나오면 성공
+5. **연습이 끝나면 3번에서 바꾼 경로를 원래대로 되돌리기**
+
+맥북에서 연습할 때 Python 경로: `/Applications/QGIS.app/Contents/MacOS/bin/python3`
+(예: `/Applications/QGIS.app/Contents/MacOS/bin/python3 run_all.py`)
+
+---
+
+## 3. 안심구역 1일차 따라하기
+
+### 3-1. 번들 풀기
+안심구역 PC에서 반입된 `hbi_code_bundle_v4.txt` 가 있는 폴더를 열고, 1장의 방법으로 실행 창을 연 뒤
+```
+python hbi_code_bundle_v4.txt
+cd hbi
+```
+
+### 3-2. 데이터 경로 넣기 (config.py)
+1. 윈도우 탐색기에서 제공받은 **수치지형도 폴더**를 찾아 주소창 클릭 → 경로 복사
+2. `config.py` 를 메모장으로 열고 `DATA_ROOT_MAP = r"..."` 의 따옴표 안에 붙여넣기
+3. DEM 5m 폴더도 같은 방식으로 `DATA_ROOT_DEM` 에
+4. DEM 1m 을 받았다면 `DATA_ROOT_DEM1M = r"..."` (안 받았으면 `None` 그대로)
+5. 저장 (메모장: 파일 → 저장, 인코딩이 UTF-8 인지 확인)
+
+### 3-3. 구조 확인
+```
+python 01_inspect.py
+```
+화면을 보고 아래 표대로 판단합니다.
+
+| 화면에 이렇게 나오면 | 이렇게 고치세요 (config.py) |
+|---|---|
+| `shp 파일 총 0개` | `DATA_ROOT_MAP` 경로가 틀림. 폴더를 다시 복사 |
+| `[없음] sidewalk_cl ...` | 1번 목록에서 보도중심선에 해당하는 실제 파일명 글자를 `LAYERS["sidewalk_cl"]` 목록에 추가 |
+| `prj 없음 → 추정 ...` 이고 범위 x가 80만~120만 | `DEFAULT_CRS = "EPSG:5179"` |
+| `BPRP_SE 분포` 에 `BDU001` 이 없음 | 분포에 보이는 주거용 코드로 `RESIDENTIAL_USE` 수정 |
+| 속성 이름이 `BPRP_SE` 가 아님 | `COL["bld_use"]` 를 실제 이름으로 |
+| `DEM 5m: 파일 0개` | `DATA_ROOT_DEM` 경로 확인 |
+| `scipy 없음` | 문제 없음. 느려질 뿐 결과는 같음 → 3-4에서 범위를 작게 |
+
+### 3-4. 작은 범위로 시험 실행
+1. 01_inspect 화면의 `범위 x ...~..., y ...~...` 에서 가운데쯤 2km×2km 를 골라 `config.py` 에 입력
+   ```python
+   AREA_BBOX = [194000, 541000, 196000, 543000]   # 예시. 실제 범위 숫자 안에서 고르기
+   ```
+2. `python 02_network.py` → `python 03_hbi.py` → `python 05_export.py`
+3. 끝까지 되면 `AREA_BBOX = None` 으로 되돌리기 (2일차에 전체 실행)
+
+### 3-5. 나오기 전에 메모할 것 (데이터 값은 적지 않기)
+- `work/inspect_report.txt` 의 레이어 목록·좌표계 부분
+- 오류가 났다면 **빨간 오류 메시지의 마지막 줄**과 몇 번 파일에서 났는지
+
+---
+
+## 4. 2~5일차
+
+| 일차 | 명령 | 확인할 것 (화면) |
+|---|---|---|
+| 2 | `python 02_network.py` (DEM 1m 있으면 `--dem1m` 붙이기) | "최대 연결망 노드 비율" 90% 이상 / "노드 고도 결측" 5% 이하 |
+| 3 | `python 03_hbi.py` | "네트워크 연결" 95% 이상 / HBI 중앙값이 1.0~1.5 사이 |
+| 3 | `external/od_pairs.csv`, `sites.csv` 를 메모장으로 열어 현장실측 좌표·시간, 화곡동 좌표 입력 | |
+| 4 | `python 04_validate.py` | 선정지 percentile, 대현산 wheel_path_m, 기여도 표 |
+| 3 | `config.py` 에 `DATA_ROOT_PARCEL`(센터가 준 필지 폴더, 서울 파일만 있는 폴더) 입력 → `python 06_parcel.py` | "필지 N개", 지목 '대' 필지 수 |
+| 3 | SKT·KCB 파일을 받았으면 `config.py` 맨 아래 `JOIN_DATA` 채우기 → `python 07_join_dong.py` | "코드 방식 ... 로 N/M개 행정동 결합" 에서 N이 충분한지 |
+| 4 | `python 08_sensitivity.py` (선택) | 순위상관이 0.9 이상이면 "가정을 바꿔도 결론 유지" |
+| 5 | `python 05_export.py` 를 한 번 더(최종) → 아래 "반출 전 체크리스트" 확인 → **반출 신청** |  |
+
+한 번에 돌리려면 `python run_all.py` (DEM 1m 포함 `--dem1m`, 민감도 포함 `--sens`)
+`DATA_ROOT_PARCEL` 이나 `JOIN_DATA` 경로를 채워 두면 06·07 도 자동으로 함께 실행됩니다.
+
+### 반출 전 체크리스트 (output 폴더)
+밖에서는 원자료를 다시 계산할 수 없으니, 반출 신청 전에 아래가 모두 있는지 확인하세요.
+- [ ] `summary.csv` — 목적지별 요약 (기획서 16장)
+- [ ] `grid_hbi.csv`, `grid_hbi_medical.gpkg` 등 — 격자 결과·지도 (16장, 본선 데모)
+- [ ] `dong_hbi.csv` — 행정동 결과 (weight_all·weight_high 열 포함 → 밖에서 고령인구 추정)
+- [ ] `validation_sites.csv`, `validation_routes.csv`, `validation_new_candidates.csv`, `validation_ablation.csv` (17·18장)
+- [ ] `parcel_summary.csv`, `parcel_by_legal_dong.csv` (필지 결합)
+- [ ] `join_summary.csv`, `join_*.csv` (SKT·KCB 를 썼다면, 19장)
+- [ ] `sensitivity.csv` (민감도, 질의응답)
+- [ ] `map_*.png` (matplotlib 이 있을 때만. 없으면 gpkg 로 밖에서 지도 제작)
+
+### 데이터 경계 처리
+받은 도엽 범위의 가장자리에서 500m 안쪽 건물은 모든 통계에서 자동으로 빠집니다 (`config.EDGE_BUFFER`).
+경계 근처 집은 가장 가까운 병원이 데이터 밖에 있을 수 있어 시간이 부풀려지기 때문입니다.
+03단계 화면의 "데이터 경계 500m 이내 건물 N개" 비율이 50%를 넘으면 너무 많이 빠지는 것이니 `EDGE_BUFFER = 300` 으로 줄이세요.
+
+---
+
+## 5. 공개데이터 (external 폴더)
+
+| 파일 | 내용 | 상태 |
+|---|---|---|
+| `sites.csv` | 서울시 2025 선정지 5곳 좌표 (lon=경도, lat=위도) | 입력됨 (근사 좌표, note 열 참고. 화곡동은 수정 권장) |
+| `od_pairs.csv` | 검증 구간 출발·도착 좌표, `measured_min` = 실측 분 | 대현산배수지공원 입력됨, 현장실측 3줄은 직접 입력 |
+| `dong_boundary.geojson` | 서울 행정동 경계 426개 (ADM_CD = 행안부 10자리, ADM_CD_STAT = 통계청 8자리) | 입력됨 |
+| `pharmacy.csv` | 약국 `name, lon, lat` | 비어 있음 (없어도 의료시설 기준으로 분석됨) |
+| `elderly_pop.csv` | 행정동 코드 `adm_cd`, 65세 이상 인구 `pop65` | 비어 있음 → 반출 후 밖에서 `tools/outside_elderly.py` 로 추정 |
+
+CSV는 메모장으로 열어 쉼표로 구분해서 입력하면 됩니다. 좌표는 네이버·카카오 지도에서 위치를 우클릭하면 나오는 **경위도**(예: 127.0215, 37.5569)를 쓰세요. 엑셀로 저장할 때는 "CSV UTF-8" 형식으로 저장하세요.
+
+---
+
+## 6. 반출 원칙
+
+- **`output/` 만 반출 신청** (격자·행정동 집계, 요약 통계, 지도 이미지)
+- 건물이 5개 미만인 격자·동은 자동으로 빠집니다 (`config.MIN_COUNT`)
+- `work/` 는 건물 단위라 **반출하지 않습니다.** 필지의 소유·공시지가 정보는 읽지도 않습니다.
+
+---
+
+## 7. 자주 나는 오류
+
+| 오류 메시지 (마지막 줄) | 원인과 해결 |
+|---|---|
+| `No module named 'osgeo'` | 일반 Python으로 실행함 → OSGeo4W Shell 또는 QGIS 콘솔 사용 |
+| `No module named 'config'` | 폴더 위치가 틀림 → `cd` 로 `hbi` 폴더 안에 들어가서 실행 (콘솔은 `sys.path.insert` 줄 먼저) |
+| `FileNotFoundError: ... network.npz` | 앞 단계를 안 돌림 → 02 → 03 순서대로 |
+| `07_join_dong` 에서 "결합된 동이 너무 적습니다" | `JOIN_DATA` 의 `code_col` 이 실제 코드 열 이름인지, 파일을 열어 확인 |
+| `SyntaxError` 또는 `IndentationError` | config.py 를 고치다 따옴표·쉼표를 지웠거나 들여쓰기가 바뀜 → 해당 줄 확인 |
+| `보도중심선/도로중심선이 없습니다` | 3-3 표의 `[없음]` 해결 방법 참고 |
+| `목적지가 없습니다` | 건물 용도 코드가 다름 → 01_inspect 의 BPRP_SE 분포 확인 후 `MEDICAL_USE` 수정 |
+| `MemoryError` 또는 너무 느림 | `AREA_BBOX` 로 구 하나씩 나눠서 실행 |
+| `swig/python detected a memory leak` | 무해한 경고. 무시 |
+| 한글이 `???` 로 보임 | `SHP_ENCODING = "UTF-8"` 로 바꿔 보기 |
+
+---
+
+## 8. 안심구역 밖에서 (반출 후)
+- 고령인구 추정: 행정안전부 인구 파일을 받아 `python tools/outside_elderly.py dong_hbi.csv 인구파일.csv`
+- 결과 지도: `grid_hbi_medical.gpkg` 를 QGIS에서 열어 색칠 (05_export.py 맨 위 설명)
+- 본선 데모: `grid_hbi.csv` 의 `elder_min`(경사 반영)·`flat_min`(평지 가정)·`hbi_mean` 을 미리보기 화면에 넣으면 됩니다
+
+## 9. 모델 요약 (기획서·질의응답용)
+
+- **고령자:** 평지 0.8m/s. 오르막은 Tobler 보행함수로 느려지고, 내리막은 같은 경사 오르막 부담의 50%만큼 느려짐. 계단은 최소 경사 25%로 보고 1.2배 가중
+- **휠체어:** 평지 1.0m/s. 경사가 1/12(8.3%)를 넘으면 시간 10배(사실상 회피), 계단은 통행 불가
+- **HBI** = 경사 반영 왕복시간 ÷ 평지 가정 왕복시간 (귀갓길 편도 배수 `home_ratio` 도 함께 산출)
+- 다리·터널 위는 경사 0, 경사 ±40% 초과는 오류로 보고 잘라냄
