@@ -25,10 +25,14 @@ evenly/
 │  ├─ hbi/                기본 버전: QGIS 내장 Python (numpy + GDAL)  ← 실제로 쓰는 것
 │  └─ hbi_geopandas/      대체 버전: geopandas 환경용 (v2 기능까지만)
 ├─ tools/
-│  └─ build_bundle.py     analysis/ → 반입용 txt 번들 만들기
+│  ├─ build_bundle.py     analysis/ → 반입용 txt 번들 만들기
+│  ├─ make_fake_results.py  가짜 반출 결과 (파이프라인 시험용, results/fake_export)
+│  ├─ prepare_deck_data.py  반출 결과 → deck/data/results.json + 결과 그림
+│  └─ check_deck.py        만든 pptx 에 남은 빈칸 점검
 ├─ deliverables/          제출·반입용 완성 파일 (기획서 pptx, 코드 번들 txt)
 ├─ results/
-│  └─ raw_export/         안심구역에서 반출 승인받은 파일을 그대로 넣는 곳 (git 제외)
+│  ├─ raw_export/         안심구역에서 반출 승인받은 파일을 그대로 넣는 곳 (git 제외)
+│  └─ fake_export/        가짜 결과 (자동 생성, git 제외)
 ├─ deck/                  기획서 PPT 생성기 (Node + pptxgenjs)
 ├─ demo/                  본선 데모 화면 (미리보기 html + 생성 스크립트)
 └─ docs/                  신청서 문안, 일정·체크리스트, 예상 질의응답, 결정 기록, 출처, 데이터정의서
@@ -58,14 +62,22 @@ python3 tools/build_bundle.py v5          # → deliverables/hbi_code_bundle_v5.
 ```
 반입자료를 바꾸면 심의가 다시 필요할 수 있으니, 교체 전에 센터에 먼저 확인합니다.
 
-### B. 반출 결과를 받았을 때 → 기획서 채우기
-1. 반출 승인된 파일을 전부 `results/raw_export/` 에 넣기 (파일명 그대로)
-2. `docs/02_일정_체크리스트.md` 의 "반출 파일 체크리스트"로 빠진 파일 확인
-3. 고령인구 추정: `python3 analysis/hbi/tools/outside_elderly.py results/raw_export/dong_hbi.csv 인구파일.csv`
-4. 기획서 빈칸(`___`) 채우기 → `deck/` 생성기 실행 → `deliverables/` 에 새 pptx
+### B. 반출 결과를 받았을 때 → 기획서 완성본 한 번에
+```
+cd deck && npm run build:real        # → deliverables/언덕위우리동네_기획서_final.pptx + deck/data/missing.txt
+```
+그 전에 준비할 것 (처음 한 번: `cd deck && npm install`, `python3 -m pip install --user matplotlib`)
+1. 반출 승인된 파일을 전부 `results/raw_export/` 에 넣기 (파일명 그대로, git 에는 안 올라감)
+2. 고령인구 추정표: `cd results/raw_export && python3 ../../analysis/hbi/tools/outside_elderly.py dong_hbi.csv 인구파일.csv`
+   (결과 `dong_hbi_with_elderly.csv` 가 **현재 폴더**에 생기므로 꼭 raw_export 안에서 실행)
+3. `deck/inputs.json` 에 팀명·안심구역 방문일 5개 적기
+4. `npm run build:real` 후 `deck/data/missing.txt` 를 열어 남은 빈칸 확인 → 파일을 더 넣고 다시 실행
+5. 점검: `python3 tools/check_deck.py deliverables/언덕위우리동네_기획서_final.pptx` (빈칸이 missing.txt 에 있는 곳뿐인지, 워터마크 0장인지)
+
+결과가 오기 전 시험: `cd deck && npm run build:fake` (가짜 결과 → `deliverables/_test_기획서.pptx`, 전 장 "테스트 데이터 — 제출 금지")
 
 ### C. 본선 데모 갱신
-`demo/page_template.html` 에 실제 `grid_hbi.csv` 를 넣어 다시 생성 (현재 `hbi_preview.html` 은 공개 지형으로 만든 미리보기)
+`python3 demo/build_demo.py` → `demo/evenly_demo.html` (반출된 `grid_hbi.csv` 로 생성, 외부 요청 없는 html 한 파일). 시험은 `--src results/fake_export`
 
 ## 이름 규칙
 - 서비스·레포 이름은 **evenly** (문서에서는 소문자 그대로, 한글 표기는 "이븐리"), 지표 이름은 **HBI**
