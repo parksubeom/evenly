@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>evenly · 언덕 부담 지도</title>
+<style>
+:root{
+  --paper:#EDF0EA; --panel:#F7F8F5; --ink:#1F2A24; --ink2:#4E5C54; --line:#CBD3CC; --mapbg:#F7F9F7; --bnd:#9AA69F; --bnd2:#D5DDD7;
+  --g1:#7FA88E; --g2:#F2D16B; --g3:#E8743B; --g4:#B23A2A; --warn:#B23A2A;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#151B18; --panel:#1C2420; --ink:#E4EAE5; --ink2:#A3B0A8; --line:#34403A; --mapbg:#1A211D; --bnd:#6F7D75; --bnd2:#2C3631; } }
+:root[data-theme="dark"]{ --paper:#151B18; --panel:#1C2420; --ink:#E4EAE5; --ink2:#A3B0A8; --line:#34403A; --mapbg:#1A211D; --bnd:#6F7D75; --bnd2:#2C3631; }
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,sans-serif;
+  font-size:16px;line-height:1.6;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+.note{background:var(--ink);color:var(--paper);font-size:13.5px;padding:10px 20px;line-height:1.5}
+.note.fake{background:var(--warn);color:#fff}
+.note b{font-weight:700}
+.wrap{max-width:1120px;margin:0 auto;padding:0 16px}
+header{padding:40px 0 22px}
+.brand{font-size:15px;font-weight:700;letter-spacing:.02em;color:var(--ink2);margin:0 0 6px}
+.brand span{color:var(--g1)}
+h1{font-size:clamp(30px,5.4vw,54px);line-height:1.1;margin:0;font-weight:700;letter-spacing:-0.02em}
+.lede{font-size:17px;color:var(--ink2);margin:14px 0 0;max-width:38em}
+.controls{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin:0 0 14px}
+.controls label{font-size:13.5px;color:var(--ink2);margin-right:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{font:inherit;font-size:14px;padding:6px 12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;border-radius:999px;min-height:36px}
+.chips button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+select{font:inherit;font-size:14px;padding:6px 10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);min-height:36px;max-width:100%}
+.stage{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,1fr);gap:28px;align-items:start;padding-bottom:48px}
+.mapbox{position:relative;border:1px solid var(--line);background:var(--mapbg);aspect-ratio:1/1;overflow:hidden}
+canvas{display:block;width:100%;height:100%;cursor:crosshair;touch-action:manipulation}
+.scale{position:absolute;left:10px;bottom:10px;background:rgba(247,248,245,.9);color:#1F2A24;font-size:12px;padding:3px 8px;display:flex;align-items:center;gap:8px}
+#sb{display:block;height:4px;background:#1F2A24}
+.panel{background:var(--panel);border:1px solid var(--line);padding:20px}
+.modes{display:flex;border:1px solid var(--ink);margin-bottom:16px}
+.modes button{flex:1;font:inherit;font-size:14px;font-weight:600;padding:10px 4px;background:transparent;color:var(--ink);border:0;cursor:pointer;line-height:1.3}
+.modes button+button{border-left:1px solid var(--ink)}
+.modes button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+button:focus-visible,select:focus-visible{outline:3px solid var(--g3);outline-offset:2px}
+.legend{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink2);margin-bottom:6px}
+.ramp{flex:1;height:10px;background:linear-gradient(90deg,var(--g1),var(--g2),var(--g3),var(--g4))}
+.legend-cap{font-size:13px;color:var(--ink2);margin:0 0 18px}
+.pick{border-top:1px solid var(--line);padding-top:16px}
+.pick .hint{color:var(--ink2);font-size:15px;margin:0}
+.big{display:flex;align-items:baseline;gap:12px;margin:6px 0 2px;flex-wrap:wrap}
+.big .from{font-size:28px;font-weight:600;color:var(--ink2)}
+.big .arrow{color:var(--ink2)}
+.big .to{font-size:44px;font-weight:700;line-height:1}
+.pick .cap{font-size:14px;color:var(--ink2);margin:0 0 14px}
+dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;font-size:14.5px}
+dt{color:var(--ink2)} dd{margin:0;font-weight:500}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 0 18px}
+.stats div{border-top:2px solid var(--ink);padding-top:6px}
+.stats b{display:block;font-size:22px;line-height:1.2}
+.stats span{font-size:12.5px;color:var(--ink2)}
+section{padding:48px 0;border-top:1px solid var(--line)}
+h2{font-size:clamp(22px,3vw,30px);line-height:1.25;margin:0 0 10px;font-weight:700;letter-spacing:-0.01em}
+.sub{color:var(--ink2);margin:0 0 24px;max-width:40em}
+.bar{height:14px;background:var(--line);position:relative;margin:8px 0 4px}
+.bar i{position:absolute;left:0;top:0;bottom:0;background:var(--ink)}
+.bar .mark{position:absolute;top:-6px;bottom:-6px;width:2px;background:var(--g4)}
+.sites{display:grid;gap:18px;max-width:720px}
+.site button{all:unset;cursor:pointer;display:block;width:100%}
+.site h3{font-size:17px;margin:0;font-weight:600}
+.site .meta{font-size:14px;color:var(--ink2)}
+ol.cand{list-style:none;margin:0;padding:0;max-width:760px}
+.cand li{border-top:1px solid var(--line)}
+.cand li:last-child{border-bottom:1px solid var(--line)}
+.cand button{width:100%;display:grid;grid-template-columns:3ch 1fr auto;gap:14px;align-items:baseline;text-align:left;font:inherit;color:inherit;
+  background:transparent;border:0;padding:14px 4px;cursor:pointer}
+.cand button:hover{background:var(--panel)}
+.cand .rk{font-weight:700;color:var(--ink2)}
+.cand .w{font-weight:600}
+.cand .d{display:block;font-size:14px;color:var(--ink2);font-weight:400}
+.cand .h{font-size:22px;font-weight:700}
+footer{padding:36px 0 60px;color:var(--ink2);font-size:14px;border-top:1px solid var(--line)}
+footer p{max-width:46em;margin:0 0 10px}
+.word{font-weight:800;letter-spacing:.01em}.word span{color:var(--g1)}
+@media (max-width:860px){ .stage{grid-template-columns:1fr} }
+@media (max-width:480px){ .modes button{font-size:13px;padding:9px 2px} .big .to{font-size:38px} .stats b{font-size:19px} .cand .h{font-size:19px} }
+@media (prefers-reduced-motion: reduce){ *{transition:none!important;scroll-behavior:auto!important} }
+</style>
+</head>
+<body>
+<div class="note" id="note"></div>
+<div class="wrap">
+<header>
+  <p class="brand"><span class="word">even<span>ly</span></span> · 이븐리</p>
+  <h1>어디에 살든, 7분은 7분이어야 하니까</h1>
+  <p class="lede">서울 종로·중·관악·광진·강서구의 주거 건물마다, 가까운 필수시설까지 왕복하는 데 경사 때문에 평지보다 몇 배가 걸리는지 계산해 250m 칸으로 묶었습니다.</p>
+</header>
+
+<div class="controls">
+  <div><label id="gul">자치구</label><div class="chips" id="gus" role="group" aria-labelledby="gul"></div></div>
+  <div><label for="tgt">목적지</label><select id="tgt"></select></div>
+</div>
+
+<div class="stage">
+  <div class="mapbox"><canvas id="map" role="img" aria-label="언덕 부담 지수 격자 지도"></canvas><div class="scale"><span id="sb"></span><span id="sbl">1km</span></div></div>
+  <aside class="panel">
+    <div class="modes" role="group" aria-label="지도 보기 방식">
+      <button type="button" data-mode="flat" aria-pressed="false">평지로 계산</button>
+      <button type="button" data-mode="slope" aria-pressed="false">경사 반영</button>
+      <button type="button" data-mode="hbi" aria-pressed="true">언덕 부담 지수</button>
+    </div>
+    <div class="legend"><span id="lg0">1.0</span><div class="ramp"></div><span id="lg1">2.2 이상</span></div>
+    <p class="legend-cap" id="lgcap"></p>
+    <div class="stats" id="stats"></div>
+    <div class="pick" id="pick" aria-live="polite">
+      <p class="hint">지도에서 칸을 눌러 보세요. "평지로 계산"과 "경사 반영"을 번갈아 누르면 지도가 어떻게 달라지는지 보입니다.</p>
+    </div>
+  </aside>
+</div>
+
+<section>
+  <h2>서울시가 고른 곳을 모델도 골랐나</h2>
+  <p class="sub">2025년 고지대 이동편의시설 우선 설치대상지 5곳 주변의 평균 지수가, 전체 칸 중 상위 몇 %인지입니다. 빨간 선이 상위 10% 기준입니다. 누르면 지도에서 보여 줍니다.</p>
+  <div class="sites" id="sites"></div>
+</section>
+
+<section id="candsec">
+  <h2>선정되지 않았지만 더 가파른 곳</h2>
+  <p class="sub">선정지 5곳 중 가장 낮은 지수보다 높고, 선정지에서 500m 넘게 떨어진 칸입니다. 누르면 지도에서 위치를 보여 줍니다.</p>
+  <ol class="cand" id="cand"></ol>
+</section>
+
+<footer>
+  <p>계산 방법: 고령자 평지 속도 0.8m/s, 오르막은 Tobler 보행함수, 내리막은 같은 경사 오르막 부담의 50%. 집에서 가장 가까운 시설까지 왕복 시간을 구하고, 같은 경로를 평지로 가정한 시간으로 나눈 값이 언덕 부담 지수(HBI)입니다. 칸 값은 그 안 주거 건물의 평균(시간은 중앙값)이며, 건물 5개 미만 칸과 데이터 경계 500m 이내 건물은 뺐습니다.</p>
+  <p id="srcnote"></p>
+  <p>배경 경계: 행정동 경계(vuski/admdongkor, 공개). 선정지 위치: 서울시 발표 자료 기준 근사 좌표. <span class="word">even<span>ly</span></span> — even = 평평한 + 공평한.</p>
+</footer>
+</div>
+
+<script>
+const D = __DATA__;
+const cvs = document.getElementById('map'), ctx = cvs.getContext('2d');
+let mode = 'hbi', gu = 'all', target = D.targets.includes('medical') ? 'medical' : D.targets[0], sel = null;
+const STOPS = [[0,[127,168,142]],[0.34,[242,209,107]],[0.67,[232,116,59]],[1,[178,58,42]]];
+function col(t){ t=Math.max(0,Math.min(1,t)); for(let i=1;i<STOPS.length;i++){ if(t<=STOPS[i][0]){ const a=STOPS[i-1],b=STOPS[i],k=(t-a[0])/(b[0]-a[0]); return a[1].map((v,j)=>Math.round(v+(b[1][j]-v)*k)); } } return STOPS[3][1]; }
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const G = D.grid; // 격자 크기(m)
+const note = document.getElementById('note');
+if (D.source === 'fake') { note.classList.add('fake'); note.innerHTML = '<b>테스트 데이터 — 실제 결과가 아닙니다.</b> tools/make_fake_results.py 로 만든 가짜 값으로 화면 동작만 확인하는 버전입니다. 제출·발표에 쓰지 마세요.'; }
+else { note.innerHTML = '<b>LX 미개방데이터 분석 결과(250m 격자 집계)</b> · 데이터안심구역에서 수치지형도·DEM 5m로 계산해 반출 승인을 받은 집계 결과입니다.'; }
+document.getElementById('srcnote').textContent = D.source === 'fake' ? '데이터: 가짜(테스트) 결과 — 실제 분석값 아님.' : '데이터: 한국국토정보공사 수치지형도(1:1,000)·DEM 5m, 데이터안심구역 분석 후 250m 격자 집계로 반출.';
+
+// ── 컨트롤 ──
+const gus = document.getElementById('gus');
+[['all','5개 구 전체'], ...D.gus.map(g => [g, g])].forEach(([k, t]) => {
+  const b = document.createElement('button'); b.type='button'; b.textContent=t; b.dataset.gu=k; b.setAttribute('aria-pressed', k===gu?'true':'false');
+  b.addEventListener('click', () => setGu(k)); gus.appendChild(b);
+});
+const tsel = document.getElementById('tgt');
+D.targets.forEach(t => { const o=document.createElement('option'); o.value=t; o.textContent=D.tlabel[t]||t; if(t===target)o.selected=true; tsel.appendChild(o); });
+tsel.addEventListener('change', () => { target = tsel.value; sel = null; resetPick(); stats(); draw(); });
+function setGu(k){ gu=k; sel=null; resetPick(); gus.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.gu===k?'true':'false')); stats(); fit(); }
+const LG = { hbi:['1.0','2.2 이상','경사 반영 왕복 시간 ÷ 평지 가정 왕복 시간. 1.0이면 평지와 같습니다.'],
+  flat:['0분', '', '평지라고 가정했을 때 가장 가까운 시설까지 왕복 시간 (고령자 걸음)'],
+  slope:['0분', '', '오르막·내리막을 반영한 실제 왕복 시간 (고령자 걸음). "평지로 계산"과 번갈아 비교해 보세요.'] };
+document.querySelectorAll('.modes button').forEach(b => b.addEventListener('click', () => {
+  mode = b.dataset.mode; document.querySelectorAll('.modes button').forEach(x => x.setAttribute('aria-pressed', x===b?'true':'false')); legend(); draw();
+}));
+function legend(){ const [a,z,cap]=LG[mode]; document.getElementById('lg0').textContent=a;
+  document.getElementById('lg1').textContent = mode==='hbi' ? z : `${D.tmax[target]}분 이상`; document.getElementById('lgcap').textContent=cap; }
+
+// ── 좌표 변환 ──
+let view = null; // {x0,y0,s,ox,oy}
+function extent(){ const b = gu==='all' ? D.bbox : D.gubbox[gu]; return b; }
+function fit(){
+  const r=cvs.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+  cvs.width=Math.round(r.width*dpr); cvs.height=Math.round(r.height*dpr);
+  const [x0,y0,x1,y1]=extent(), pad=0.04*Math.min(cvs.width,cvs.height);
+  const s=Math.min((cvs.width-2*pad)/(x1-x0),(cvs.height-2*pad)/(y1-y0));
+  view={x0,y0,s,ox:(cvs.width-(x1-x0)*s)/2,oy:(cvs.height-(y1-y0)*s)/2};
+  // 축척 막대
+  const km = (x1-x0) > 12000 ? 3000 : 1000;
+  document.getElementById('sb').style.width = (km*s/dpr)+'px'; document.getElementById('sbl').textContent = (km/1000)+'km';
+  draw();
+}
+const X = x => view.ox + (x-view.x0)*view.s;
+const Y = y => cvs.height - (view.oy + (y-view.y0)*view.s);
+function cells(){ return D.cells[target] || []; }  // [x, y, hbi, elder, flat, share, n, dongIdx]
+function val(c){ if(mode==='hbi') return (c[2]-1)/1.2; return (mode==='flat'?c[4]:c[3])/D.tmax[target]; }
+
+function draw(){
+  if(!view) return;
+  const W=cvs.width, H=cvs.height, dpr=window.devicePixelRatio||1;
+  ctx.clearRect(0,0,W,H);
+  // 다른 구 경계(연하게) → 격자 → 대상 구 경계
+  ctx.lineWidth=0.6*dpr; ctx.strokeStyle=css('--bnd2');
+  D.dongs.forEach(d => { if(gu!=='all' && d.gu===gu) return; stroke(d.r); });
+  const sz = Math.max(1, G*view.s);
+  for(const c of cells()){
+    if(gu!=='all' && D.dongmeta[c[7]].gu!==gu) continue;
+    const [R,Gc,B]=col(val(c)); ctx.fillStyle=`rgb(${R},${Gc},${B})`;
+    ctx.fillRect(X(c[0]-G/2), Y(c[1]+G/2), sz+0.5, sz+0.5);
+  }
+  ctx.lineWidth=(gu==='all'?0.6:1)*dpr; ctx.strokeStyle=css('--bnd');
+  D.dongs.forEach(d => { if(gu==='all' || d.gu===gu) stroke(d.r); });
+  // 구 이름 (전체 보기)
+  if(gu==='all'){ ctx.font=`700 ${13*dpr}px system-ui, sans-serif`; ctx.textAlign='center';
+    for(const g of D.gus){ const b=D.gubbox[g]; label(g, X((b[0]+b[2])/2), Y(b[3])-6*dpr); } ctx.textAlign='left'; }
+  // 선정지 (점선 원 + 이름)
+  ctx.font=`600 ${12*dpr}px system-ui, sans-serif`;
+  for(const s of D.sites){
+    if(gu!=='all' && s.gu!==gu) continue;
+    ctx.setLineDash([5*dpr,4*dpr]); ctx.lineWidth=2*dpr; ctx.strokeStyle='#1F2A24';
+    ctx.beginPath(); ctx.arc(X(s.x),Y(s.y),Math.max(4*dpr,s.r*view.s),0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(X(s.x),Y(s.y),4*dpr,0,Math.PI*2); ctx.fill(); ctx.lineWidth=1.5*dpr; ctx.stroke();
+    if(gu!=='all') label('선정지 · '+s.short, X(s.x)+10*dpr, Y(s.y)+4*dpr);
+  }
+  if(sel){ const x=X(sel[0]-G/2), y=Y(sel[1]+G/2); ctx.lineWidth=3*dpr; ctx.strokeStyle='#1F2A24'; ctx.strokeRect(x-2,y-2,sz+4,sz+4); ctx.strokeStyle='#fff'; ctx.lineWidth=1*dpr; ctx.strokeRect(x,y,sz,sz); }
+}
+function stroke(rings){ for(const r of rings){ ctx.beginPath(); for(let i=0;i<r.length;i+=2){ const px=X(r[i]+D.o[0]), py=Y(r[i+1]+D.o[1]); i?ctx.lineTo(px,py):ctx.moveTo(px,py); } ctx.closePath(); ctx.stroke(); } }
+function label(t,x,y){ const dpr=window.devicePixelRatio||1; ctx.lineWidth=3.5*dpr; ctx.strokeStyle='rgba(255,255,255,.92)'; ctx.strokeText(t,x,y); ctx.fillStyle='#1F2A24'; ctx.fillText(t,x,y); }
+
+// ── 칸 선택 ──
+const band = h => h>=1.8?'고립 위험':h>=1.3?'체감 부담':'평지 수준';
+function resetPick(){ document.getElementById('pick').innerHTML='<p class="hint">지도에서 칸을 눌러 보세요. "평지로 계산"과 "경사 반영"을 번갈아 누르면 지도가 어떻게 달라지는지 보입니다.</p>'; }
+function pick(c){
+  sel=c; draw(); const dm=D.dongmeta[c[7]];
+  document.getElementById('pick').innerHTML=`
+    <div class="big"><span class="from">평지 ${Math.round(c[4])}분</span><span class="arrow">→</span><span class="to">실제 ${Math.round(c[3])}분</span></div>
+    <p class="cap">가장 가까운 ${D.tlabel[target]}까지 왕복, 고령자 걸음 (칸 안 건물의 중앙값)</p>
+    <dl><dt>언덕 부담 지수</dt><dd>${c[2].toFixed(2)} · ${band(c[2])}</dd>
+        <dt>1.8 이상 건물</dt><dd>${Math.round(c[5]*100)}%</dd>
+        <dt>위치</dt><dd>${dm.gu} ${dm.nm}</dd>
+        <dt>주거 건물</dt><dd>${c[6]}동</dd></dl>`;
+}
+cvs.addEventListener('click', ev => {
+  const r=cvs.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+  const px=(ev.clientX-r.left)*dpr, py=(ev.clientY-r.top)*dpr;
+  const wx=view.x0+(px-view.ox)/view.s, wy=view.y0+(cvs.height-py-view.oy)/view.s;
+  const k=Math.floor(wx/G)+','+Math.floor(wy/G); const c=index[target].get(k);
+  if(c && (gu==='all' || D.dongmeta[c[7]].gu===gu)) pick(c);
+});
+const index={}; for(const t of D.targets){ index[t]=new Map((D.cells[t]||[]).map(c=>[Math.floor(c[0]/G)+','+Math.floor(c[1]/G), c])); }
+function focus(x,y){ const dm = nearestGu(x,y); if(dm && gu!==dm) setGu(dm); let c=index[target].get(Math.floor(x/G)+','+Math.floor(y/G));
+  if(!c){ let bd=400; for(const k of cells()){ const d=Math.hypot(k[0]-x,k[1]-y); if(d<bd){bd=d;c=k;} } }  // 비어 있으면 400m 안 가장 가까운 칸
+  if(c) pick(c); document.querySelector('.stage').scrollIntoView({behavior:'smooth',block:'start'}); }
+function nearestGu(x,y){ let best=null,bd=1e18; for(const g of D.gus){ const b=D.gubbox[g]; const d=Math.hypot(Math.max(b[0]-x,0,x-b[2]),Math.max(b[1]-y,0,y-b[3])); if(d<bd){bd=d;best=g;} } return best; }
+
+// ── 요약 수치 ──
+function stats(){
+  const cs=cells().filter(c=> gu==='all' || D.dongmeta[c[7]].gu===gu);
+  const n=cs.reduce((a,c)=>a+c[6],0), hi=cs.reduce((a,c)=>a+c[6]*c[5],0);
+  const hs=cs.map(c=>c[2]).sort((a,b)=>a-b), med=hs.length?hs[Math.floor(hs.length/2)]:NaN;
+  document.getElementById('stats').innerHTML = cs.length ? `<div><b>${Math.round(hi).toLocaleString('ko-KR')}동</b><span>HBI 1.8 이상 (추정)</span></div>
+    <div><b>${(hi/n*100).toFixed(1)}%</b><span>전체 주거 건물 중</span></div><div><b>${med.toFixed(2)}</b><span>칸 지수 중앙값</span></div>` : '';
+}
+
+// ── 선정지·후보 ──
+document.getElementById('sites').innerHTML = D.sites.map((s,i)=> s.pct!=null ?
+  `<div class="site"><button type="button" data-i="${i}"><h3>${s.name}</h3><div class="bar"><i style="width:${(s.pct*100).toFixed(1)}%"></i><span class="mark" style="left:90%"></span></div>
+   <div class="meta">상위 ${Math.max(0.1,100-s.pct*100).toFixed(1)}% · 평균 지수 ${s.hbi!=null?s.hbi.toFixed(2):'-'} → ${s.top10?'모델도 상위 10% 안':'상위 10% 밖'}</div></button></div>` :
+  `<div class="site"><button type="button" data-i="${i}"><h3>${s.name}</h3><div class="bar"><span class="mark" style="left:90%"></span></div><div class="meta">검증 결과(validation_sites.csv)가 아직 없습니다.</div></button></div>`).join('');
+document.querySelectorAll('.site button').forEach(b=>b.addEventListener('click',()=>{ const s=D.sites[+b.dataset.i]; focus(s.x,s.y); }));
+if(D.cand.length){
+  document.getElementById('cand').innerHTML=D.cand.slice(0,6).map((c,k)=>`<li><button type="button" data-k="${k}">
+    <span class="rk">${k+1}</span><span><span class="w">${c.where}</span><span class="d">주거 건물 ${c.n}동 · 가까운 ${D.tlabel[D.base]} 왕복 기준</span></span><span class="h">${c.hbi.toFixed(2)}</span></button></li>`).join('');
+  document.querySelectorAll('.cand button').forEach(b=>b.addEventListener('click',()=>{ const c=D.cand[+b.dataset.k]; if(target!==D.base){ target=D.base; tsel.value=target; } focus(c.x,c.y); }));
+} else document.getElementById('candsec').hidden = true;
+
+legend(); stats();
+new ResizeObserver(fit).observe(cvs);
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', draw);
+</script>
+</body>
+</html>

@@ -117,7 +117,12 @@ def simplify(ring, tol):
         if best <= tol:
             return [pts[0], pts[-1]]
         return dp(pts[:bi + 1])[:-1] + dp(pts[bi:])
-    return dp(list(ring))
+    pts = list(ring)
+    # 닫힌 고리(처음 = 끝)는 기준선 길이가 0이라, 시작점에서 가장 먼 점에서 둘로 나눠 처리
+    far = max(range(len(pts)), key=lambda i: (pts[i][0] - pts[0][0]) ** 2 + (pts[i][1] - pts[0][1]) ** 2)
+    if far == 0:
+        return pts
+    return dp(pts[:far + 1])[:-1] + dp(pts[far:])
 
 
 # ── CSV ─────────────────────────────────────────────────────────────
