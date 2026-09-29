@@ -6,7 +6,7 @@ tools/prep_public.py ─ [반입 전, 안심구역 밖에서] 공개 데이터 C
   python tools/prep_public.py pharmacy 건강_약국_서울특별시.csv [EPSG:5174]
       → external/pharmacy.csv
   python tools/prep_public.py elevator "서울시 지하철역 엘리베이터 위치정보.csv" [--check-stations 역사마스터.csv]
-      → external/subway_elevators.csv
+      → external/subway_elevators.csv  (노드 유형 코드 1 = 지하철 출입구 행만)
 [하는 일]
   1. 열 이름 자동 인식: 이름(약국명·사업장명·지하철역명 …), 경도·위도 / X·Y / WKT "POINT(경도 위도)", 주소, 영업상태
      엘리베이터 파일처럼 "노드링크 유형" 열이 있으면 NODE 행만 씀
@@ -182,7 +182,11 @@ def main():
         tc = pick(cols, ["노드 유형 코드", "노드유형코드"])
         if tc:
             from collections import Counter
-            print(f"  '{tc}' 분포: {dict(Counter(r.get(tc, '') for r in rows))}")
+            print(f"  '{tc}' 분포: {dict(Counter(r.get(tc, '') for r in rows))}  (0 일반노드, 1 지하철 출입구, 2 버스 정류장, 3 지하보도 출입구)")
+            if kind == "elevator":
+                # 엘리베이터 목적지(station_ev)는 "지하철 출입구"(코드 1) 노드만 씀. 0·2 는 출입구가 아닌 지점
+                rows = [r for r in rows if str(r.get(tc, "")).strip() == "1"]
+                steps.append(("노드 유형 1(지하철 출입구)", len(rows)))
     if ca:
         rows = [r for r in rows if "서울" in str(r.get(ca, "")) or not str(r.get(ca, "")).strip()]
         steps.append(("서울(주소 빈 칸 포함)", len(rows)))
