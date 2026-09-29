@@ -13,7 +13,34 @@ const F = 'Malgun Gothic';
 const C = { dark:'1F3B2D', orange:'E8743B', sage:'7FA88E', tint:'EEF3EF', ink:'22302A', muted:'5F6B64', line:'D5E2D8', white:'FFFFFF', paleO:'FCEBE2' };
 const img = n => 'img/' + n;
 let page = 0;
-const T = (s, text, o) => s.addText(text, Object.assign({ fontFace:F, color:C.ink, isTextBox:true, margin:0, valign:'top' }, o));
+// 빈칸 추적: V() 가 값을 못 찾으면 pending 에 key 를 쌓고, 빈칸(___ / ○○○)이 든 글상자·표·점선 박스가 만들어질 때
+// 빈칸 수만큼 앞에서부터 꺼내 objectName 에 "BLANK:<장>:<key>|..." 로 적는다 → tools/check_deck.py 가 missing.txt 와 1:1 대조
+const BLANK_RE = /_{3,}|○○○/g;
+const pending = [];
+const flat = t => Array.isArray(t) ? t.map(r => (r && r.text !== undefined) ? flat(r.text) : String(r)).join('') : String(t);
+const runs = t => (flat(t).match(BLANK_RE) || []).length;
+function take(n, explicit = []) {
+  const keys = [];
+  for (const k of explicit) { const i = pending.findIndex(p => p.key === k && p.page === page); if (i >= 0) pending.splice(i, 1); keys.push(k); }
+  for (let i = 0; i < n; i++) {
+    const p = pending.shift();
+    if (!p || p.page !== page) { console.error(`!! ${page}장: 빈칸에 대응하는 누락 key 없음 (${p ? p.page + '장 ' + p.key + ' 가 남아 있음' : 'pending 비어 있음'})`); process.exitCode = 1; if (p) pending.unshift(p); break; }
+    keys.push(p.key);
+  }
+  return keys.length ? `BLANK:${page}:` + keys.join('|') : undefined;
+}
+const T = (s, text, o = {}) => {
+  const tag = ('_keys' in o) ? o._keys : (runs(text) ? take(runs(text)) : undefined);
+  const opt = Object.assign({ fontFace:F, color:C.ink, isTextBox:true, margin:0, valign:'top' }, o);
+  delete opt._keys; if (tag) opt.objectName = tag;
+  return s.addText(text, opt);
+};
+// 표: explicit(표 전체가 한 항목의 빈칸)이 있으면 그것만, 없으면 칸 안의 빈칸 수만큼
+function TB(s, rows, o, explicit) {
+  const n = explicit ? 0 : rows.reduce((a, r) => a + r.reduce((b, c) => b + runs(c && c.text !== undefined ? c.text : c), 0), 0);
+  const tag = (explicit || n) ? take(n, explicit ? [explicit] : []) : undefined;
+  return s.addTable(rows, Object.assign({}, o, tag ? { objectName: tag } : {}));
+}
 
 // ── 결과 데이터 ──────────────────────────────────────────────
 const DATA_PATH = path.join('data', 'results.json');
@@ -26,13 +53,14 @@ function miss(key, meta) {
   const k = page + '|' + key;
   if (seen.has(k)) return;
   seen.add(k);
-  missing.push({ page, label: (meta && meta.label) || key, need: (meta && meta.need) || [] });
+  missing.push({ page, key, label: (meta && meta.label) || key, need: (meta && meta.need) || [] });
 }
 // V: 값이 있으면 문자열, 없으면 fallback(기본 ___)을 돌려주고 누락으로 기록
 function V(key, fallback = '___') {
   const f = R.fields[key];
   if (f && f.value !== null && f.value !== undefined) return String(f.value);
   miss(key, f || { label:key, need:[] });
+  if (!(f && f.optional)) pending.push({ key, page });
   return fallback;
 }
 const has = key => { const f = R.fields[key]; return !!(f && f.value !== null && f.value !== undefined); };
@@ -44,6 +72,7 @@ function IMG(key) {
   miss('img:' + key, m || { label:key, need:[] });
   return null;
 }
+const hasImg = key => { const m = R.images[key]; return !!(m && m.path && fs.existsSync(m.path)); };
 function TBL(key) {
   const t = R.tables[key];
   if (t && t.rows && t.rows.length) return t.rows;
@@ -77,9 +106,10 @@ function circleNum(s, x, y, n, fill) {
   T(s, String(n), { x, y, w:0.42, h:0.42, fontSize:13, bold:true, color:C.white, align:'center', valign:'middle' });
 }
 
-function ph(s, x, y, w, h, label, fs) {
-  s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x, y, w, h, fill:{color:'FFF7F2'}, line:{color:C.orange, width:1.25, dashType:'dash'}, rectRadius:0.08 });
-  T(s, label, { x:x+0.15, y, w:w-0.3, h, fontSize:fs||10.5, color:'C0612F', align:'center', valign:'middle', bold:true });
+function ph(s, x, y, w, h, label, fs, key) {
+  const tag = take(runs(label), key ? [key] : []);
+  s.addShape(pres.shapes.ROUNDED_RECTANGLE, Object.assign({ x, y, w, h, fill:{color:'FFF7F2'}, line:{color:C.orange, width:1.25, dashType:'dash'}, rectRadius:0.08 }, tag ? { objectName: tag } : {}));
+  T(s, label, { x:x+0.15, y, w:w-0.3, h, fontSize:fs||10.5, color:'C0612F', align:'center', valign:'middle', bold:true, _keys: tag });
 }
 const B = {};
 
@@ -162,7 +192,7 @@ B.SAFE = () => {
     T(s, d[0], { x:x+0.15, y:1.52, w:1.4, h:0.32, fontSize:13, bold:true, color: i==4?C.orange:C.dark });
     const dt = V(`SAFE.day${i+1}`, null);
     if (dt) T(s, dt, { x:x+0.15, y:1.9, w:1.4, h:0.32, fontSize:10.5, bold:true, color:C.orange, valign:'middle' });
-    else ph(s, x+0.15, 1.9, 1.35, 0.32, '2026.  .  .', 9);
+    else ph(s, x+0.15, 1.9, 1.35, 0.32, '2026.  .  .', 9, `SAFE.day${i+1}`);
     T(s, d[1], { x:x+0.15, y:2.35, w:1.4, h:1.15, fontSize:10, color:C.ink, lineSpacingMultiple:1.15 });
   });
   card(s, 0.5, 3.8, 4.4, 1.25);
@@ -199,11 +229,11 @@ B.RES1 = () => {
   const map = IMG('map');
   if (map) {
     s.addImage({ path: map, x:0.5, y:1.35, w:5.1, h:3.4 });
-    s.addImage({ path: IMG('legend') || img('legend.png'), x:0.5, y:4.78, w:2.2, h:0.37 });
+    s.addImage({ path: hasImg('legend') ? R.images.legend.path : img('legend.png'), x:0.5, y:4.78, w:2.2, h:0.37 });
     T(s, `언덕 부담 지수 · 250m 격자 · ${Q('RES1.target', '의료시설')} 왕복`, { x:2.75, y:4.83, w:2.9, h:0.25, fontSize:8.5, color:C.muted });
   } else {
     s.addImage({ path: img('hbi_map.png'), x:0.5, y:1.35, w:5.1, h:3.4, transparency:55 });
-    ph(s, 1.3, 2.55, 3.5, 1.0, '실제 결과 지도 삽입\n(5개 구 250m 격자 HBI)', 11);
+    ph(s, 1.3, 2.55, 3.5, 1.0, '실제 결과 지도 삽입\n(5개 구 250m 격자 HBI)', 11, 'img:map');
     s.addImage({ path: img('legend.png'), x:0.5, y:4.78, w:2.2, h:0.37 });
     T(s, '언덕 부담 지수', { x:2.75, y:4.83, w:1.5, h:0.25, fontSize:8.5, color:C.muted });
   }
@@ -226,8 +256,16 @@ B.RES1 = () => {
   const bt = (R.tables['RES1.by_target'] || {}).rows || [];
   s.addNotes('안심구역 분석 결과로 자동 생성된 장표입니다 (tools/prepare_deck_data.py). ___ 가 남아 있으면 deck/data/missing.txt 를 확인하세요.'
     + (bt.length ? ' 목적지별 HBI 1.8 이상 비율: ' + bt.map(r => `${r[0]} ${r[1]}(중앙값 ${r[2]})`).join(', ') + '.' : '')
-    + (has('RES1.median') ? ` 의료시설 기준 HBI 중앙값 ${V('RES1.median')}, 고령자 왕복 중앙값 ${V('RES1.elder_rt')}분.` : ''));
+    + edgeNote() + (has('RES1.wheel_ev') ? ` 휠체어 도달불가 비율(엘리베이터 있는 역 기준) ${Q('RES1.wheel_ev', '')}.` : ''));
 };
+
+// 경계 500m 포함 여부가 버전마다 다른 세 지표: v5 "(경계 제외)"면 그대로, v4면 "v4, 경계 500m 포함" 표시. 본문에는 넣지 않음
+function edgeNote() {
+  const items = [['RES1.median', 'HBI 중앙값', ''], ['RES1.home_ratio', '귀갓길 편도 배수 중앙값', ''], ['RES1.elder_rt', '고령자 왕복 중앙값', '분']].filter(([k]) => has(k));
+  if (!items.length) return '';
+  const scope = R.fields[items[0][0]].scope;
+  return ` 의료시설 기준 ${items.map(([k, l, u]) => `${l} ${Q(k, '')}${u}`).join(', ')}` + (scope === 'v5' ? ' (경계 500m 제외).' : ' (v4 산출, 경계 500m 포함 — 다른 지표와 모집단이 달라 본문에는 쓰지 않음).');
+}
 
 B.VALID = () => {
   const s = base('분석 결과 ② 모델 검증', '우리 모델은 서울시의 판단을 재현하는가');
@@ -235,17 +273,17 @@ B.VALID = () => {
   const c = (t, o={}) => ({ text:t, options:Object.assign({ fontSize:10, align:'center', valign:'middle', color:C.ink }, o) });
   const blank = c('____', { color:'C0612F', bold:true });
   const sites = TBL('VALID.sites');
-  const simg = sites && IMG('sites');
+  const simg = sites && hasImg('sites') ? R.images.sites.path : null;
   if (simg) {
-    T(s, `2025 서울시 선정지 5곳 · 반경 300m 평균 HBI의 백분위 (상위 10% 안: ${V('VALID.top10_count')})`, { x:0.5, y:1.35, w:4.6, h:0.25, fontSize:9.5, bold:true, color:C.dark });
+    T(s, (Q('VALID.pct_mode', 'grid') === 'circle' ? '2025 선정지 5곳 · 같은 반경 300m 원끼리 비교한 백분위' : '2025 서울시 선정지 5곳 · 반경 300m 평균 HBI의 백분위') + ` (상위 10% 안: ${V('VALID.top10_count')})`, { x:0.5, y:1.35, w:4.6, h:0.25, fontSize:9.5, bold:true, color:C.dark });
     s.addImage({ path: simg, x:0.5, y:1.62, w:4.6, h:2.2 });
   } else {
     const row = r => [ c(r.name), r.top_text ? c(r.top_text, { bold:true, color:C.orange }) : blank, r.top10 ? c(r.top10, { bold:true }) : blank ];
     const rows = sites || ['광진구 중곡동', '강서구 화곡동', '관악구 봉천동', '종로구 숭인동', '중구 신당동'].map(n => ({ name:n }));
-    s.addTable([
+    TB(s, [
       [ {text:'2025 서울시 선정지',options:hdr}, {text:'모델 HBI 순위',options:hdr}, {text:'상위 10% 포함',options:hdr} ],
       ...rows.map(row),
-    ], { x:0.5, y:1.4, w:4.6, colW:[1.8,1.4,1.4], rowH:0.37, fontFace:F, border:{type:'solid',color:C.line,pt:0.75} });
+    ], { x:0.5, y:1.4, w:4.6, colW:[1.8,1.4,1.4], rowH:0.37, fontFace:F, border:{type:'solid',color:C.line,pt:0.75} }, sites ? undefined : 'tbl:VALID.sites');
   }
   card(s, 0.5, 3.95, 4.6, 1.05, C.paleO);
   T(s, '재현 사례: 대현산배수지공원 (계단 190개)', { x:0.7, y:4.03, w:4.2, h:0.28, fontSize:11, bold:true, color:C.dark });
@@ -272,8 +310,9 @@ B.VALID = () => {
   card(s, 5.4, 3.95, 4.1, 1.05, C.dark);
   T(s, `선정되지 않았지만 HBI가 더 높은 곳 ${V('VALID.new_n', '___곳')} 발견 → "공모 방식이 놓친 곳"`, { x:5.6, y:3.95, w:3.75, h:1.05, fontSize:11, bold:true, color:C.white, valign:'middle' });
   s.addNotes('분석결과의 타당성과 신뢰성(본선 우수성 30점)을 담당하는 장표. 전문가 판단 재현, 실측 비교, 새로운 발견 세 가지를 보여줍니다.'
-    + (has('VALID.net_m') ? ` 대현산배수지공원 보행 최단거리 ${V('VALID.net_m')}, 휠체어는 계단을 피해 ${V('VALID.wheel_m')}.` : '')
-    + (has('VALID.new_n') && V('VALID.new_n').includes('이상') ? ' validation_new_candidates.csv 는 상위 30개만 저장하므로 "30곳 이상"으로 표기합니다 (정확한 수는 04_validate.py 실행 로그).' : ''));
+    + (has('VALID.net_m') ? ` 대현산배수지공원 보행 최단거리 ${Q('VALID.net_m', '')}, 휠체어는 계단을 피해 ${Q('VALID.wheel_m', '-')}.` : '')
+    + (Q('VALID.pct_mode', 'grid') === 'circle' ? ' 백분위는 선정지와 같은 반경 300m 원 평균끼리 비교한 값입니다(v5 percentile_circle).' : ' 백분위는 선정지 반경 300m 건물 평균을 전체 250m 격자 평균 분포에 놓은 값입니다(v4, 집계 단위가 달라 해석 주의).')
+    + (has('VALID.new_n') && Q('VALID.new_n', '').includes('이상') ? ' validation_new_candidates.csv 는 상위 30개만 저장하므로 "30곳 이상"으로 표기합니다 (정확한 수는 04_validate.py 실행 로그).' : ''));
 };
 
 B.ABL = () => {
@@ -290,12 +329,12 @@ B.ABL = () => {
     [ sc('500m 격자로 뭉뚱그림', '동네 안 경사 편차'), r(`HBI 1.8 이상 건물의 ${V('ABL.grid_hidden', '___%')}가 평균에 가려짐`) ],
   ];
   if (has('ABL.dem1m')) rows.push([ sc('DEM 5m ↔ 1m (관악구)', '해상도 차이'), c(`HBI 순위상관 ${V('ABL.dem1m')} → 5m로도 결론 유지`, { bold:true, fontSize:9.5 }) ]);
-  s.addTable(rows, { x:0.5, y:1.35, w:5.55, colW:[2.05,3.5], rowH:[0.34, ...rows.slice(1).map(() => (rows.length > 5 ? 0.44 : 0.56))], fontFace:F, border:{type:'solid',color:C.line,pt:0.75} });
+  TB(s, rows, { x:0.5, y:1.35, w:5.55, colW:[2.05,3.5], rowH:[0.34, ...rows.slice(1).map(() => (rows.length > 5 ? 0.44 : 0.56))], fontFace:F, border:{type:'solid',color:C.line,pt:0.75} });
   const rk = IMG('ranks');
   if (rk) {
     s.addImage({ path: rk, x:6.2, y:1.3, w:3.3, h:2.66 });
   } else {
-    ph(s, 6.2, 1.35, 3.3, 2.55, '순위 역전 산점도\n격자별 평지 기준 vs 경사 반영 왕복 시간', 10);
+    ph(s, 6.2, 1.35, 3.3, 2.55, '순위 역전 산점도\n격자별 평지 기준 vs 경사 반영 왕복 시간', 10, 'img:ranks');
   }
   card(s, 0.5, 4.05, 9, 0.95, C.dark);
   T(s, [
@@ -318,7 +357,7 @@ B.CROSS = () => {
   T(s, `중첩 분석: HBI 상위 25% × KCB 소득 하위 25% 행정동 ${V('CROSS.kcb_overlap', '___곳')} → 이동과 경제 부담이 겹친 최우선 지역`, { x:0.7, y:4.1, w:3.95, h:0.9, fontSize:10, bold:true, color:C.dark, valign:'middle' });
   const skt = IMG('skt');
   if (skt) s.addImage({ path: skt, x:5.1, y:1.4, w:4.4, h:2.75 });
-  else ph(s, 5.1, 1.4, 4.4, 2.75, `산점도 삽입\nx: 행정동 평균 HBI · y: 외출 지수\n상관계수 r = ${V('CROSS.skt_r', '____')} (p = ${V('CROSS.skt_p', '____')})`, 10.5);
+  else ph(s, 5.1, 1.4, 4.4, 2.75, `산점도 삽입\nx: 행정동 평균 HBI · y: 외출 지수\n상관계수 r = ${V('CROSS.skt_r', '____')} (p = ${V('CROSS.skt_p', '____')})`, 10.5, 'img:skt');
   T(s, [
     { text:'결과 해석: ', options:{ bold:true, color:C.orange } },
     { text:V('CROSS.interp', '____________________________'), options:{ bold:true, color:C.dark } },
@@ -329,9 +368,10 @@ B.CROSS = () => {
 
 B.IMPACT = () => {
   const s = base('기대효과와 확산', '서울의 언덕에서 시작해 전국으로');
-  const impact = `파일럿 구 상위 후보지 ${V('IMPACT.n_sites', '___곳')} 설치 시 연간 ${V('IMPACT.minutes', '___만 분')} 절감`;
+  const impact = `후보지 ${V('IMPACT.n_sites', '___곳')} 설치 시 고령자 약 ${V('IMPACT.people')}명 수혜`;
+  const impact2 = `1회 왕복마다 합계 약 ${V('IMPACT.minutes', '___분')} 단축`;
   const cols = [
-    ['공익적 효과', C.dark, ['후보지별 수혜 인원 × 단축 시간 산출', impact, '민원 이전에 취약지를 먼저 발견']],
+    ['공익적 효과', C.dark, [impact, impact2, '민원 이전에 취약지를 먼저 발견']],
     ['산업적 효과', C.orange, ['지도앱 도보 경로에 경사 반영 옵션', '휠체어·유아차 이용자용 경로 안내', '부동산·돌봄 서비스의 입지 분석 지표']],
     ['확산 가능성', C.sage, ['국토정보필지는 전국 단위로 제공', 'DEM 확보 시 부산 산복도로 등 구릉지 도시로 확장', '연 1회 갱신으로 시설 설치 효과 추적']],
   ];
@@ -341,7 +381,7 @@ B.IMPACT = () => {
     s.addShape(pres.shapes.OVAL, { x:x+0.2, y:1.48, w:0.35, h:0.35, fill:{color:c[1]}, line:{color:c[1]} });
     T(s, c[0], { x:x+0.65, y:1.48, w:2.0, h:0.35, fontSize:13.5, bold:true, valign:'middle' });
     c[2].forEach((t, j) => {
-      const hot = t === impact;
+      const hot = t === impact || t === impact2;
       T(s, t, { x:x+0.2, y:2.0 + j*0.68, w:2.45, h:0.6, fontSize:10.5, color: t.includes('___')?'C0612F':(hot?C.orange:C.ink), bold: hot });
     });
   });
@@ -352,8 +392,8 @@ B.IMPACT = () => {
     { text:'서비스명 evenly(이븐리) — even = 평평한 + 공평한', options:{ bold:true, color:C.white, breakLine:true } },
     { text:'기울어진 길의 부담을 드러내, 어디에 살든 같은 7분이 되도록 돕는 접근성 지도', options:{ color:'CFE0D4' } },
   ], { x:2.5, y:4.17, w:6.8, h:0.85, fontSize:11.5, valign:'middle', lineSpacingMultiple:1.1 });
-  if (has('IMPACT.minutes')) T(s, V('IMPACT.assume'), { x:0.5, y:5.07, w:8.5, h:0.3, fontSize:7, color:C.muted });
-  s.addNotes('본선 실현 가능성 30점의 기대효과와 확산 가능성 항목. 공익 효과 숫자는 grid_hbi.csv 와 dong_hbi_with_elderly.csv 로 자동 계산한 상한 추정입니다 (가정은 슬라이드 아래 각주). 서비스명 evenly 는 이 장과 마지막 장에서 소개합니다.');
+  if (has('IMPACT.minutes')) T(s, Q('IMPACT.note', ''), { x:0.5, y:5.07, w:8.5, h:0.3, fontSize:7, color:C.muted });
+  s.addNotes('본선 실현 가능성 30점의 기대효과와 확산 가능성 항목. 공익 효과는 v5 개입 시뮬레이션(intervention_dong.csv)과 행정동 65세 이상 인구로 계산한 1회 왕복 기준 값입니다. 연간 환산은 출처 있는 외출 빈도 가정이 없어 넣지 않았습니다. 서비스명 evenly 는 이 장과 마지막 장에서 소개합니다.');
 };
 
 B.PLAN = () => {
@@ -413,7 +453,7 @@ B.AP4 = () => {
     ? rows.map((r, i) => r.map((t, j) => c(t == null ? '—' : t, j == 0 ? { align:'left', bold:true, fill:{color: i==0?C.paleO:C.white} } : (i==0 ? { fill:{color:C.paleO} } : {}))))
     : ['기본값', '보행속도 0.7m/s', '보행속도 1.0m/s', '내리막 부담 0%(Tobler 원식)', '내리막 부담 100%', '계단 가중 1.5', '경사 절단 30%']
         .map(n => [ c(n, { align:'left', bold:true }), ...[0,1,2,3].map(() => c('___', { bold:true, color:'C0612F' })) ]);
-  s.addTable([head, ...body], { x:0.5, y:1.35, w:9, colW:[2.8,1.4,1.6,1.7,1.5], rowH:0.36, fontFace:F, border:{type:'solid',color:C.line,pt:0.75} });
+  TB(s, [head, ...body], { x:0.5, y:1.35, w:9, colW:[2.8,1.4,1.6,1.7,1.5], rowH:0.36, fontFace:F, border:{type:'solid',color:C.line,pt:0.75} }, rows ? undefined : 'tbl:APPX.sens');
   card(s, 0.5, 4.35, 9, 0.7, C.tint);
   T(s, '순위상관·상위 10% 일치율이 1(100%)에 가까울수록, 보행속도나 내리막 가정을 바꿔도 "가장 먼저 도와야 할 곳"의 순서가 유지된다는 뜻입니다. 속도는 시간만 바꾸고 HBI(비율)는 거의 바꾸지 않습니다.',
     { x:0.7, y:4.35, w:8.6, h:0.7, fontSize:10, color:C.ink, valign:'middle' });
@@ -424,11 +464,11 @@ B.AP4 = () => {
 B.AP2 = () => {
   const s = base('부록 2. 분석 기술', '분석 환경과 기술 스택', { appendix:true });
   const items = [
-    ['공간 처리', 'QGIS 3.x · geopandas · shapely', '필지 필터링, 중심점 생성, 좌표계 변환, 토폴로지 정리'],
-    ['래스터 처리', 'rasterio · numpy', 'DEM 결측 보간, 링크 끝점 고도 샘플링'],
-    ['네트워크 분석', 'networkx (방향 그래프)', '다중 출발점 Dijkstra로 전 필지 최단시간 일괄 계산'],
-    ['통계 검증', 'scipy · pandas', 'Spearman 순위상관, 실측-예측 상관, 민감도 분석'],
-    ['시각화', 'QGIS · matplotlib · folium', '필지별 HBI 지도, 본선 데모용 인터랙티브 웹 지도'],
+    ['실행 환경', 'QGIS 3.32 내장 Python', '안심구역 분석 PC 기본 환경. 별도 설치 없이 실행 (반입은 txt 번들 1개)'],
+    ['공간·래스터 처리', 'GDAL/OGR (osgeo) · numpy', '수치지형도 shp 읽기, 좌표계 변환, 링크 분할, DEM 끝점 고도 샘플링'],
+    ['네트워크 분석', '자체 다익스트라 (lib/qgraph.py)', '방향 그래프, 다중 출발점 최단시간. scipy 가 있으면 scipy.sparse.csgraph 사용'],
+    ['통계 검증', 'numpy (scipy 선택)', 'Spearman 순위상관, 실측-예측 상관, 기여도·민감도 분석'],
+    ['시각화', 'QGIS · matplotlib(있을 때)', '격자 GPKG 를 QGIS로 색칠, 데모는 html 한 파일(외부 요청 없음)'],
   ];
   items.forEach((it, i) => {
     const y = 1.35 + i*0.74;
@@ -442,38 +482,40 @@ B.AP2 = () => {
 B.AP3 = () => {
   const s = base('부록 3. 핵심 분석 코드', '경사 비용과 언덕 부담 지수 계산', { appendix:true });
   const code = [
-"import numpy as np, networkx as nx",
+"# analysis/hbi/lib/model.py 발췌 (QGIS 내장 Python, numpy)",
+"def tobler(s):                                  # 경사 s → 보행속도 km/h",
+"    return 6.0 * np.exp(-3.5 * np.abs(s + 0.05))",
+"FLAT = tobler(0.0)",
 "",
-"def tobler(s):                          # s: 경사 (오르막 +)",
-"    return 6 * np.exp(-3.5 * abs(s + 0.05))   # km/h",
-"FLAT = tobler(0)",
+"def elder_time(length, s, stair):               # 고령자 링크 통과 시간(초)",
+"    s = np.where(stair, np.sign(s + 1e-9) * np.maximum(np.abs(s), 0.25), s)",
+"    up = FLAT / tobler(np.abs(s))",
+"    down = 1 + C.DOWNHILL_WEIGHT * (up - 1)     # 내리막 = 오르막 부담의 50%",
+"    factor = np.where(s >= 0, FLAT / tobler(s), down)",
+"    t = length / C.ELDER_SPEED * factor         # 0.8 m/s",
+"    return np.where(stair, t * C.STAIR_FACTOR, t)",
 "",
-"def edge_cost(length, z0, z1, user, is_stair):",
-"    s = (z1 - z0) / length",
-"    if user == 'wheel':",
-"        if is_stair: return None            # 통행 불가",
-"        if abs(s) > 1/12: return length * 20  # 자력 통행 한계",
-"        return length / 0.8",
-"    v = 0.8 * tobler(s) / FLAT               # 고령자 기준 0.8 m/s",
-"    return length / v                        # 초",
+"def wheel_time(length, s, stair):                # 휠체어: 계단 통행 불가",
+"    t = length / (C.WHEEL_SPEED * np.maximum(0.4, 1 - 5 * np.maximum(s, 0)))",
+"    t = np.where(np.abs(s) > C.WHEEL_LIMIT, t * C.WHEEL_STEEP_PENALTY, t)   # 1/12 초과 10배",
+"    return np.where(stair, np.inf, t)",
 "",
-"def build_graph(links, user):",
-"    G = nx.DiGraph()",
-"    for r in links.itertuples():             # r.z0, r.z1: DEM 샘플 고도",
-"        for a, b, za, zb in [(r.n0, r.n1, r.z0, r.z1), (r.n1, r.n0, r.z1, r.z0)]:",
-"            t = edge_cost(r.length, za, zb, user, r.is_stair)",
-"            if t: G.add_edge(a, b, t=t, flat=r.length / 0.8)",
-"    return G",
+"# 왕복: go = G.dijkstra(dests, reverse=True) (집→시설), back = G.dijkstra(dests) (시설→집)",
+"# HBI = (go + back)[고령자] ÷ (go + back)[평지 가정]",
 "",
-"def hbi_all(G, targets):                     # 왕복 기준: 가는 길 + 오는 길",
-"    go   = nx.multi_source_dijkstra_path_length(G.reverse(), targets, weight='t')",
-"    back = nx.multi_source_dijkstra_path_length(G, targets, weight='t')",
-"    flat = nx.multi_source_dijkstra_path_length(G, targets, weight='flat')",
-"    return {n: (go[n] + back[n]) / (2 * flat[n]) for n in flat if n in go and n in back}",
+"# analysis/hbi/lib/qgraph.py 발췌 — Graph.dijkstra (scipy 없을 때의 자체 구현)",
+"    dist = np.full(self.n, np.inf); dist[sources] = 0.0",
+"    h = [(0.0, int(s)) for s in sources]; heapq.heapify(h)",
+"    while h:",
+"        d, x = heapq.heappop(h)",
+"        if d > dist[x]: continue",
+"        for k in range(ptr[x], ptr[x + 1]):",
+"            y, nd = nb[k], d + wt[k]",
+"            if nd < dist[y]: dist[y] = nd; heapq.heappush(h, (nd, int(y)))",
   ].join('\n');
   card(s, 0.5, 1.3, 9, 3.85, 'F4F6F4');
-  T(s, code, { x:0.7, y:1.4, w:8.6, h:3.7, fontFace:'Courier New', fontSize:8, color:C.ink });
-  s.addNotes('전체 코드는 별도 첨부(증빙자료). 실제 데이터 컬럼명에 맞게 수정 필요.');
+  T(s, code, { x:0.7, y:1.36, w:8.6, h:3.75, fontFace:'Courier New', fontSize:7.2, color:C.ink });
+  s.addNotes('실제 반입 코드(analysis/hbi/lib/model.py, lib/qgraph.py)에서 발췌·축약. 전체 코드는 반입 번들(hbi_code_bundle_*.txt)과 같습니다.');
 };
 
 // 1 COVER
@@ -682,7 +724,7 @@ B.PRE();
     T(s, t[0], { x:x+0.2, y:2.28, w:1.35, h:0.55, fontSize:12, bold:true });
     T(s, t[1], { x:x+0.2, y:2.85, w:1.33, h:1.3, fontSize:9.8, color:C.muted, lineSpacingMultiple:1.15 });
   });
-  T(s, '도구: QGIS(경사·지도 제작) · Python(geopandas, rasterio, networkx) · 방향 그래프 기반 최단시간 경로 탐색', { x:0.5, y:4.5, w:9, h:0.4, fontSize:10.5, color:C.dark, bold:true });
+  T(s, '도구: QGIS 3.32 내장 Python · numpy + GDAL/OGR · 자체 다익스트라(방향 그래프, scipy 있으면 사용) 최단시간 경로 탐색', { x:0.5, y:4.5, w:9, h:0.4, fontSize:10.5, color:C.dark, bold:true });
   s.addNotes('오르막과 내리막을 구분하는 방향 그래프가 기술적 핵심입니다. 같은 길이라도 가는 길과 오는 길의 비용이 다릅니다.');
 }
 
@@ -788,34 +830,35 @@ B.CROSS();
 
 // 16 ONE PERSON
 {
-  const measured = Q('ONE.mode', 'example') === 'measured';
-  const s = base('14  한 사람에게 돌아가는 변화', measured ? '엘리베이터 한 대가 바꾸는 귀갓길 (실측 구간 기준)' : '엘리베이터 한 대가 바꾸는 김순자 할머니의 귀갓길');
-  if (!measured) {
+  const iv = Q('ONE.mode', 'example') === 'intervention';
+  const s = base('14  한 사람에게 돌아가는 변화', iv ? '선정지 시설 1기가 바꾸는 귀갓길' : '엘리베이터 한 대가 바꾸는 김순자 할머니의 귀갓길');
+  if (!iv) {
     s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x:7.95, y:0.3, w:1.55, h:0.3, fill:{color:C.paleO}, line:{color:C.orange, width:1}, rectRadius:0.15 });
     T(s, '예시 · 가정 시뮬레이션', { x:7.95, y:0.3, w:1.55, h:0.3, fontSize:8.5, bold:true, color:C.orange, align:'center', valign:'middle' });
-    notes.push('참고: 22장 "한 사람의 변화"는 validation_routes.csv 에 실측 구간(measured_min)이 없어 기존 예시(14분 → 약 10분)를 "예시" 표시와 함께 유지');
+    notes.push('참고: 22장 "한 사람의 변화"는 실측 구간(validation_routes.csv measured_min)과 선정지 개입 결과(intervention_summary.csv, v5)가 함께 있어야 계산됨 → 기존 예시(14분 → 약 10분)를 "예시" 배지와 함께 유지');
   }
   card(s, 0.5, 1.4, 3.9, 2.55);
-  T(s, '지금', { x:0.75, y:1.55, w:3, h:0.3, fontSize:12, bold:true, color:C.muted });
-  T(s, measured ? V('ONE.before') : '14분', { x:0.75, y:1.9, w:3, h:0.7, fontSize:36, bold:true, color:C.orange });
-  T(s, measured ? `구간 배수 ${V('ONE.ratio')} · 오르막 경사 반영\n팀 실측 ${V('ONE.measured')} (성인 걸음)` : '귀갓길 배수 1.52 · 오르막에서 두 번 휴식\n궂은 날에는 약 받는 날을 미룸',
+  T(s, iv ? '지금 (수혜 주거 건물 평균)' : '지금', { x:0.75, y:1.55, w:3.4, h:0.3, fontSize:12, bold:true, color:C.muted });
+  T(s, iv ? `HBI ${V('ONE.hbi_before')}` : '14분', { x:0.75, y:1.9, w:3.5, h:0.7, fontSize:iv?32:36, bold:true, color:C.orange });
+  T(s, iv ? `실측 구간 ${V('ONE.route')}: 팀 실측 ${V('ONE.measured')}\n모델 예측 ${V('ONE.route_model')} (성인 1.1m/s)` : '귀갓길 배수 1.52 · 오르막에서 두 번 휴식\n궂은 날에는 약 받는 날을 미룸',
     { x:0.75, y:2.7, w:3.5, h:0.9, fontSize:11, color:C.ink, lineSpacingMultiple:1.2 });
   s.addShape(pres.shapes.RIGHT_ARROW, { x:4.55, y:2.4, w:0.6, h:0.5, fill:{color:C.orange}, line:{color:C.orange} });
   card(s, 5.3, 1.4, 4.2, 2.55, C.dark);
-  T(s, measured ? '경사 구간을 이동편의시설 1기로 대체하면' : '가장 가파른 150m 구간에 경사형 엘리베이터 1기', { x:5.55, y:1.55, w:3.8, h:0.3, fontSize:11, bold:true, color:'CFE0D4' });
-  T(s, measured ? V('ONE.after') : '약 10분', { x:5.55, y:1.9, w:3.5, h:0.7, fontSize:36, bold:true, color:C.white });
-  T(s, measured ? '배수 약 1.0 · 평지와 같은 부담\n대기·탑승 1.5분 포함' : '배수 약 1.0 · 평지와 같은 부담\n쉬지 않고 집에 도착', { x:5.55, y:2.7, w:3.7, h:0.9, fontSize:11, color:C.white, lineSpacingMultiple:1.2 });
+  T(s, iv ? `${V('ONE.facility')} 설치 후` : '가장 가파른 150m 구간에 경사형 엘리베이터 1기', { x:5.55, y:1.55, w:3.8, h:0.3, fontSize:11, bold:true, color:'CFE0D4' });
+  T(s, iv ? `HBI ${V('ONE.hbi_after')}` : '약 10분', { x:5.55, y:1.9, w:3.7, h:0.7, fontSize:iv?32:36, bold:true, color:C.white });
+  T(s, iv ? `왕복 평균 ${V('ONE.saved')}분 단축 (최대 ${V('ONE.saved_max')}분)\n수혜 주거 건물 ${V('ONE.n_benefit')}동` : '배수 약 1.0 · 평지와 같은 부담\n쉬지 않고 집에 도착',
+    { x:5.55, y:2.7, w:3.7, h:0.9, fontSize:11, color:C.white, lineSpacingMultiple:1.2 });
   card(s, 0.5, 4.15, 9, 0.9, C.paleO);
   T(s, [
     { text:'이 계산을 집집마다 반복하면, ', options:{ color:C.ink } },
     { text:'"엘리베이터 1기가 몇 명의 하루에서 몇 분을 돌려주는가"', options:{ bold:true, color:C.dark } },
     { text:'를 설치 전에 알 수 있습니다.', options:{ color:C.ink } },
   ], { x:0.75, y:4.15, w:8.5, h:0.9, fontSize:12.5, valign:'middle' });
-  src(s, measured
-    ? `모델 산출: ${V('ONE.route')} 구간 편도, 고령자 0.8m/s + Tobler 경사 보정 (validation_routes.csv) / 설치 후 = 평지 가정 시간 + 대기·탑승 1.5분`
+  src(s, iv
+    ? '모델 산출: intervention_summary.csv 선정지 행(설치 전·후 HBI, 왕복 단축 분) / 실측 구간은 모델 검증용 (validation_routes.csv)'
     : '예시(가정 시뮬레이션): 엘리베이터가 경사 20% 구간 150m(고도 30m)를 대체, 대기·탑승 1.5분 / 잔여 300m는 평균 경사 8% / 팀 자체 산출');
-  s.addNotes(measured ? '제안의 효능감을 한 사람의 변화로 보여주는 장표. 팀이 현장에서 실측한 구간을 모델로 다시 계산한 값입니다.'
-    : '제안의 효능감을 한 사람의 변화로 보여주는 장표. 14분이 10분이 되는 것, 그리고 쉬지 않고 집에 갈 수 있다는 것. (실측 구간 결과가 들어오면 자동으로 실제 값으로 바뀝니다)');
+  s.addNotes(iv ? '선정지에 시설을 설치했을 때 그 시설의 수혜 주거 건물 평균이 어떻게 바뀌는지(분석 코드 v5 개입 시뮬레이션). 실측 구간은 모델이 현장 시간을 잘 맞히는지 보여 주는 근거입니다.'
+    : '제안의 효능감을 한 사람의 변화로 보여주는 장표. 14분이 10분이 되는 것, 그리고 쉬지 않고 집에 갈 수 있다는 것. (v5 개입 결과와 실측 구간이 들어오면 자동으로 실제 값으로 바뀝니다)');
 }
 
 B.IMPACT();
@@ -844,13 +887,14 @@ B.AP3();
 B.AP4();
 
 // ── 저장 + 누락 목록 ────────────────────────────────────────
+if (pending.length) { console.error('!! 빈칸으로 그려지지 않은 누락 key: ' + pending.map(p => p.page + '장 ' + p.key).join(', ')); process.exitCode = 1; }
 if (page > 30) { console.error(`!! 슬라이드 ${page}장 — 30장 제한 초과`); process.exit(1); }
 const OUT = R.source === 'real' ? '../deliverables/언덕위우리동네_기획서_final.pptx'
           : R.source === 'fake' ? '../deliverables/_test_기획서.pptx'
           : '../deliverables/_blank_기획서.pptx';
 const lines = [`# 기획서 누락 목록 — source=${R.source}${R.src ? ', src=' + R.src : ''}, ${new Date().toISOString().slice(0, 19)}`,
   `# 출력: ${OUT.replace('../', '')} (${page}장)`,
-  ...missing.map(m => `누락: ${m.page}장, ${m.label}, ${m.need.join(' / ') || '-'}`), ...notes];
+  ...missing.map(m => `누락: ${m.page}장, ${m.label}, ${m.need.join(' / ') || '-'}  [${m.key}]`), ...notes];
 fs.mkdirSync('data', { recursive:true });
 fs.writeFileSync(path.join('data', 'missing.txt'), lines.join('\n') + '\n');
 if (R.source === 'none') console.warn('!! data/results.json 없음 → 빈칸 버전으로 생성합니다 (npm run build:fake 또는 build:real 을 쓰세요)');
