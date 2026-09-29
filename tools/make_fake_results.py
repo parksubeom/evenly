@@ -266,7 +266,7 @@ def main():
                    for k, v in emd.items() if len(v) >= 2])
         # 상호제공데이터 결합 (07_join_dong.py)
         js = []
-        for name, base, slope in [("SKT_고령유동인구", 0.62, -0.28), ("KCB_소득", 3150.0, -900.0)]:
+        for name, base, slope in [("SKT_60대이상유동인구", 0.62, -0.28), ("KCB_소득", 3150.0, -900.0)]:
             jr = []
             for r in dong_rows:
                 v = base + slope * (r[4] - 1.2) + rnd.gauss(0, abs(base) * 0.08)
