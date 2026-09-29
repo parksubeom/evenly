@@ -13,3 +13,9 @@ node_modules/
 package-lock.json
 # 맥
 .DS_Store
+# 공개데이터 원본 (폴더만 추적)
+data_public/raw/*
+!data_public/raw/.gitkeep
+# 밖 도구 결과 (반출 결과에서 만들어짐)
+results/dong_joined.csv
+results/public_baseline/
