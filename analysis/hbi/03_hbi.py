@@ -32,7 +32,7 @@ from lib.model import run_scenario
 
 net = load()
 nodes, e = net["nodes"], net["e"]
-gi = np.where(net["giant"])[0]           # 가장 큰 연결망에 속한 노드 번호들
+gi = np.where(net["giant"])[0]           # 남긴 연결망(큰 덩어리들)에 속한 노드 번호들
 idx = NearestIndex(nodes[gi])            # 그 노드들에만 연결하도록 색인
 
 def snap(xs, ys, maxd):

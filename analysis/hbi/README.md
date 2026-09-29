@@ -147,7 +147,7 @@ python 01_inspect.py
 
 | 일차 | 명령 | 확인할 것 (화면) |
 |---|---|---|
-| 2 | `python 02_network.py` (DEM 1m 있으면 `--dem1m` 붙이기) | "최대 연결망 노드 비율" 90% 이상 / "노드 고도 결측" 5% 이하 |
+| 2 | `python 02_network.py` (DEM 1m 있으면 `--dem1m` 붙이기) | "남긴 연결망 N개 … 노드 비율" 90% 이상 (N = 서로 떨어진 구 묶음 수, 5개 구면 보통 4: 종로·중 / 관악 / 광진 / 강서) / "노드 고도 결측" 5% 이하 |
 | 3 | `python 03_hbi.py` | "네트워크 연결" 95% 이상 / HBI 중앙값이 1.0~1.5 사이 |
 | 3 | `external/od_pairs.csv`, `sites.csv` 를 메모장으로 열어 현장실측 좌표·시간, 화곡동 좌표 입력 | |
 | 4 | `python 04_validate.py` | 선정지 percentile, 대현산 wheel_path_m, 기여도 표 |

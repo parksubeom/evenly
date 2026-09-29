@@ -56,7 +56,7 @@ if not tg:
     raise SystemExit(f"비교할 목적지가 없습니다 (INTERVENTION_TARGETS={C.INTERVENTION_TARGETS}, 결과에 있는 목적지={list(dest)})")
 
 # ── 1. 시설 양 끝 → 길 노드 연결, 시설 통과 시간 ───────────
-gi = np.where(net["giant"])[0]                                   # 가장 큰 연결망 노드만 (섬에 붙으면 효과가 0)
+gi = np.where(net["giant"])[0]                                   # 남긴 연결망 노드만 (작은 섬에 붙으면 효과가 0)
 idx = NearestIndex(nodes[gi])
 tf = transformer("EPSG:4326")                                    # 경위도 → 분석 좌표계
 fac = []                                                         # [(이름, 상태, (노드a, 노드b, 시간초)), ...]
