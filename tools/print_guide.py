@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-tools/print_guide.py ─ docs/1차방문_그림안내.md → 인쇄용 A4 PDF (docs/1차방문_그림안내.pdf)
+tools/print_guide.py ─ docs/1차방문_안내서.md → 인쇄용 A4 PDF (docs/1차방문_안내서.pdf)
 
 [실행]  python3 tools/print_guide.py        (Google Chrome 필요: HTML 을 만들어 Chrome 으로 PDF 인쇄)
 [이 문서에만 쓰는 표기]
-  ## 제목          → 새 쪽 (한 쪽에 한 단계)
+  # 제목           → 첫 번째는 문서 제목, 그다음부터는 "부" 표지 (새 쪽)
+  ## 제목          → 새 쪽 (한 쪽에 한 단계). 부 표지 바로 뒤의 첫 ## 은 같은 쪽
+  ### 제목         → 쪽을 넘기지 않는 작은 제목
   할 일: …          → 쪽 맨 위 큰 글씨 칸
   ```               → 명령 상자 (13pt 고정폭, 한 상자에 한 가지 일)
   ```screen 종류 제목 → 화면 예시 그림. 종류: cmd(OSGeo4W Shell) plaincmd(일반 명령 프롬프트) notepad(메모장) start(시작 메뉴 검색) explorer(탐색기 주소창) folder(폴더 목록)
@@ -15,8 +17,8 @@ tools/print_guide.py ─ docs/1차방문_그림안내.md → 인쇄용 A4 PDF (d
 import html, os, re, subprocess, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC = os.path.join(ROOT, "docs", "1차방문_그림안내.md")
-OUT = os.path.join(ROOT, "docs", "1차방문_그림안내.pdf")
+SRC = os.path.join(ROOT, "docs", "1차방문_안내서.md")
+OUT = os.path.join(ROOT, "docs", "1차방문_안내서.pdf")
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 CIRCLE = "①②③④⑤⑥⑦⑧⑨"
 CAPTION = "화면 예시 — 실제 화면과 글꼴·색·숫자가 다를 수 있음"
@@ -27,6 +29,10 @@ body { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; font-siz
 h1 { font-size: 19pt; margin: 0 0 6pt; }
 h2 { font-size: 16pt; margin: 0 0 5pt; padding: 3pt 8pt; background: #1f3b2d; color: #fff; break-before: page; }
 h2.first { break-before: auto; margin-top: 10pt; }
+h1.part { font-size: 20pt; break-before: page; margin: 0 0 6pt; padding: 6pt 10pt; border: 2.5pt solid #1f3b2d; color: #1f3b2d; }
+h3 { font-size: 13.5pt; margin: 10pt 0 3pt; border-bottom: 1.2pt solid #1f3b2d; break-after: avoid; }
+table.wide td code { font-size: 8.2pt; white-space: nowrap; }
+pre.cmdbox.small { font-size: 9pt; font-weight: normal; }
 p { margin: 3pt 0; } ol, ul { margin: 3pt 0 4pt 20pt; padding: 0; } li { margin: 2pt 0; }
 .todo { font-size: 15pt; font-weight: bold; border: 2pt solid #1f3b2d; background: #eef5f0; padding: 5pt 9pt; margin: 4pt 0 7pt; }
 .todo small { display: block; font-size: 10pt; font-weight: normal; color: #1f3b2d; }
@@ -117,12 +123,15 @@ def cells(line):
 
 
 WIDTHS = {("물어볼 것", "받아 적을 주소"): (52, 48), ("화면 문구", "뜻 → 할 일"): (40, 60), ("구역", "동네", "메모장에 넣을 줄"): (9, 15, 76),
-          ("화면에 나온 것", "뜻", "할 일"): (36, 19, 45), ("구역", "① 최대 연결망 노드 비율", "② 데이터 경계 500m 이내 (x%)", "끝났나 ○/×", "×일 때 오류 마지막 줄"): (8, 20, 22, 14, 36)}
+          ("화면에 나온 것", "뜻", "할 일"): (36, 19, 45), ("부", "누가 보나", "내용"): (24, 26, 50),
+          ("순서", "할 일", "명령 / 바꿀 줄"): (14, 46, 40), ("단계", "화면 문구", "기준"): (8, 40, 52), ("찾을 줄 (처음 모습)", "바꿀 내용"): (50, 50),
+          ("볼 줄", "연습 구역 1", "연습 구역 2"): (40, 28, 32), ("항목", "이 맥 (리허설)", "안심구역 (Windows, QGIS 3.32)"): (16, 32, 52),
+          ("구역", "대상 구", "config.py 에 넣을 줄", "크기", "들어 있는 선정지 (잘린 선까지 거리)"): (6, 11, 42, 14, 27), ("구역", "① 최대 연결망 노드 비율", "② 데이터 경계 500m 이내 (x%)", "끝났나 ○/×", "×일 때 오류 마지막 줄"): (8, 20, 22, 14, 36)}
 
 
 def convert(md):
     lines = md.split("\n")
-    out, i, lst, first = [], 0, None, True
+    out, i, lst, title_done, after_part = [], 0, None, False, False
 
     def close():
         nonlocal lst
@@ -148,7 +157,8 @@ def convert(md):
                 else:
                     out.append(("<!--short-->" if short else "") + html_)
             else:
-                out.append(f'<pre class="cmdbox">{html.escape(body)}</pre>')
+                small = "small" if max(len(x) for x in body.split("\n")) > 60 else ""   # 긴 줄(리허설 준비 줄·밖에서 할 일)은 작게
+                out.append(f'<pre class="cmdbox {small}">{html.escape(body)}</pre>')
             i = j + 1
             continue
         if ln.startswith("|") and i + 1 < len(lines) and re.match(r"^\|[-| :]+\|$", lines[i + 1].strip()):
@@ -161,7 +171,7 @@ def convert(md):
                 out.append('<div class="okbad"><div class="ok"><b class="h">✔ 성공하면</b>' + inline(rows[0][0]) +
                            '</div><div class="bad"><b class="h">✘ 이상하면</b>' + inline(rows[0][1]) + "</div></div>")
             else:
-                klass = "bbox" if "메모장에 넣을 줄" in head else ("memo" if "끝났나 ○/×" in head else "")
+                klass = "bbox" if "메모장에 넣을 줄" in head else ("memo" if "끝났나 ○/×" in head else ("wide" if "config.py 에 넣을 줄" in head else ""))
                 cols = "".join(f'<col style="width:{w}%">' for w in WIDTHS[tuple(head)]) if tuple(head) in WIDTHS else ""
                 out.append(f'<table class="{klass}"><colgroup>{cols}</colgroup><tr>' + "".join(f"<th>{inline(h)}</th>" for h in head) + "</tr>"
                            + "".join("<tr>" + "".join(f"<td>{inline(c)}</td>" for c in r) + "</tr>" for r in rows) + "</table>")
@@ -177,9 +187,14 @@ def convert(md):
             continue
         close()
         if ln.startswith("# "):
-            out.append(f"<h1>{inline(ln[2:])}</h1>")
+            if not title_done:
+                out.append(f"<h1>{inline(ln[2:])}</h1>"); title_done = True
+            else:
+                out.append(f'<h1 class="part">{inline(ln[2:])}</h1>'); after_part = True
         elif ln.startswith("## "):
-            out.append(f'<h2 class="{"first" if first else ""}">{inline(ln[3:])}</h2>'); first = False
+            out.append(f'<h2 class="{"first" if after_part else ""}">{inline(ln[3:])}</h2>'); after_part = False
+        elif ln.startswith("### "):
+            out.append(f"<h3>{inline(ln[4:])}</h3>")
         elif ln.startswith("할 일:"):
             out.append(f'<div class="todo"><small>이 단계에서 할 일</small>{inline(ln[4:].strip())}</div>')
         elif ln.strip():
@@ -192,7 +207,7 @@ def convert(md):
 def main():
     if not os.path.exists(CHROME):
         raise SystemExit(f"Google Chrome 이 없습니다: {CHROME}")
-    doc = (f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>1차 방문 그림 안내</title><style>{CSS}</style></head>'
+    doc = (f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>1차 방문 안내서</title><style>{CSS}</style></head>'
            f'<body>{convert(open(SRC, encoding="utf-8").read())}</body></html>')
     with tempfile.TemporaryDirectory() as td:
         hp = os.path.join(td, "doc.html")

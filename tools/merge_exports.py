@@ -4,7 +4,7 @@ tools/merge_exports.py ─ [안심구역 밖] 1차 방문(v4)에서 구역별로
 
 [왜]  v4 는 "가장 큰 길 연결망 하나"만 남겨서, 서로 떨어진 5개 구를 한 번에 돌리면 구 묶음 하나만 남습니다.
       그래서 1차 방문에서는 구역(종로·중 / 관악 / 광진 / 강서)마다 AREA_BBOX 를 바꿔 02→05 를 따로 돌리고
-      output 을 구역별로 반출합니다 (docs/1차방문_구역별실행.md). 이 도구가 그 4개를 합칩니다.
+      output 을 구역별로 반출합니다 (docs/1차방문_안내서.md). 이 도구가 그 4개를 합칩니다.
 [실행]
   python3 tools/merge_exports.py --zone A=results/raw_export_zones/A --zone B=results/raw_export_zones/B \\
                                  --zone C=results/raw_export_zones/C --zone D=results/raw_export_zones/D \\
@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from evenly_common import ROOT, load_dongs, dong_of, load_sites, read_csv, write_csv, num, truthy, is_fake_dir, mark_fake, refuse_raw_export
 
 ZONES = {"A": ["종로구", "중구"], "B": ["관악구"], "C": ["광진구"], "D": ["강서구"]}
-# 1차 방문 구역별 AREA_BBOX (EPSG:5186, 대상 구 범위 + 1,000m, 100m 단위). docs/1차방문_구역별실행.md 와 같은 값
+# 1차 방문 구역별 AREA_BBOX (EPSG:5186, 대상 구 범위 + 1,000m, 100m 단위). docs/1차방문_안내서.md 와 같은 값
 ZONE_BBOX = {"A": [194500, 548300, 203400, 560200], "B": [190100, 536300, 200000, 545000],
              "C": [203900, 546100, 211100, 553700], "D": [178200, 546400, 190500, 557200]}
 EDGE = 500   # config.EDGE_BUFFER
