@@ -16,7 +16,7 @@ tools/public_baseline.py ─ [안심구역 밖] 공개데이터만으로 같은 
         높이 = R×256 + G + B/256 − 32768
 [결과]  results/public_baseline/
   grid_public_<target>.csv : 250m 격자 cell_x, cell_y(EPSG:5186 중심), n_nodes, hbi_mean, elder_min, flat_min (노드 3개 이상 격자)
-  compare_<target>.csv     : metric, value — 공통 격자 수, 순위상관, LX 상위10% 중 공개도 상위10% 비율,
+  compare_<target>.csv     : metric, value — (마지막 두 줄: lx_grid 입력 경로, 출처 real/fake) 공통 격자 수, 순위상관, LX 상위10% 중 공개도 상위10% 비율,
                              LX HBI 1.3 이상 격자 수와 그중 공개데이터로 1.3 미만(놓침) 비율, 평균 절대차, 중앙값, 비고
 """
 import argparse, csv, io, math, os, re, sys, urllib.request
@@ -342,6 +342,10 @@ def main():
                     ["평균 절대차", round(float(np.mean(np.abs(A - P))), 3)],
                     ["중앙값 LX", round(float(np.median(A)), 3)], ["중앙값 공개", round(float(np.median(P)), 3)]]
         cmp.append(["비고", NOTE])
+        # 어떤 LX 격자와 비교했는지 기록 → 기획서 파이프라인이 가짜 결과와 비교한 파일을 실제 빌드에서 거부 (prepare_deck_data.py)
+        lxp = os.path.abspath(a.lx_grid)
+        fake = os.path.exists(os.path.join(os.path.dirname(lxp), "_FAKE_DATA_README.txt")) or "fake_export" in lxp
+        cmp += [["lx_grid 입력", lxp], ["lx_grid 출처", "fake" if fake else "real"]]
         with open(os.path.join(a.out, f"compare_{a.target}.csv"), "w", encoding="utf-8-sig", newline="") as f:
             w = csv.writer(f); w.writerow(["metric", "value"]); w.writerows(cmp)
         for m in cmp:
