@@ -14,6 +14,8 @@
   3. 행정동·250m 격자마다 점 수를 세고 "주거 건물 100개당 점 수"를 구함 (건물 MIN_COUNT 개 미만 동·격자는 제외)
   4. 동별 평균 HBI 와의 스피어만 순위상관, HBI 하위·상위 25% 동의 평균 비율
 [결과] (output/ → 반출 대상. 개별 점 좌표는 내보내지 않고 개수만)
+  [v5 값 합계 모드] POINT_DATA 에 value_cols·agg="sum" 을 주면 점 수 대신 값의 합 (SKT 50m 셀 유동인구 등).
+       period_col(예: STD_YM) 을 주면 기간 수로 나눠 기간 평균. 이때 n_points·per100_bld 는 "값 합계"·"건물 100개당 값"
   points_<이름>_dong.csv   : adm_cd, n_bld, hbi_mean, n_points, per100_bld
   points_<이름>_grid.csv   : cell_x, cell_y, n_bld, hbi_mean, n_points, per100_bld
   points_summary.csv       : 이름별 행 수 흐름(전체 → 조건 통과 → 좌표 있음 → 범위 안 → 동·격자 합계)과 상관계수
@@ -22,7 +24,7 @@
 import os, csv, numpy as np
 np.seterr(invalid="ignore", divide="ignore")
 import config as C
-from lib.qio import log, write_csv, transform_xy, transformer, find_files, iter_layer
+from lib.qio import log, write_csv, transform_xy, transformer, find_files, iter_layer, read_any as read_table
 from lib.qgraph import spearman
 from lib.bload import load_buildings, usable
 
@@ -30,17 +32,6 @@ os.makedirs(C.OUTPUT, exist_ok=True)
 todo = {k: v for k, v in C.POINT_DATA.items() if v.get("path")}
 if not todo:
     raise SystemExit("config.POINT_DATA 에 path 가 있는 항목이 없습니다 → 건너뜀")
-
-
-def read_any(path):
-    """CSV 를 인코딩을 바꿔 가며 읽기. 반환: (행 목록, 성공한 인코딩)"""
-    for enc in ("utf-8-sig", "cp949", "euc-kr"):
-        try:
-            with open(path, encoding=enc, newline="") as f:
-                return list(csv.DictReader(f)), enc
-        except UnicodeDecodeError:
-            continue
-    raise RuntimeError(f"인코딩을 알 수 없음: {path}")
 
 
 def fnum(v):
@@ -72,8 +63,10 @@ if bd:
 
 summary = []
 for name, cfg in todo.items():
-    rows, enc = read_any(cfg["path"])
+    rows, enc, sep = read_table(cfg["path"], cfg.get("sep"))   # [v5] 인코딩·구분자(쉼표·| ·탭) 자동
     n0 = len(rows)
+    vcols = cfg.get("value_cols") or []                        # [v5] 값 합계 모드 (SKT 유동인구처럼 점=셀, 값을 더함)
+    summing = cfg.get("agg") == "sum" and bool(vcols)
     for col, val in (cfg.get("filter") or {}).items():   # 정확히 일치 (리스트면 그중 하나)
         ok = set(str(x) for x in (val if isinstance(val, (list, tuple)) else [val]))
         rows = [r for r in rows if str(r.get(col, "")).strip() in ok]
@@ -81,13 +74,28 @@ for name, cfg in todo.items():
         rows = [r for r in rows if str(txt) in str(r.get(col, ""))]
     n1 = len(rows)
     xy = np.array([(fnum(r.get(cfg["x_col"])), fnum(r.get(cfg["y_col"]))) for r in rows], float).reshape(-1, 2)
-    xy = xy[np.isfinite(xy).all(axis=1)]                 # 좌표가 빈 행 제외
+    if summing:
+        miss = [c for c in vcols if rows and c not in rows[0]]
+        if miss:
+            raise SystemExit(f"{name}: 값 열 {miss} 가 파일에 없습니다. 열: {list(rows[0])[:20]}")
+        val = np.array([np.nansum([fnum(r.get(c)) for c in vcols]) for r in rows], float)
+        pc = cfg.get("period_col")
+        nper = len({r.get(pc) for r in rows}) if pc else 1          # 기간(예: 12개월) 수 → 합 ÷ 기간 = 기간 평균
+        val = val / max(nper, 1)
+        if pc:
+            log(f"  값 합계 모드: {'+'.join(vcols)}, '{pc}' {nper}개 기간 평균")
+    else:
+        val = np.ones(len(xy))
+    okm = np.isfinite(xy).all(axis=1)
+    xy, val = xy[okm], val[okm]                          # 좌표가 빈 행 제외
     n2 = len(xy)
     px, py = transform_xy(transformer(cfg.get("crs") or "EPSG:4326"), xy[:, 0], xy[:, 1]) if n2 else (np.array([]), np.array([]))
     inb = (px >= bx0) & (px <= bx1) & (py >= by0) & (py <= by1)   # 분석 범위 안
-    px, py = px[inb], py[inb]
+    px, py, val = px[inb], py[inb], val[inb]
     n3 = len(px)
-    log(f"{name}: 인코딩 {enc}, 전체 {n0:,} → 조건 통과 {n1:,} → 좌표 있음 {n2:,} → 범위 안 {n3:,}")
+    vsum = float(val.sum())                              # 범위 안 점들의 값 합계 (개수 모드면 = 점 수)
+    log(f"{name}: 인코딩 {enc}, 구분자 '{sep}', 전체 {n0:,} → 조건 통과 {n1:,} → 좌표 있음 {n2:,} → 범위 안 {n3:,}"
+        + (f" (값 합계 {vsum:,.1f})" if summing else ""))
 
     # 격자별
     kb = np.floor(X[v] / C.GRID).astype(np.int64) * 10**7 + np.floor(Y[v] / C.GRID).astype(np.int64)
@@ -95,12 +103,13 @@ for name, cfg in todo.items():
     ub, inv = np.unique(kb, return_inverse=True)
     cnt = np.bincount(inv)
     hm = np.bincount(inv, H[v]) / cnt
-    up, pc = np.unique(kp, return_counts=True)
-    pmap = dict(zip(up, pc))
+    up, pinv = np.unique(kp, return_inverse=True)
+    pmap = dict(zip(up, np.bincount(pinv.ravel(), val) if len(kp) else []))   # 격자별 점 수(또는 값 합)
     grows = []
     for k in np.where(cnt >= C.MIN_COUNT)[0]:
-        n = int(pmap.get(ub[k], 0))
-        grows.append([(ub[k] // 10**7 + 0.5) * C.GRID, (ub[k] % 10**7 + 0.5) * C.GRID, int(cnt[k]), round(float(hm[k]), 3), n, round(n / cnt[k] * 100, 3)])
+        n = float(pmap.get(ub[k], 0))
+        grows.append([(ub[k] // 10**7 + 0.5) * C.GRID, (ub[k] % 10**7 + 0.5) * C.GRID, int(cnt[k]), round(float(hm[k]), 3),
+                      round(n, 2) if summing else int(n), round(n / cnt[k] * 100, 3)])
     write_csv(os.path.join(C.OUTPUT, f"points_{name}_grid.csv"), ["cell_x", "cell_y", "n_bld", "hbi_mean", "n_points", "per100_bld"], grows)
 
     # 행정동별
@@ -111,8 +120,8 @@ for name, cfg in todo.items():
             m = v & (bwhich == k)
             if m.sum() < C.MIN_COUNT:
                 continue
-            n = int((pwhich == k).sum())
-            drows.append([code, int(m.sum()), round(float(H[m].mean()), 3), n, round(n / m.sum() * 100, 3)])
+            n = float(val[pwhich == k].sum()) if summing else int((pwhich == k).sum())
+            drows.append([code, int(m.sum()), round(float(H[m].mean()), 3), round(n, 2) if summing else n, round(n / m.sum() * 100, 3)])
     write_csv(os.path.join(C.OUTPUT, f"points_{name}_dong.csv"), ["adm_cd", "n_bld", "hbi_mean", "n_points", "per100_bld"], drows)
 
     # 상관과 4분위 비교 (동 기준)
@@ -124,8 +133,10 @@ for name, cfg in todo.items():
         q1, q3 = np.quantile(hh, [0.25, 0.75])
         lo, hi = float(rate[hh <= q1].mean()), float(rate[hh >= q3].mean())
     f = lambda x: round(float(x), 3) if np.isfinite(x) else ""
+    unit = "값 합계" if summing else "점 수"
     summary += [[name, "전체 행 수", n0], [name, "조건 통과", n1], [name, "좌표 있음", n2], [name, "분석 범위 안", n3],
-                [name, f"격자 합계(건물 {C.MIN_COUNT}개 이상 격자)", ng], [name, f"행정동 합계(건물 {C.MIN_COUNT}개 이상 동)", nd],
+                [name, f"분석 범위 안 {unit}", round(vsum, 2)],
+                [name, f"격자 합계(건물 {C.MIN_COUNT}개 이상 격자, {unit})", round(ng, 2)], [name, f"행정동 합계(건물 {C.MIN_COUNT}개 이상 동, {unit})", round(nd, 2)],
                 [name, "동별 HBI 평균 vs 건물 100개당 점 수: 스피어만", f(rho)],
                 [name, "HBI 하위 25% 동 평균(건물 100개당)", f(lo)], [name, "HBI 상위 25% 동 평균(건물 100개당)", f(hi)]]
     log(f"  격자 합계 {ng:,}, 동 합계 {nd:,} (범위 안 {n3:,} 중 차이 = 건물 {C.MIN_COUNT}개 미만 격자·동이나 동 경계 밖 점), 스피어만 {f(rho)}")
