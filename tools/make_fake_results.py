@@ -7,6 +7,7 @@ tools/make_fake_results.py ─ 반출 결과와 똑같은 형식의 "가짜" 결
 [실행] python3 tools/make_fake_results.py              → results/fake_export/ (전체)
        python3 tools/make_fake_results.py --partial    → join_*, parcel_*, sensitivity, map_* 없이 (누락 처리 시험)
        python3 tools/make_fake_results.py --schema v4  → v4(1차 방문) 형식. 기본 v5 는 intervention_*·validation_measured,
+                                                         KCB 저소득 비율(07), SKT 값 합계(10 points_*), 교통사고 법정동(11 legal_*), pop60,
                                                          percentile_circle, station_ev, "(경계 제외)" 지표 이름이 추가됨
 [주의] 여기서 나온 숫자는 전부 지어낸 값입니다. 이 폴더로 만든 PPT에는 "테스트 데이터 — 제출 금지"
        워터마크가 붙고, 파일명도 deliverables/_test_기획서.pptx 로 따로 나옵니다.
@@ -24,6 +25,19 @@ TARGETS = ["medical", "bus", "elderly", "station"]      # v4 는 약국 미포�
 # 목적지별 평지 가정 왕복 시간(분)의 대략 범위, HBI 강도
 TPROF = {"medical": (8, 34, 1.0), "bus": (3, 14, 0.8), "elderly": (10, 40, 1.05), "station": (14, 48, 1.15)}
 SENS = ["보행속도 0.7m/s", "보행속도 1.0m/s", "내리막 부담 0%(Tobler 원식)", "내리막 부담 100%", "계단 가중 1.5", "경사 절단 30%"]
+
+
+def pear(xs, ys):
+    n = len(xs); mx, my = sum(xs) / n, sum(ys) / n
+    sxy = sum((x - mx) * (y - my) for x, y in zip(xs, ys)); sxx = sum((x - mx) ** 2 for x in xs); syy = sum((y - my) ** 2 for y in ys)
+    return sxy / math.sqrt(sxx * syy) if sxx > 0 and syy > 0 else 0.0
+
+
+def rk(xs):
+    o = sorted(range(len(xs)), key=lambda i: xs[i]); r = [0.0] * len(xs)
+    for n, i in enumerate(o):
+        r[i] = n
+    return r
 
 
 def gpkg_write(path, layer, cells, cols):
@@ -261,20 +275,25 @@ def main():
         for r in med:
             k = r["c"]["dong"]["adm_cd"][:8] + "01"            # 가짜 법정동 코드
             emd.setdefault(k, []).append(r)
-        write_csv(P("parcel_by_legal_dong.csv"), ["emd_cd", "n", "hbi_mean", "share_high"],
-                  [[k, sum(r["c"]["n"] for r in v), round(sum(r["hbi"] for r in v) / len(v), 3), round(sum(r["share"] for r in v) / len(v), 3)]
-                   for k, v in emd.items() if len(v) >= 2])
+        prow = [[k, sum(r["c"]["n"] for r in v), round(sum(r["hbi"] for r in v) / len(v), 3), round(sum(r["share"] for r in v) / len(v), 3)]
+                + ([v[0]["c"]["dong"]["gu"], "가짜" + v[0]["c"]["dong"]["adm_nm"].split()[-1]] if V5 else [])
+                for k, v in emd.items() if len(v) >= 2]
+        write_csv(P("parcel_by_legal_dong.csv"), ["emd_cd", "n", "hbi_mean", "share_high"] + (["sgg_nm", "emd_nm"] if V5 else []), prow)
         # 상호제공데이터 결합 (07_join_dong.py)
+        #   v5: KCB_60세이상_월200만원이하비율 (0~1, 높을수록 저소득). HBI 가 높은 동일수록 저소득 비율이 높게 → 19장 중첩 방향 시험
+        #   v4: v4 config 이름(SKT_고령유동인구, KCB_소득 금액) 그대로
         js = []
-        for name, base, slope in [("SKT_60대이상유동인구", 0.62, -0.28), ("KCB_소득", 3150.0, -900.0)]:
+        jset = ([("KCB_60세이상_월200만원이하비율", 0.30, 0.22, 0.03)] if V5 else
+                [("SKT_고령유동인구", 0.62, -0.28, 0.05), ("KCB_소득", 3150.0, -900.0, 250.0)])
+        for name, base, slope, sd in jset:
             jr = []
             for r in dong_rows:
-                v = base + slope * (r[4] - 1.2) + rnd.gauss(0, abs(base) * 0.08)
-                jr.append([r[0], r[2], r[4], r[5], round(v, 4)])
+                v = base + slope * (r[4] - 1.2) + rnd.gauss(0, sd)
+                jr.append([r[0], r[2], r[4], r[5], round(min(0.95, max(0.02, v)), 4) if "비율" in name else round(v, 4)])
             write_csv(P(f"join_{name}.csv"), ["adm_cd", "adm_nm", "hbi_mean", "share_high", name], jr)
-            js += [[name, "결합 행정동 수", len(jr)], [name, "HBI 평균 vs 값: 피어슨 상관", -0.412 if "SKT" in name else -0.268],
-                   [name, "HBI 평균 vs 값: 스피어만 순위상관", -0.395 if "SKT" in name else -0.241],
-                   [name, "고위험 비율 vs 값: 스피어만 순위상관", -0.37 if "SKT" in name else -0.22]]
+            js += [[name, "결합 행정동 수", len(jr)], [name, "HBI 평균 vs 값: 피어슨 상관", round(pear([x[2] for x in jr], [x[4] for x in jr]), 3)],
+                   [name, "HBI 평균 vs 값: 스피어만 순위상관", round(pear(rk([x[2] for x in jr]), rk([x[4] for x in jr])), 3)],
+                   [name, "고위험 비율 vs 값: 스피어만 순위상관", round(pear(rk([x[3] for x in jr]), rk([x[4] for x in jr])), 3)]]
             for gname in ["HBI 하위 25% 동", "25~50%", "50~75%", "HBI 상위 25% 동"]:
                 js.append([name, f"{gname} 평균값", ""])
         write_csv(P("join_summary.csv"), ["data", "metric", "value"], js)
@@ -318,22 +337,46 @@ def main():
                 row += [v, round(v * r[7] / r[6], 1) if r[6] else ""]
             jr.append(row)
         write_csv(P("dong_joined.csv"), jh, jr)
-        pd = [[r[0], r[3], r[4], max(0, int(r[3] * (0.004 + 0.01 * (r[4] - 1)) + rnd.randint(-2, 2))), 0] for r in dong_rows]
-        for x in pd:
-            x[4] = round(x[3] / x[1] * 100, 3)
-        write_csv(P("points_교통사고_고령보행자_dong.csv"), ["adm_cd", "n_bld", "hbi_mean", "n_points", "per100_bld"], pd)
-        write_csv(P("points_교통사고_고령보행자_grid.csv"), ["cell_x", "cell_y", "n_bld", "hbi_mean", "n_points", "per100_bld"],
-                  [[r["c"]["x"], r["c"]["y"], r["c"]["n"], round(r["hbi"], 3), 0, 0.0] for r in med[:50]])
-        hh = sorted(x[2] for x in pd)
-        q1, q3 = hh[len(hh) // 4], hh[len(hh) * 3 // 4]
-        lo_ = sum(x[4] for x in pd if x[2] <= q1) / max(1, sum(1 for x in pd if x[2] <= q1))
-        hi_ = sum(x[4] for x in pd if x[2] >= q3) / max(1, sum(1 for x in pd if x[2] >= q3))
+        # 60세 이상 거주인구 (실제는 data_public/pop60.csv = tools/prep_elderly_pop.py --min-age 60. 가짜는 이 폴더 안에만)
+        pop60 = {r[0]: rnd.randint(2800, 12000) for r in dong_rows}
+        write_csv(P("pop60.csv"), ["adm_cd", "pop60", "base_ym"], [[k, v, "2026-08-31"] for k, v in pop60.items()])
+        # SKT (10_points_join.py 값 합계 모드): 행정동 합 = 60세 이상 거주인구 × 외출 지수, 외출 지수는 HBI 가 높을수록 낮게
+        psum = []
+        for nm, per in [("SKT_60대이상유동인구", None), ("SKT_낮시간유동인구", 3.1)]:
+            dd = []
+            for r in dong_rows:
+                ix = max(0.2, 1.6 - 0.55 * (r[4] - 1.0) + rnd.gauss(0, 0.12))
+                v = pop60[r[0]] * (ix if per is None else per * ix)
+                dd.append([r[0], r[3], r[4], round(v, 2), round(v / r[3] * 100, 3)])
+            write_csv(P(f"points_{nm}_dong.csv"), ["adm_cd", "n_bld", "hbi_mean", "n_points", "per100_bld"], dd)
+            write_csv(P(f"points_{nm}_grid.csv"), ["cell_x", "cell_y", "n_bld", "hbi_mean", "n_points", "per100_bld"],
+                      [[r["c"]["x"], r["c"]["y"], r["c"]["n"], round(r["hbi"], 3), 0.0, 0.0] for r in med[:50]])
+            tot = sum(x[3] for x in dd)
+            hh = sorted(x[2] for x in dd); q1, q3 = hh[len(hh) // 4], hh[len(hh) * 3 // 4]
+            psum += [[nm, "전체 행 수", 19200 * 12], [nm, "조건 통과", 19200 * 12], [nm, "좌표 있음", 19200 * 12], [nm, "분석 범위 안", 5040 * 12],
+                     [nm, "분석 범위 안 값 합계", round(tot * 1.02, 2)], [nm, "격자 합계(건물 5개 이상 격자, 값 합계)", round(tot * 0.9, 2)],
+                     [nm, "행정동 합계(건물 5개 이상 동, 값 합계)", round(tot, 2)],
+                     [nm, "동별 HBI 평균 vs 건물 100개당 점 수: 스피어만", round(pear(rk([x[2] for x in dd]), rk([x[4] for x in dd])), 3)],
+                     [nm, "HBI 하위 25% 동 평균(건물 100개당)", round(sum(x[4] for x in dd if x[2] <= q1) / max(1, sum(1 for x in dd if x[2] <= q1)), 3)],
+                     [nm, "HBI 상위 25% 동 평균(건물 100개당)", round(sum(x[4] for x in dd if x[2] >= q3) / max(1, sum(1 for x in dd if x[2] >= q3)), 3)]]
+        write_csv(P("points_summary.csv"), ["data", "metric", "value"], psum)
+        # 교통사고 (11_legal_dong_join.py): 법정동별 건수, HBI 가 높을수록 조금 많게
         nm = "교통사고_고령보행자"
-        write_csv(P("points_summary.csv"), ["data", "metric", "value"], [
-            [nm, "전체 행 수", 5210], [nm, "조건 통과", 1390], [nm, "좌표 있음", 1371], [nm, "분석 범위 안", 1204],
-            [nm, "격자 합계(건물 5개 이상 격자)", 1090], [nm, "행정동 합계(건물 5개 이상 동)", sum(x[3] for x in pd)],
-            [nm, "동별 HBI 평균 vs 건물 100개당 점 수: 스피어만", 0.31],
-            [nm, "HBI 하위 25% 동 평균(건물 100개당)", round(lo_, 3)], [nm, "HBI 상위 25% 동 평균(건물 100개당)", round(hi_, 3)]])
+        lr = []
+        for r in prow:
+            if r[1] < MIN_COUNT:
+                continue
+            ne = max(0, int(r[1] * (0.01 + 0.02 * (r[2] - 1)) + rnd.randint(-1, 2)))
+            lr.append([r[0], r[4], r[5], r[1], r[2], ne, round(ne / r[1] * 100, 3)])
+        write_csv(P(f"legal_{nm}.csv"), ["emd_cd", "sgg_nm", "emd_nm", "n_parcel", "hbi_mean", "n_events", "per100_parcel"], lr)
+        hh = sorted(x[4] for x in lr); q1, q3 = hh[len(hh) // 4], hh[len(hh) * 3 // 4]
+        lo_ = sum(x[6] for x in lr if x[4] <= q1) / max(1, sum(1 for x in lr if x[4] <= q1))
+        hi_ = sum(x[6] for x in lr if x[4] >= q3) / max(1, sum(1 for x in lr if x[4] >= q3))
+        write_csv(P("legal_summary.csv"), ["data", "metric", "value"], [
+            [nm, "전체 행 수", 3000], [nm, "조건 통과", 1480], [nm, "법정동 이름 있음(건수)", 1480], [nm, "법정동 수(건수 있는 곳)", len(lr)],
+            [nm, f"붙은 법정동(필지 {MIN_COUNT}개 이상) 수", len(lr)], [nm, "붙은 법정동 건수 합계", sum(x[5] for x in lr)],
+            [nm, "법정동 HBI 평균 vs 필지 100개당 건수: 스피어만", round(pear(rk([x[4] for x in lr]), rk([x[6] for x in lr])), 3)],
+            [nm, "HBI 하위 25% 법정동 평균(필지 100개당)", round(lo_, 3)], [nm, "HBI 상위 25% 법정동 평균(필지 100개당)", round(hi_, 3)]])
 
     with open(P("deck_inputs.json"), "w", encoding="utf-8") as f:
         json.dump({"team_name": "테스트팀", "visit_dates": ["2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-19"]},
