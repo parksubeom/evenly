@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>현장실측 기록지 (10/3~4)</title>
+<title>현장실측 기록지 (10/3 토)</title>
 <style>
 @page { size: A4; margin: 11mm 11mm 10mm; }
 * { box-sizing: border-box; }
@@ -22,13 +22,14 @@ th { background: #eee; font-weight: 700; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
 .box { border: 1px solid #000; height: 34mm; }
 .meta { font-size: 8.5pt; }
+.off td { color: #999; }
 @media screen { body { padding: 12px; background: #fff; } .page { margin: 0 auto 24px; } }
 </style>
 </head>
 <body>
 
 <div class="page">
-<h1>현장실측 기록지 · 2026.10.3(토)~10.4(일)</h1>
+<h1>현장실측 기록지 · 2026.10.3(토) 하루</h1>
 <p class="meta">기록자 ______________ · 동행 ______________ · 날씨 ______________ · 기온 ____℃</p>
 
 <div class="two">
@@ -41,9 +42,9 @@ th { background: #eee; font-weight: 700; }
 </ul>
 <h2>좌표 찍는 법 (구글지도)</h2>
 <ol>
-<li>지도에서 그 지점을 <b>길게 누르면</b> 빨간 핀과 함께 위쪽에 <b>위도, 경도</b>가 뜸 (예: 37.48075, 126.94017)</li>
+<li>지도에서 그 지점을 <b>길게 누르면</b> 빨간 핀과 함께 위쪽에 <b>위도, 경도</b>가 뜸 (예: 37.55930, 127.02077)</li>
 <li>소수점 <b>5자리</b>까지 적기 (약 1m 정밀도)</li>
-<li>구글지도는 <b>위도(37.…)가 앞</b>. CSV 에는 <b>경도(126.…)를 앞</b>에 적으니 옮길 때 순서 주의 (관악·강서는 경도가 126 으로 시작)</li>
+<li>구글지도는 <b>위도(37.…)가 앞</b>. CSV 에는 <b>경도를 앞</b>에 적으니 옮길 때 순서 주의. 서울 경도는 <b>126~127 로 시작</b> (서쪽 지역은 126.…)</li>
 </ol>
 </div>
 <div>
@@ -59,43 +60,47 @@ th { background: #eee; font-weight: 700; }
 </div>
 </div>
 
-<h2>동선 (분석 구역 B 관악 · D 강서 안에서만)</h2>
+<h2>동선 (토요일 하루, ② → ③ → ④ → ① 순서)</h2>
+<p class="small"><b>출발 전</b> 대현산 모노레일 운영 시간 확인 · <b>이동</b>: 갈 때 5호선 청구역, ④ 뒤 6호선 신당역 → 창신역, 올 때 1호선 동묘앞역</p>
 <table class="small">
-<tr><th style="width:15%">때</th><th style="width:6%">번호</th><th>장소</th><th style="width:38%">할 일</th></tr>
-<tr><td rowspan="3">토요일<br>구역 B (관악)</td><td>①</td><td>봉천동 비안어린이공원 인근 계단 (2025 선정지, 37.48075, 126.94017)</td><td>계단 <b>아래·위 끝 좌표</b>, 오르기·내리기 시간 따로</td></tr>
-<tr><td>②</td><td>봉천역 → 언덕 위 주거지 왕복</td><td>400~600m 오르막 구간 하나. 출발·도착 좌표, 오르막·내리막 시간</td></tr>
-<tr><td>③</td><td>도림천 산책로 평지 (대조군)</td><td>평지 400m 안팎 왕복, 평지 걸음 속도 기준</td></tr>
-<tr><td rowspan="3">일요일<br>구역 D (강서)</td><td>④</td><td>화곡동 487번지 일대 계단 (2025 선정지, <b>좌표가 아직 없는 유일한 곳</b>)</td><td>계단 <b>아래·위 끝 좌표</b> (가장 중요). 시간은 재면 좋음</td></tr>
-<tr><td>⑤</td><td>까치산역 → 언덕 위 주거지 왕복</td><td>오르막 구간 하나. 출발·도착 좌표, 오르막·내리막 시간</td></tr>
-<tr><td>(선택)</td><td>금천구 금동초교 수직 엘리베이터 (분석 구역 밖)</td><td><b>대기·탑승 시간만</b>. 좌표는 검증에 쓰지 않음 (엘리베이터 설정값 대기 45초·1.0m/s 확인용)</td></tr>
+<tr><th style="width:17%">때</th><th style="width:6%">번호</th><th>장소</th><th style="width:36%">할 일</th></tr>
+<tr><td rowspan="4">토요일</td><td>②</td><td>신당동 대현산배수지공원 (하부 승강장 37.55930, 127.02077)</td><td>계단 도보 오르기·내리기 + 모노레일 대기·탑승 시간 따로, 하부·상부 좌표</td></tr>
+<tr><td>③</td><td>청구동 마을마당 앞 계단 (②에서 약 500m)</td><td>계단 오르기·내리기, 양 끝 좌표</td></tr>
+<tr><td>④</td><td>청계천변 평지 (대조군)</td><td>평지 400m 내외 왕복, 평지 걸음 속도 기준</td></tr>
+<tr><td>①</td><td>숭인동 창신역 1번출구 → 언덕 위 (37.57933, 127.01508)</td><td>오르막 왕복, 계단 구간 양 끝 좌표</td></tr>
+<tr class="off"><td>일요일</td><td>⑤ ⑥</td><td>봉천동 비안어린이공원 계단 · 북아현동 엘리베이터</td><td>이번에는 하지 않음</td></tr>
 </table>
-<p class="small">숭인동·신당동은 이번 실측에서 뺍니다 (모델 검증: 선정지 순위, 대현산 약 770m 우회 재현으로 대신).</p>
 
 <h2>시설 양 끝 좌표 (a = 아래, b = 위)</h2>
 <table class="grid small">
-<tr><th style="width:7%">번호</th><th style="width:20%">장소</th><th>a 위도</th><th>a 경도</th><th>b 위도</th><th>b 경도</th><th style="width:9%">계단 수</th><th style="width:10%">대기(초)</th><th style="width:10%">탑승(초)</th></tr>
-<tr><td>①</td><td>비안어린이공원 인근 계단</td><td></td><td></td><td></td><td></td><td></td><td>—</td><td>—</td></tr>
-<tr><td>④</td><td>화곡동 487번지 일대 계단</td><td></td><td></td><td></td><td></td><td></td><td>—</td><td>—</td></tr>
-<tr><td>(선택)</td><td>금동초교 엘리베이터</td><td colspan="4" style="text-align:center">좌표 적지 않음 (분석 구역 밖)</td><td>—</td><td></td><td></td></tr>
+<tr><th style="width:6%">번호</th><th style="width:18%">장소</th><th>a 위도</th><th>a 경도</th><th>b 위도</th><th>b 경도</th><th style="width:9%">계단 수</th><th style="width:10%">대기(초)</th><th style="width:10%">탑승(초)</th></tr>
+<tr><td>②</td><td>대현산 모노레일 (하부 a · 상부 b)</td><td>37.55930</td><td>127.02077</td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>③</td><td>청구동 마을마당 앞 계단</td><td></td><td></td><td></td><td></td><td></td><td>—</td><td>—</td></tr>
+<tr><td>①</td><td>창신역 일대 계단</td><td></td><td></td><td></td><td></td><td></td><td>—</td><td>—</td></tr>
 </table>
-<p class="small">① 위의 좌표(37.48075, 126.94017)는 공원 위치입니다. 계단 양 끝은 현장에서 찍어 적으세요.</p>
+<p class="small">②의 a 좌표는 서울시 보도자료(2020.11)의 하부 승강장 위치입니다. 현장에서 확인해 다르면 고쳐 적으세요.</p>
+<p class="small" style="margin-top:1.5mm"><b>집에서 지도 위성 보기로 찍을 곳</b> (계단 아래·위 끝)</p>
+<table class="grid small">
+<tr><th style="width:24%">장소</th><th>a 위도</th><th>a 경도</th><th>b 위도</th><th>b 경도</th><th style="width:22%">메모</th></tr>
+<tr><td>봉천동 비안어린이공원 인근 계단</td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>중곡동 무지개계단</td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>화곡동 487번지 일대 계단</td><td></td><td></td><td></td><td></td><td></td></tr>
+</table>
 </div>
 
 <div class="page">
 <h2 style="margin-top:0">구간 기록표</h2>
 <table class="grid small">
 <tr><th style="width:5%">번호</th><th style="width:7%">방향<br>(오름/내림)</th><th style="width:15%">출발 좌표<br>(위도, 경도)</th><th style="width:15%">도착 좌표<br>(위도, 경도)</th><th style="width:8%">시간<br>(분:초)</th><th style="width:5%">쉼<br>(회)</th><th style="width:6%">계단<br>(칸)</th><th style="width:16%">난간·벤치·경사로·노면</th><th style="width:7%">사진<br>번호</th><th>메모</th></tr>
-<tr><td>①</td><td>오름</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-<tr><td>①</td><td>내림</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
 <tr><td>②</td><td>오름</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
 <tr><td>②</td><td>내림</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-<tr><td>③</td><td>평지</td><td></td><td></td><td></td><td></td><td>—</td><td></td><td></td><td></td></tr>
-<tr><td>③</td><td>평지</td><td></td><td></td><td></td><td></td><td>—</td><td></td><td></td><td></td></tr>
-<tr><td>④</td><td>오름</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-<tr><td>④</td><td>내림</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-<tr><td>⑤</td><td>오름</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-<tr><td>⑤</td><td>내림</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-<tr><td>(선택)</td><td>엘리베이터</td><td colspan="2">대기 ___분 ___초 / 탑승 ___분 ___초</td><td></td><td>—</td><td>—</td><td></td><td></td><td></td></tr>
+<tr><td>②</td><td>모노레일</td><td colspan="2">대기 ___분 ___초 / 탑승 ___분 ___초</td><td></td><td>—</td><td>—</td><td></td><td></td><td></td></tr>
+<tr><td>③</td><td>오름</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>③</td><td>내림</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>④</td><td>평지</td><td></td><td></td><td></td><td></td><td>—</td><td></td><td></td><td></td></tr>
+<tr><td>④</td><td>평지</td><td></td><td></td><td></td><td></td><td>—</td><td></td><td></td><td></td></tr>
+<tr><td>①</td><td>오름</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>①</td><td>내림</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
 <tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
 <tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
 </table>
@@ -106,9 +111,8 @@ th { background: #eee; font-weight: 700; }
 <h2>다녀온 뒤 옮기는 곳</h2>
 <table class="small">
 <tr><th style="width:24%">기록</th><th style="width:34%">옮길 파일</th><th>적는 법</th></tr>
-<tr><td>시설 양 끝 좌표</td><td><code>analysis/hbi/external/interventions.csv</code> (v5)</td><td>a_lon, a_lat = 아래 끝 / b_lon, b_lat = 위 끝. <b>경도 먼저</b>. 잰 대기·탑승 시간으로 wait_s·speed 를 적거나 비워 둠(기본값)</td></tr>
-<tr><td>①②③⑤ 구간 (오름 방향, ③ 은 한 방향)</td><td><code>analysis/hbi/external/od_pairs.csv</code> 의 "현장실측①②③⑤" 줄</td><td>o = 아래(출발), d = 위(도착). o_lon, o_lat, d_lon, d_lat. measured_min 은 <b>분 단위 소수</b> (예: 3분 36초 → 3.6)</td></tr>
-<tr><td>④ 화곡동 계단 좌표</td><td><code>interventions.csv</code> 의 화곡동 줄 + <code>sites.csv</code> 의 강서구 화곡동 lon·lat</td><td>sites.csv 는 계단 가운데쯤 한 점 (지금은 화곡본동 중심 근사)</td></tr>
+<tr><td>시설 양 끝 좌표 (현장·위성 보기 모두)</td><td><code>analysis/hbi/external/interventions.csv</code> (v5)</td><td>a_lon, a_lat = 아래 끝 / b_lon, b_lat = 위 끝. <b>경도 먼저</b>. 잰 대기·탑승 시간으로 wait_s·speed 를 적거나 비워 둠(기본값)</td></tr>
+<tr><td>오르막 구간 (오름 방향)</td><td><code>analysis/hbi/external/od_pairs.csv</code></td><td>o = 아래(출발), d = 위(도착). o_lon, o_lat, d_lon, d_lat. measured_min 은 <b>분 단위 소수</b> (예: 3분 36초 → 3.6). v5 파일의 "현장실측①②③⑤" 줄은 이름을 이번 구간(②③④①)으로 바꿔 적으면 됨</td></tr>
 <tr><td>구간 기록표 전체</td><td><code>docs/field_survey_template.csv</code> 를 복사해 날짜 붙여 저장</td><td>이 표와 같은 열. 좌표는 위도·경도 칸을 따로</td></tr>
 <tr><td>사진</td><td><code>docs/photos/</code> (git 에는 올라가지 않음)</td><td>파일명 앞에 번호: <code>2_a_출발.jpg</code>, <code>2_중간_가파름.jpg</code>. 얼굴 나온 사진은 지우기</td></tr>
 </table>
