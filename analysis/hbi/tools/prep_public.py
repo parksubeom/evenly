@@ -6,7 +6,7 @@ tools/prep_public.py ─ [반입 전, 안심구역 밖에서] 공개 데이터 C
   python tools/prep_public.py pharmacy 건강_약국_서울특별시.csv [EPSG:5174]
       → external/pharmacy.csv
   python tools/prep_public.py elevator "서울시 지하철역 엘리베이터 위치정보.csv" [--check-stations 역사마스터.csv]
-      → external/subway_elevators.csv  (노드 유형 코드 1 = 지하철 출입구 행만)
+      → external/subway_elevators.csv  (역 단위: 코드 1 이 있으면 코드 1 만, 없으면 코드 0, 코드 2 제외)
 [하는 일]
   1. 열 이름 자동 인식: 이름(약국명·사업장명·지하철역명 …), 경도·위도 / X·Y / WKT "POINT(경도 위도)", 주소, 영업상태
      엘리베이터 파일처럼 "노드링크 유형" 열이 있으면 NODE 행만 씀
@@ -184,9 +184,15 @@ def main():
             from collections import Counter
             print(f"  '{tc}' 분포: {dict(Counter(r.get(tc, '') for r in rows))}  (0 일반노드, 1 지하철 출입구, 2 버스 정류장, 3 지하보도 출입구)")
             if kind == "elevator":
-                # 엘리베이터 목적지(station_ev)는 "지하철 출입구"(코드 1) 노드만 씀. 0·2 는 출입구가 아닌 지점
-                rows = [r for r in rows if str(r.get(tc, "")).strip() == "1"]
-                steps.append(("노드 유형 1(지하철 출입구)", len(rows)))
+                # 엘리베이터 목적지(station_ev): 역 단위로 고름
+                #   코드 1(지하철 출입구)이 있는 역 → 코드 1 노드만 / 코드 1 이 하나도 없는 역 → 그 역의 코드 0(일반노드)
+                #   코드 2(버스 정류장)는 뺌. 역마다 적어도 하나는 남아 휠체어 결과가 "역에 갈 수 없음" 으로 왜곡되지 않게
+                code = lambda r: str(r.get(tc, "")).strip()
+                has1 = {r[cn] for r in rows if code(r) == "1"}
+                only0 = sorted({r[cn] for r in rows if code(r) == "0"} - has1)
+                rows = [r for r in rows if code(r) == "1" or (code(r) == "0" and r[cn] not in has1)]
+                steps.append((f"역 단위 선택(코드 1 역 {len(has1)} + 코드 0 만 있는 역 {len(only0)})", len(rows)))
+                print(f"  코드 0 만 있는 역 {len(only0)}곳 (상위 10): {', '.join(only0[:10])}")
     if ca:
         rows = [r for r in rows if "서울" in str(r.get(ca, "")) or not str(r.get(ca, "")).strip()]
         steps.append(("서울(주소 빈 칸 포함)", len(rows)))
