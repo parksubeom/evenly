@@ -24,6 +24,8 @@
 | `outside_join_dong.py` | 반출 `dong_hbi.csv` + 동별 통계 CSV (여러 개) | `results/dong_joined.csv` | "자치구 + 동 이름"으로 결합, `<label>_<열>_in_high` = 값 × weight_high ÷ weight_all |
 | `public_baseline.py` | 도보 네트워크 CSV, 역 좌표, (선택) 반출 `grid_hbi.csv` | `results/public_baseline/grid_public_<target>.csv`, `compare_<target>.csv` | 공개데이터만으로 같은 모델(analysis/hbi/lib 그대로)을 돌린 대조군과 LX 결과 비교 |
 | `prep_points.py` | 아무 점 CSV | `name, lon, lat` CSV | 이름·좌표 열 자동 인식, 미터 좌표면 경위도로 변환, `--seoul` 서울 경계 안만 |
+| `outside_elderly.py` | 반출 `dong_hbi.csv` + `elderly_pop.csv` | 같은 폴더 `dong_hbi_with_elderly.csv` (+ pop65, base_ym) | **밖에서는 이 파일을 씀.** `analysis/hbi/tools/outside_elderly.py`(번들 안)는 예전 인구 형식용이라 쓰지 않음 |
+| `merge_exports.py` | 1차 방문 구역별 반출 폴더 A~D | `results/raw_export` + `merge_notes.txt` | 대상 구 안 격자·동만 합치고 선정지 백분위·신규 후보는 다시 계산 (docs/1차방문_구역별실행.md) |
 | `prep_elderly_pop.py` | 주민등록 고령 인구현황 CSV | `elderly_pop.csv` (adm_cd, pop65) | 동 단위 행만. 구 단위 파일이면 저장하지 않음 |
 
 실행 환경: 일반 Python 3 + numpy. `public_baseline.py` 는 osgeo(QGIS Python) 또는 pyproj + Pillow 가 필요합니다
