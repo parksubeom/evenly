@@ -386,11 +386,22 @@ B.IMPACT = () => {
     card(s, x, 1.35, 2.85, 2.7);
     s.addShape(pres.shapes.OVAL, { x:x+0.2, y:1.48, w:0.35, h:0.35, fill:{color:c[1]}, line:{color:c[1]} });
     T(s, c[0], { x:x+0.65, y:1.48, w:2.0, h:0.35, fontSize:13.5, bold:true, valign:'middle' });
-    c[2].forEach((t, j) => {
-      const hot = t === impact || t === impact2;
-      const n = c[2].length, gap = n > 3 ? 0.51 : 0.68;
-      T(s, t, { x:x+0.2, y:2.0 + j*gap, w:2.45, h:gap - 0.06, fontSize:n > 3 ? 10 : 10.5, color: t.includes('___')?'C0612F':(hot?C.orange:C.ink), bold: hot });
-    });
+    const n = c[2].length;
+    if (n <= 3) {
+      c[2].forEach((t, j) => {
+        const hot = t === impact || t === impact2;
+        T(s, t, { x:x+0.2, y:2.0 + j*0.68, w:2.45, h:0.62, fontSize:10.5, color: t.includes('___')?'C0612F':(hot?C.orange:C.ink), bold: hot });
+      });
+    } else {
+      // 항목이 4개(동별 통계 추정 줄 포함)면 글자 수로 줄 수를 어림해 차례로 쌓음 (10pt 에서 한 줄 약 28자)
+      let y = 1.98;
+      c[2].forEach((t) => {
+        const hot = t === impact || t === impact2;
+        const h = Math.max(1, Math.ceil(t.length / 28)) * 0.175 + 0.06;
+        T(s, t, { x:x+0.2, y, w:2.45, h, fontSize:10, color: t.includes('___')?'C0612F':(hot?C.orange:C.ink), bold: hot });
+        y += h + 0.12;
+      });
+    }
   });
   // 서비스명 evenly
   card(s, 0.5, 4.17, 9, 0.85, C.dark);

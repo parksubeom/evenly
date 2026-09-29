@@ -307,11 +307,16 @@ def main():
             ["공통 격자 수", 412], ["순위상관(스피어만, LX vs 공개)", 0.58], ["LX 상위10% 중 공개도 상위10% 비율", 0.41],
             ["LX HBI 1.3 이상 격자 수", 96], ["그중 공개데이터로 1.3 미만(놓침) 비율", 0.34], ["평균 절대차", 0.17],
             ["중앙값 LX", 1.14], ["중앙값 공개", 1.09], ["비고", "LX = 건물 평균, 공개 = 길 노드 평균, 공개 지형 약 30m급, 2020 네트워크, 계단 미사용"]])
-        jh = hdr + ["disabled_합계", "disabled_합계_in_high", "alone65_합계", "alone65_합계_in_high"]
+        # outside_join_dong.py --label 장애인_유형 --cols 지체,뇌병변 / --label 장애인_정도 --cols "심한 장애" / --label 독거노인 --cols 합계
+        jcols = ["장애인_유형_지체", "장애인_유형_뇌병변", "장애인_정도_심한장애", "독거노인_합계"]
+        jh = hdr + [c + sfx for c in jcols for sfx in ("", "_in_high")]
         jr = []
         for r in dong_rows:
-            dis, alo = rnd.randint(300, 1600), rnd.randint(150, 900)
-            jr.append(r + [dis, round(dis * r[7] / r[6], 1) if r[6] else "", alo, round(alo * r[7] / r[6], 1) if r[6] else ""])
+            vals = [rnd.randint(120, 700), rnd.randint(30, 200), rnd.randint(100, 600), rnd.randint(150, 900)]
+            row = list(r)
+            for v in vals:
+                row += [v, round(v * r[7] / r[6], 1) if r[6] else ""]
+            jr.append(row)
         write_csv(P("dong_joined.csv"), jh, jr)
         pd = [[r[0], r[3], r[4], max(0, int(r[3] * (0.004 + 0.01 * (r[4] - 1)) + rnd.randint(-2, 2))), 0] for r in dong_rows]
         for x in pd:

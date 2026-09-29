@@ -290,18 +290,23 @@ def main():
     optional("ABL.pub_n", "공통 격자 수", ["results/public_baseline/compare_station.csv"], cmpd.get("공통 격자 수") or None)
     dj = opt_file("dong_joined.csv")
     jrows = read_csv(dj) if dj else None
-    LABEL_KO = {"disabled": "장애인", "alone65": "독거노인", "alone": "독거노인"}
+    # 라벨(outside_join_dong.py --label) → 표시 이름, 합치는 방식. 라벨에 "_" 가 있을 수 있어 가장 길게 맞는 라벨을 씀
+    LABELS = {"장애인_유형": ("지체·뇌병변 장애인", "sum"), "장애인_정도": ("중증 장애인", "first"),
+              "독거노인": ("독거노인", "first"), "alone65": ("독거노인", "first"), "alone": ("독거노인", "first"),
+              "disabled": ("장애인", "first")}
     parts = []
     if jrows:
-        seen_lab = []
+        groups = {}
         for c in jrows[0]:
-            if c.endswith("_in_high"):
-                lab = c.split("_")[0]
-                if lab in seen_lab:
-                    continue                                   # 라벨마다 첫 열(보통 합계)만
-                seen_lab.append(lab)
-                tot = sum(num(r.get(c)) or 0 for r in jrows)
-                parts.append(f"{LABEL_KO.get(lab, lab)} 약 {f_about(tot)}명")
+            if not c.endswith("_in_high"):
+                continue
+            lab = max((k for k in LABELS if c.startswith(k + "_")), key=len, default=c.split("_")[0])
+            groups.setdefault(lab, []).append(c)
+        for lab, cs in groups.items():
+            ko, how = LABELS.get(lab, (lab, "first"))
+            use = cs if how == "sum" else cs[:1]           # 장애인_유형은 지체+뇌병변 합(휠체어 수요), 나머지는 첫 열(합계)
+            tot = sum(num(r.get(c)) or 0 for r in jrows for c in use)
+            parts.append(f"{ko} 약 {f_about(tot)}명")
     optional("IMPACT.joined", "HBI 1.8 이상 거주 추정(장애인·독거노인)", ["results/dong_joined.csv (tools/outside_join_dong.py)"], ", ".join(parts) or None)
     pts = {}
     for r in R("points_summary.csv") or []:
