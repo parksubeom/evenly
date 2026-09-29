@@ -258,6 +258,22 @@ def read_csv(path):
         return list(csv.DictReader(f))
 
 
+def read_any(path, sep=None):
+    """[v5] 안심구역에서 받는 CSV 를 읽기: 인코딩(utf-8-sig → cp949 → euc-kr)과 구분자(쉼표·파이프 | ·탭)를 자동으로 맞춤.
+    sep 를 주면 그 구분자를 씀 (config 에서 직접 지정). 반환: (행 목록 [{열: 값}], 인코딩, 구분자)
+    SKT 파일처럼 "|" 로 나뉜 파일도 읽힙니다. JS로 치면 Papa.parse(text, {delimiter: ""}) 의 자동 감지와 비슷"""
+    for enc in ("utf-8-sig", "cp949", "euc-kr"):
+        try:
+            with open(path, encoding=enc, newline="") as f:
+                head = f.readline()
+                f.seek(0)
+                d = sep or max([",", "|", "\t"], key=head.count)     # 첫 줄에 가장 많이 나오는 구분자
+                return list(csv.DictReader(f, delimiter=d)), enc, d
+        except UnicodeDecodeError:
+            continue
+    raise RuntimeError(f"인코딩을 알 수 없음: {path}")
+
+
 def csv_points(path, lon="lon", lat="lat"):
     """CSV 의 경위도(lon, lat) 열 → 분석 좌표계 x, y 배열. 좌표가 빈 행은 건너뜀.
     반환: (행 목록, x 배열, y 배열)"""

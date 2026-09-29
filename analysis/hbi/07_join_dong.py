@@ -4,6 +4,8 @@
 
 [언제] 05_export.py 로 output/dong_hbi.csv 가 만들어진 뒤, 안심구역에서 SKT·KCB 파일을 받았을 때
 [준비] config.py 맨 아래 JOIN_DATA 에 파일 경로·코드 열·값 열 이름을 적습니다.
+       [v5] 구분자(쉼표·| ·탭)는 자동 인식(또는 "sep"), filter 값은 목록·"__LATEST__"(가장 늦은 값), 분모 여러 열은 "base_cols"
+       SKT 유동인구는 행정동 코드가 없는 50m 셀 자료라 07 이 아니라 10_points_join.py 의 값 합계 모드로 붙입니다
        파일을 메모장이나 엑셀로 열어 첫 줄(열 이름)을 보고 그대로 옮겨 적으면 됩니다.
 [실행] python 07_join_dong.py
 [하는 일]
@@ -17,22 +19,12 @@
 import os, csv, numpy as np
 np.seterr(invalid="ignore", divide="ignore")
 import config as C
-from lib.qio import log, read_csv, write_csv
+from lib.qio import log, read_csv, write_csv, read_any as read_table
 from lib.qgraph import spearman
 
 dong = read_csv(os.path.join(C.OUTPUT, "dong_hbi.csv"))
 if not dong:
     raise SystemExit("output/dong_hbi.csv 가 없습니다. 05_export.py 를 먼저 실행하세요 (external/dong_boundary.geojson 필요)")
-
-def read_any(path):
-    """CSV 를 utf-8 → cp949 순으로 시도해서 읽기 (SKT·KCB 파일 인코딩이 다를 수 있음)"""
-    for enc in ("utf-8-sig", "cp949", "euc-kr"):
-        try:
-            with open(path, encoding=enc) as f:
-                return list(csv.DictReader(f))
-        except UnicodeDecodeError:
-            continue
-    raise RuntimeError(f"인코딩을 알 수 없음: {path}")
 
 def num(v):
     try:
@@ -52,19 +44,27 @@ for name, cfg in C.JOIN_DATA.items():
     if not cfg.get("path"):
         log(f"{name}: path 가 None → 건너뜀")
         continue
-    rows = read_any(cfg["path"])
-    log(f"{name}: {len(rows):,}행 읽음")
+    rows, enc, sep = read_table(cfg["path"], cfg.get("sep"))       # [v5] 인코딩·구분자(쉼표·| ·탭) 자동
+    log(f"{name}: {len(rows):,}행 읽음 (인코딩 {enc}, 구분자 '{sep}')")
+    n0 = len(rows)
     for k, val in (cfg.get("filter") or {}).items():
-        rows = [r for r in rows if str(r.get(k, "")).strip() == str(val)]
+        if val == "__LATEST__":                                   # [v5] 그 열의 가장 늦은 값만 (예: 기준시점)
+            val = max(str(r.get(k, "")).strip() for r in rows)
+            log(f"  filter {k} = 가장 늦은 값 '{val}'")
+        ok = set(str(x) for x in (val if isinstance(val, (list, tuple)) else [val]))   # [v5] 목록이면 그중 하나
+        rows = [r for r in rows if str(r.get(k, "")).strip() in ok]
+    log(f"  조건 통과 {len(rows):,}/{n0:,}행")
     agg, base = {}, {}
     for r in rows:                                          # 행정동별 합산
         code = "".join(ch for ch in str(r.get(cfg["code_col"], "")) if ch.isdigit())
         if not code:
             continue
         agg[code] = agg.get(code, 0.0) + np.nansum([num(r.get(c)) for c in cfg["value_cols"]])
-        if cfg.get("base_col"):
-            base[code] = base.get(code, 0.0) + num(r.get(cfg["base_col"]))
-    if cfg.get("base_col"):
+        bcols = cfg.get("base_cols") or ([cfg["base_col"]] if cfg.get("base_col") else [])   # [v5] 분모 열 여러 개(합)
+        if bcols:
+            base[code] = base.get(code, 0.0) + np.nansum([num(r.get(c)) for c in bcols])
+    if cfg.get("base_cols") or cfg.get("base_col"):
+        log(f"  비율 = {'+'.join(cfg['value_cols'])} 합 ÷ {'+'.join(cfg.get('base_cols') or [cfg['base_col']])} 합 (행정동별)")
         agg = {k: (v / base[k] if base.get(k) else np.nan) for k, v in agg.items()}
     best = max(keyers, key=lambda k: sum(keyers[k](d) in agg for d in dong))   # 가장 많이 맞는 코드 방식
     matched = [(d, agg[keyers[best](d)]) for d in dong if keyers[best](d) in agg]
