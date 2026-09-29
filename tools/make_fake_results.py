@@ -185,13 +185,13 @@ def main():
                   round(g["wa"]), round(g["wh"]), ""] for k, g in agg.items() if g["n"] >= MIN_COUNT]
     hdr = ["adm_cd", "adm_cd_stat", "adm_nm", "n_bld", "hbi_mean", "share_high", "weight_all", "weight_high", "elderly_in_high_est"]
     write_csv(P("dong_hbi.csv"), hdr, dong_rows)
-    # 밖에서 만드는 고령인구 추정표 (analysis/hbi/tools/outside_elderly.py 결과 형식: 열 순서 유지 + pop65)
+    # 밖에서 만드는 고령인구 추정표 (tools/outside_elderly.py 결과 형식: 열 순서 유지 + pop65 + base_ym)
     ew = []
     for r in dong_rows:
         pop = rnd.randint(2200, 9000)
         est = round(pop * r[7] / r[6]) if r[6] else ""
-        ew.append(r[:8] + [est, pop])
-    write_csv(P("dong_hbi_with_elderly.csv"), hdr + ["pop65"], ew)
+        ew.append(r[:8] + [est, pop, "2026-08-31"])
+    write_csv(P("dong_hbi_with_elderly.csv"), hdr + ["pop65", "base_ym"], ew)   # tools/outside_elderly.py 와 같은 열 (base_ym = 인구 기준일)
 
     # 검증 ① 선정지
     cm = [r["hbi"] for r in med]

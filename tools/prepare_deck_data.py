@@ -13,7 +13,8 @@ tools/prepare_deck_data.py ─ 반출 결과 파일 → 기획서에 넣을 값(
         분모는 결과 폴더의 pop60.csv(가짜 시험) 또는 data_public/pop60.csv (tools/prep_elderly_pop.py --min-age 60).
         KCB 중첩 방향은 KCB_HIGH_IS_POOR 한 줄. 보조 근거는 11(legal_summary.csv) 우선, 없으면 10 개수 모드 점 자료
 [원칙]  값을 지어내지 않습니다. 파일이 없거나 값이 비어 있으면 null 로 두고 "필요한 파일"을 적습니다.
-        그림은 matplotlib 이 필요합니다 (python3 -m pip install --user matplotlib). 없으면 그림만 누락으로 처리.
+        그림은 matplotlib 이 필요합니다. deck 의 npm 스크립트는 deck/py.js 로 matplotlib 이 있는 Python(EVENLY_PY → QGIS → python3)을 고름.
+        --expect real 에서 matplotlib 이 없으면 멈춤 (그림 빠진 제출본 방지). 가짜 빌드는 경고만 하고 그림을 누락으로 처리.
 """
 import argparse, datetime, json, math, os, re, sys
 
@@ -173,6 +174,13 @@ def main():
     if a.expect == "fake" and not fake:
         raise SystemExit("!! --expect fake 인데 가짜 표지가 없습니다")
     source = "fake" if fake else "real"
+    try:                                              # 그림(지도·차트)용. 실제 빌드에서 없으면 그림 빠진 제출본이 조용히 나오므로 멈춤
+        import matplotlib  # noqa: F401
+    except ImportError:
+        if a.expect == "real":
+            raise SystemExit(f"!! matplotlib 이 없는 Python 입니다 ({sys.executable}) → 실제 기획서를 만들지 않습니다.\n"
+                             "   deck 에서 npm run build:real 로 실행하면 deck/py.js 가 QGIS Python 을 고릅니다 (또는 EVENLY_PY=<matplotlib 있는 python>)")
+        print(f"!! matplotlib 없음 ({sys.executable}) → 그림은 누락으로 처리하고 계속 (가짜 빌드라 경고만)")
     S = lambda n: os.path.join(src, n)
     R = lambda n: read_csv(S(n))
     B = Box()
