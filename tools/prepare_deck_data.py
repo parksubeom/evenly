@@ -260,7 +260,7 @@ def main():
           f_about(eld_total))
     B.put("RES1.elderly_src", "고령인구 추정 출처 파일", ["dong_hbi_with_elderly.csv"], eld_src)
     ym = sorted({r.get("base_ym", "") for r in (ew or []) if r.get("base_ym")})
-    B.fields["RES1.elderly_ym"] = {"value": ",".join(ym) or None, "label": "고령인구 기준연월", "need": ["dong_hbi_with_elderly.csv (tools/outside_elderly.py)"], "optional": True}
+    B.fields["RES1.elderly_ym"] = {"value": ",".join(ym) or None, "label": "고령인구 기준연월", "need": ["dong_hbi_with_elderly.csv 의 base_ym 열 (tools/outside_elderly.py)"], "optional": True}
     ps = {r["metric"].strip(): num(r["value"]) for r in (R("parcel_summary.csv") or [])}
     B.put("RES1.parcel_share", "국토정보필지(지목 '대') HBI 1.8 이상 비율", ["parcel_summary.csv"], f_pct(ps.get("'대' 필지 HBI 1.8 이상 비율")))
     B.put("RES1.parcel_n", "HBI 산출 필지 수", ["parcel_summary.csv"], f_int(ps.get("HBI 산출 필지 수")))
@@ -386,7 +386,7 @@ def main():
                     + (f", 순위상관 ρ = {rho_:.2f}" if rho_ is not None else "") + " (상관이며 인과 아님)")
             psrc = f"points_summary.csv ({nm}, 10_points_join.py)"
     optional("CROSS.points", "보조 근거: 교통사고 등 결합", ["legal_summary.csv (11, v5) 또는 points_summary.csv (10)"], ptxt)
-    optional("CROSS.points_src", "보조 근거 출처 파일", [], psrc)
+    optional("CROSS.points_src", "보조 근거 출처 파일", ["legal_summary.csv (11) 또는 points_summary.csv (10)"], psrc)
 
     # ── 19장 상호제공데이터 ──
     js = {}
@@ -426,10 +426,10 @@ def main():
     B.put("CROSS.skt_rho", "외출 지수 vs HBI 순위상관 ρ", need_j, f_num(rho))
     B.put("CROSS.skt_p", "외출 지수 순위상관 p", need_j, (("p < 0.001" if p_rho < 0.001 else f"p = {p_rho:.3f}") if p_rho is not None else None))
     B.put("CROSS.skt_n", "외출 지수 행정동 수", need_j, f_int(len(idx)) if rho is not None else None)
-    optional("CROSS.skt_src", "SKT 읽은 파일", [], (skt_src + (f" ÷ {os.path.relpath(pop_path, ROOT)}" if skt_mode == "sum" and pop_path else "")) if skt_src else None)
-    optional("CROSS.skt_unit", "SKT 값 단위", [], {"sum": "SKT: 50m 셀별 '월의 일평균' 60대 이상 유동인구(남녀 합)를 기준월 평균해 행정동별로 더한 값(명/일)",
+    optional("CROSS.skt_src", "SKT 읽은 파일", ["points_SKT_*_dong.csv (10) 또는 join_SKT_*.csv (07)"], (skt_src + (f" ÷ {os.path.relpath(pop_path, ROOT)}" if skt_mode == "sum" and pop_path else "")) if skt_src else None)
+    optional("CROSS.skt_unit", "SKT 값 단위", ["points_SKT_*_dong.csv (10) 또는 join_SKT_*.csv (07)"], {"sum": "SKT: 50m 셀별 '월의 일평균' 60대 이상 유동인구(남녀 합)를 기준월 평균해 행정동별로 더한 값(명/일)",
                                                   "join": "SKT: 07_join_dong.py 결과 값 그대로 (v4 형식, 거주인구로 나누지 않음)"}.get(skt_mode))
-    optional("CROSS.pop60_ym", "60세 이상 거주인구 기준일", [], ",".join(pop_ym) or None)
+    optional("CROSS.pop60_ym", "60세 이상 거주인구 기준일", ["pop60.csv 의 base_ym 열 (tools/prep_elderly_pop.py --min-age 60)"], ",".join(pop_ym) or None)
     interp = None
     if rho is not None and p_rho is not None:
         if rho < 0 and p_rho < 0.05:
@@ -458,8 +458,8 @@ def main():
                 iq = ks[int(len(vals) * 0.25)]
                 overlap = sum(1 for h, i in vals if h >= hq and i <= iq)
     B.put("CROSS.kcb_overlap", "HBI 상위 25% × KCB 60세 이상 저소득 25% 행정동 수", ["join_KCB_*.csv (07_join_dong.py)"], f"{overlap}곳" if overlap is not None else None)
-    optional("CROSS.kcb_rule", "KCB 중첩 기준", [], "60세 이상 월 200만원 이하 비율 상위 25%" if KCB_HIGH_IS_POOR else "60세 이상 소득 하위 25%")
-    optional("CROSS.kcb_src", "KCB 읽은 파일", [], f"join_{kcb_key}.csv (07_join_dong.py), KCB_HIGH_IS_POOR = {KCB_HIGH_IS_POOR}" if kcb_rows else None)
+    optional("CROSS.kcb_rule", "KCB 중첩 기준", ["prepare_deck_data.py 의 KCB_HIGH_IS_POOR"], "60세 이상 월 200만원 이하 비율 상위 25%" if KCB_HIGH_IS_POOR else "60세 이상 소득 하위 25%")
+    optional("CROSS.kcb_src", "KCB 읽은 파일", ["join_KCB_*.csv (07)"], f"join_{kcb_key}.csv (07_join_dong.py), KCB_HIGH_IS_POOR = {KCB_HIGH_IS_POOR}" if kcb_rows else None)
     skt_plot = idx
 
     # ── 22장 한 사람의 변화: 실측 구간 + intervention_summary 의 선정지(planned) 행 (v5) ──
@@ -541,6 +541,11 @@ def main():
         f.write(f"# 누락 목록 초안 (source={source}, src={data['src']}) — 슬라이드 번호는 build_deck.js 가 채웁니다\n")
         for m in miss:
             f.write(f"누락: ?, {m['label']}, {' / '.join(m['need'])}\n")
+        opt = [(k, v) for k, v in B.fields.items() if v.get("optional") and v.get("value") in (None, "")]
+        if opt:
+            f.write("# 선택 항목 대체 (값이 없어 기본 문구로 바뀔 수 있는 곳. 필수 빈칸이 아니라 check_deck N=M=K 에는 넣지 않음)\n")
+            for k, v in opt:
+                f.write(f"대체: ?, {v['label']}, {' / '.join(v['need']) or '-'}  [{k}]\n")
     print(f"[{source}] {data['src']} → deck/data/results.json  (값 {sum(1 for v in B.fields.values() if v['value'] is not None)}/{len(B.fields)}, "
           f"그림 {sum(1 for v in B.images.values() if v['path'])}/{len(B.images)}, 누락 {len(miss)})")
 

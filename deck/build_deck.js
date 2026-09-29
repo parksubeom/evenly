@@ -48,6 +48,15 @@ const R = fs.existsSync(DATA_PATH) ? JSON.parse(fs.readFileSync(DATA_PATH, 'utf8
 const FAKE = R.source === 'fake';
 if (FAKE) pres.title = '[테스트 데이터 — 제출 금지] ' + pres.title;
 const missing = [], notes = [], seen = new Set();
+const fallbacks = [], seenFb = new Set();
+// 선택 항목(optional)이나 Q() 기본 문구로 바뀐 곳: 필수 빈칸은 아니지만 missing.txt 의 "선택 항목 대체" 절에 남김 (check_deck 은 세지 않음)
+function fb(key, used) {
+  const k = page + '|' + key;
+  if (seenFb.has(k)) return;
+  seenFb.add(k);
+  const f = R.fields[key] || {};
+  fallbacks.push({ page, key, label: f.label || key, need: f.need || [], used });
+}
 function miss(key, meta) {
   if (meta && meta.optional) return;
   const k = page + '|' + key;
@@ -61,11 +70,12 @@ function V(key, fallback = '___') {
   if (f && f.value !== null && f.value !== undefined) return String(f.value);
   miss(key, f || { label:key, need:[] });
   if (!(f && f.optional)) pending.push({ key, page });
+  else fb(key, fallback);
   return fallback;
 }
 const has = key => { const f = R.fields[key]; return !!(f && f.value !== null && f.value !== undefined); };
 // Q: 값이 없어도 누락으로 치지 않는 보조 문구 (기본값이 그대로 말이 되는 곳)
-const Q = (key, fallback) => has(key) ? String(R.fields[key].value) : fallback;
+const Q = (key, fallback) => { if (has(key)) return String(R.fields[key].value); fb(key, fallback); return fallback; };
 function IMG(key) {
   const m = R.images[key];
   if (m && m.path && fs.existsSync(m.path)) return m.path;
@@ -915,12 +925,14 @@ const OUT = R.source === 'real' ? '../deliverables/언덕위우리동네_기획�
           : '../deliverables/_blank_기획서.pptx';
 const lines = [`# 기획서 누락 목록 — source=${R.source}${R.src ? ', src=' + R.src : ''}, ${new Date().toISOString().slice(0, 19)}`,
   `# 출력: ${OUT.replace('../', '')} (${page}장)`,
-  ...missing.map(m => `누락: ${m.page}장, ${m.label}, ${m.need.join(' / ') || '-'}  [${m.key}]`), ...notes];
+  ...missing.map(m => `누락: ${m.page}장, ${m.label}, ${m.need.join(' / ') || '-'}  [${m.key}]`), ...notes,
+  ...(fallbacks.length ? ['# 선택 항목 대체 (값이 없어 기본 문구로 바뀐 곳. 필수 빈칸이 아니라 check_deck N=M=K 에는 넣지 않음)',
+    ...fallbacks.map(m => `대체: ${m.page}장, ${m.label}, ${m.need.join(' / ') || '-'}  [${m.key}] → "${String(m.used).replace(/\n/g, ' ').slice(0, 40)}"`)] : [])];
 fs.mkdirSync('data', { recursive:true });
 fs.writeFileSync(path.join('data', 'missing.txt'), lines.join('\n') + '\n');
 if (R.source === 'none') console.warn('!! data/results.json 없음 → 빈칸 버전으로 생성합니다 (npm run build:fake 또는 build:real 을 쓰세요)');
 if (FAKE) console.warn('!! 가짜(테스트) 데이터 — 모든 장에 "테스트 데이터 — 제출 금지" 워터마크');
-console.log(`슬라이드 ${page}장, 누락 ${missing.length}건 → deck/data/missing.txt`);
+console.log(`슬라이드 ${page}장, 누락 ${missing.length}건, 선택 항목 대체 ${fallbacks.length}건 → deck/data/missing.txt`);
 missing.forEach(m => console.log(`  누락: ${m.page}장, ${m.label}, ${m.need.join(' / ') || '-'}`));
 notes.forEach(n => console.log('  ' + n));
 pres.writeFile({ fileName: OUT }).then(f => console.log('wrote', f));
