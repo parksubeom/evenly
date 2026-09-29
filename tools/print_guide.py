@@ -44,7 +44,7 @@ table.memo td { height: 26pt; }
 .okbad div { flex: 1; border: 1.6pt solid; padding: 4pt 7pt; font-size: 11pt; }
 .okbad .ok { border-color: #2e7d32; background: #eef7ee; } .okbad .bad { border-color: #c62828; background: #fdeeee; }
 .okbad b.h { display: block; font-size: 12pt; margin-bottom: 2pt; }
-.shot { margin: 5pt 0 6pt; break-inside: avoid; }
+.shot { margin: 4pt 0 4pt; break-inside: avoid; }
 .shot .cap { font-size: 8.5pt; color: #666; margin-top: 2pt; }
 .shot .lab { font-size: 10pt; font-weight: bold; margin-bottom: 2pt; }
 .win { border: 1pt solid #777; box-shadow: 1.5pt 1.5pt 0 #bbb; }
@@ -53,7 +53,7 @@ table.memo td { height: 26pt; }
 .win.cmd .tb { background: #fff; }
 .win.cmd .body { background: #0c0c0c; color: #cccccc; font: 9.2pt/1.38 Menlo, Consolas, monospace; padding: 5pt 7pt; white-space: pre-wrap; overflow-wrap: anywhere; }
 .win.note .menu { font: 9pt 'Apple SD Gothic Neo', sans-serif; padding: 1pt 6pt; border-bottom: 1pt solid #ddd; color: #333; word-spacing: 6pt; }
-.win.note .body { background: #fff; color: #000; font: 10pt/1.5 Menlo, Consolas, monospace; padding: 5pt 7pt; white-space: pre-wrap; overflow-wrap: anywhere; }
+.win.note .body { background: #fff; color: #000; font: 9.4pt/1.38 Menlo, Consolas, monospace; padding: 5pt 7pt; white-space: pre-wrap; overflow-wrap: anywhere; }
 .win.start { width: 60%; background: #f3f3f3; }
 .win.start .search { margin: 7pt; padding: 4pt 8pt; background: #fff; border: 1pt solid #888; border-radius: 12pt; font-size: 11pt; }
 .win.start .item { margin: 3pt 7pt 8pt; padding: 5pt 8pt; background: #fff; font-size: 11pt; }
@@ -117,7 +117,7 @@ def cells(line):
 
 
 WIDTHS = {("물어볼 것", "받아 적을 주소"): (52, 48), ("화면 문구", "뜻 → 할 일"): (40, 60), ("구역", "동네", "메모장에 넣을 줄"): (9, 15, 76),
-          ("화면에 나온 것", "뜻", "할 일"): (36, 19, 45), ("구역", "① 최대 연결망 노드 비율", "② 데이터 경계 500m 이내 (x%)", "끝났나 ○/×"): (10, 33, 35, 22)}
+          ("화면에 나온 것", "뜻", "할 일"): (36, 19, 45), ("구역", "① 최대 연결망 노드 비율", "② 데이터 경계 500m 이내 (x%)", "끝났나 ○/×", "×일 때 오류 마지막 줄"): (8, 20, 22, 14, 36)}
 
 
 def convert(md):
