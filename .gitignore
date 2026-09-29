@@ -13,3 +13,6 @@ node_modules/
 package-lock.json
 # 맥
 .DS_Store
+# 공개데이터 원본 (폴더만 추적, 원본은 커밋하지 않음)
+data_public/raw/*
+!data_public/raw/.gitkeep
