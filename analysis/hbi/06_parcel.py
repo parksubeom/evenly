@@ -8,6 +8,7 @@
           지목이 "대"(대지)인 필지만 따로 골라 주거지 결과를 다시 확인합니다.
           ※ 필지의 소유·공시지가 정보는 읽지 않습니다 (PNU, 읍면동코드, 지목만 사용)
 [결과] output/parcel_summary.csv, output/parcel_by_legal_dong.csv (법정동별 요약)
+       [v5] parcel_by_legal_dong.csv 에 sgg_nm·emd_nm(시군구·법정동 이름, 필지의 SGG_NM·EMD_NM) 열 추가
 """
 import os, numpy as np
 from osgeo import ogr
@@ -24,7 +25,8 @@ H = b[f"{T}_hbi"].copy()
 H[~usable(b)] = np.nan                     # 데이터 경계 근처 건물 제외
 bbox = [np.nanmin(X) - 50, np.nanmin(Y) - 50, np.nanmax(X) + 50, np.nanmax(Y) + 50]   # 건물이 있는 범위의 필지만 읽음
 files = find_files(C.DATA_ROOT_PARCEL, [""], ".shp")
-parcels = [(g, a) for g, a in iter_layer(files=files, fields=["PNU", "EMD_CD", "JIMOK"], bbox=bbox, encoding=C.PARCEL_ENCODING)]
+# [v5] SGG_NM(시군구명)·EMD_NM(법정 읍면동명) 도 읽음 → 11_legal_dong_join.py 가 교통사고(법정동 이름) 와 붙일 때 씀
+parcels = [(g, a) for g, a in iter_layer(files=files, fields=["PNU", "EMD_CD", "JIMOK", "SGG_NM", "EMD_NM"], bbox=bbox, encoding=C.PARCEL_ENCODING)]
 log(f"필지 {len(parcels):,}개")
 
 # 건물 점들을 100m 칸에 나눠 담아 두고(버킷), 필지마다 겹치는 칸의 건물만 검사 → 빠름
@@ -33,6 +35,7 @@ bucket = {}
 for i, (x, y) in enumerate(zip(X, Y)):
     bucket.setdefault((int(x // cell), int(y // cell)), []).append(i)
 pmax, pemd, pji = {}, {}, {}           # 필지번호(PNU) → 최대 HBI / 읍면동코드 / 지목
+emd_name = {}                          # [v5] 읍면동코드 → (시군구명, 법정동명)
 for g, a in parcels:
     x0, x1, y0, y1 = g.GetEnvelope()
     idx = []
@@ -49,6 +52,8 @@ for g, a in parcels:
         pmax[a["PNU"]] = max(vals)
         pemd[a["PNU"]] = a.get("EMD_CD")
         pji[a["PNU"]] = str(a.get("JIMOK") or "")
+        if a.get("EMD_NM"):
+            emd_name.setdefault(a.get("EMD_CD"), (str(a.get("SGG_NM") or ""), str(a.get("EMD_NM") or "")))
 
 dae = [k for k in pmax if "대" in pji[k]]            # 지목에 "대" 가 들어간 필지
 if pmax and not dae:
@@ -60,7 +65,9 @@ write_csv(os.path.join(C.OUTPUT, "parcel_summary.csv"), ["metric", "value"], row
 emd = {}
 for k in dae:
     emd.setdefault(pemd[k], []).append(pmax[k])
-write_csv(os.path.join(C.OUTPUT, "parcel_by_legal_dong.csv"), ["emd_cd", "n", "hbi_mean", "share_high"],
-          [[k, len(v), round(float(np.mean(v)), 3), round(float(np.mean(np.array(v) >= C.HBI_BANDS[1])), 3)]
+write_csv(os.path.join(C.OUTPUT, "parcel_by_legal_dong.csv"), ["emd_cd", "n", "hbi_mean", "share_high", "sgg_nm", "emd_nm"],
+          [[k, len(v), round(float(np.mean(v)), 3), round(float(np.mean(np.array(v) >= C.HBI_BANDS[1])), 3)] + list(emd_name.get(k, ("", "")))
            for k, v in emd.items() if len(v) >= C.MIN_COUNT])
+if not emd_name:
+    log("  필지에 SGG_NM·EMD_NM 필드가 없어 법정동 이름 칸은 비움 (11_legal_dong_join.py 는 이름이 있어야 결합 가능)")
 log(rows)

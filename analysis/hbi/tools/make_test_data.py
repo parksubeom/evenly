@@ -66,6 +66,7 @@ pf = []
 for i in range(0, W, 50):
     for j in range(0, W, 50):
         pf.append((box(X0 + i, Y0 + j, X0 + i + 50, Y0 + j + 50),
-                   {"PNU": f"11110{i:05d}{j:05d}"[:19], "EMD_CD": "11110101" if i < 1000 else "11110102", "JIMOK": "대" if (i // 50 + j // 50) % 7 else "도"}))
-shp(f"{BASE}/parcel/LX_서울_필지.shp", ogr.wkbPolygon, ["PNU", "EMD_CD", "JIMOK"], pf, enc="UTF-8", cpg=False)
+                   {"PNU": f"11110{i:05d}{j:05d}"[:19], "EMD_CD": "11110101" if i < 1000 else "11110102", "JIMOK": "대" if (i // 50 + j // 50) % 7 else "도",
+                    "SGG_NM": "가상구", "EMD_NM": "가상1동" if i < 1000 else "가상2동"}))   # [v5] 법정동 이름 (11_legal_dong_join 연습용)
+shp(f"{BASE}/parcel/LX_서울_필지.shp", ogr.wkbPolygon, ["PNU", "EMD_CD", "JIMOK", "SGG_NM", "EMD_NM"], pf, enc="UTF-8", cpg=False)
 print("완료:", os.path.abspath(BASE))

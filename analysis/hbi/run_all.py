@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-run_all.py ─ 01~05 단계(+ 설정에 따라 06·07·08·09·10)를 순서대로 한 번에 실행 (package.json 의 "scripts" 를 연달아 돌리는 것과 비슷)
+run_all.py ─ 01~05 단계(+ 설정에 따라 06·07·08·09·10·11)를 순서대로 한 번에 실행 (package.json 의 "scripts" 를 연달아 돌리는 것과 비슷)
 
 [실행]  python run_all.py            (DEM 1m 비교: --dem1m, 민감도 분석: --sens  예) python run_all.py --dem1m --sens)
   - 한 단계에서 오류가 나면 거기서 멈추고 어느 단계인지 알려 줍니다.
@@ -25,6 +25,7 @@ def _has_facility():
         return any(all((r.get(k) or "").strip() for k in ("a_lon", "a_lat", "b_lon", "b_lat")) for r in csv.DictReader(f))
 if _has_facility(): steps.append("09_intervention.py")
 if any(v.get("path") for v in C.POINT_DATA.values()): steps.append("10_points_join.py")   # [v5] 점 자료 경로가 있으면
+if any(v.get("path") for v in C.LEGAL_DONG_DATA.values()): steps.append("11_legal_dong_join.py")   # [v5] 법정동 이름 자료가 있으면
 for s in steps:
     args = [sys.executable, s] + (["--dem1m"] if s == "02_network.py" and "--dem1m" in sys.argv else [])
     print(f"\n########## {s} ##########", flush=True)
