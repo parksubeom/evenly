@@ -14,7 +14,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DONG_GEOJSON = os.path.join(ROOT, "analysis", "hbi", "external", "dong_boundary.geojson")
 SITES_CSV = os.path.join(ROOT, "analysis", "hbi", "external", "sites.csv")
 TARGET_GU = ["종로구", "중구", "관악구", "광진구", "강서구"]
-TARGET_LABEL = {"medical": "의료시설", "bus": "버스정류장", "elderly": "노유자시설", "station": "지하철역", "pharmacy": "약국"}
+TARGET_LABEL = {"medical": "의료시설", "bus": "버스정류장", "elderly": "노유자시설", "station": "지하철역", "station_ev": "지하철역(엘리베이터)", "pharmacy": "약국"}
 FAKE_MARKER = "_FAKE_DATA_README.txt"      # 가짜 결과 폴더에만 있는 표시 파일
 
 # ── EPSG:5186 (Korea 2000 / Central Belt 2010) ─────────────────────────

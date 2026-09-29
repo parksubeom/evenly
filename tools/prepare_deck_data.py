@@ -12,7 +12,7 @@ tools/prepare_deck_data.py ─ 반출 결과 파일 → 기획서에 넣을 값(
 [원칙]  값을 지어내지 않습니다. 파일이 없거나 값이 비어 있으면 null 로 두고 "필요한 파일"을 적습니다.
         그림은 matplotlib 이 필요합니다 (python3 -m pip install --user matplotlib). 없으면 그림만 누락으로 처리.
 """
-import argparse, datetime, json, math, os, sys
+import argparse, datetime, json, math, os, re, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from evenly_common import (ROOT, TARGET_GU, TARGET_LABEL, FAKE_MARKER, load_dongs, dong_of, read_csv, num, truthy)
@@ -26,8 +26,6 @@ COLORS = ["#7FA88E", "#F2D16B", "#E8743B", "#B23A2A"]
 SITE_SHORT = [("중곡", "광진구 중곡동"), ("화곡", "강서구 화곡동"), ("봉천", "관악구 봉천동"), ("숭인", "종로구 숭인동"), ("신당", "중구 신당동")]
 WEEKDAY = "월화수목금토일"
 
-# 공익 효과 계산 가정 (기획서 23장 각주에 그대로 표시)
-IMPACT = {"top_n": 10, "min_gap_m": 500, "wait_min": 3.0, "trips_per_year": 52}
 
 
 # ── 서식 ────────────────────────────────────────────────────────
@@ -154,7 +152,7 @@ def main():
         sm.setdefault(r["target"], {})[r["metric"].strip()] = num(r["value"])
     grid = R("grid_hbi.csv") or []
     abl = {(r["scenario"].strip(), r["metric"].strip()): num(r["value"]) for r in (R("validation_ablation.csv") or [])}
-    targets = [t for t in ["medical", "bus", "elderly", "station", "pharmacy"] if t in sm or any(g["target"] == t for g in grid)]
+    targets = [t for t in ["medical", "bus", "elderly", "station", "station_ev", "pharmacy"] if t in sm or any(g["target"] == t for g in grid)]
     T0 = "medical" if "medical" in targets else (targets[0] if targets else "medical")
     m0 = sm.get(T0, {})
 
@@ -184,8 +182,20 @@ def main():
     B.put("RES1.n_bld", "분석 주거 건물 수", need_s, f_int(n_all))
     B.put("RES1.high_n", f"HBI {HI} 이상 건물 수", need_s, f_int(hi_n))
     B.put("RES1.high_share", f"HBI {HI} 이상 비율", need_s, f_pct(hi_sh))
-    B.put("RES1.median", "HBI 중앙값", need_s, f_num(m0.get("HBI 중앙값")))
-    B.put("RES1.elder_rt", "고령자 왕복 중앙값(분)", need_s, f_num(m0.get("고령자 왕복 중앙값(분)"), 1))
+    # 경계 500m 포함 여부가 v4/v5 에서 다른 세 지표: v5 "(경계 제외)" 이름을 우선, v4 이름뿐이면 발표자 노트에만 (본문 금지)
+    def edge_metric(key, label, v5, v4, d):
+        if v5 in m0:
+            v, scope = m0[v5], "v5"
+        elif v4 in m0:
+            v, scope = m0[v4], "v4"
+        else:
+            v, scope = None, None
+        B.fields[key] = {"value": f_num(v, d), "label": label, "need": need_s, "optional": True, "scope": scope}
+    edge_metric("RES1.median", "HBI 중앙값", "HBI 중앙값(경계 제외)", "HBI 중앙값", 2)
+    edge_metric("RES1.home_ratio", "귀갓길 편도 배수 중앙값", "귀갓길(목적지→집) 편도 배수 중앙값(경계 제외)", "귀갓길(목적지→집) 편도 배수 중앙값", 2)
+    edge_metric("RES1.elder_rt", "고령자 왕복 중앙값(분)", "고령자 왕복 중앙값(분, 경계 제외)", "고령자 왕복 중앙값(분)", 1)
+    ev = sm.get("station_ev", {})
+    B.fields["RES1.wheel_ev"] = {"value": f_pct(ev.get("휠체어 도달불가 비율")), "label": "휠체어 도달불가 비율(엘리베이터 역 기준)", "need": need_s, "optional": True}
     k_good = ("DEM 제외(평지 가정)", "HBI 1.8 이상 건물 중 평지 기준 소요시간이 중앙값 이하('양호')인 비율")
     good = abl.get(k_good)
     B.put("RES1.inverted_n", "평지 기준 '양호' → 경사 반영 '취약' 건물 수", ["summary.csv", "validation_ablation.csv"],
@@ -217,11 +227,15 @@ def main():
     site_rows = []
     for key, label in SITE_SHORT:
         r = next((x for x in vs if key in x.get("name", "")), None)
-        pct = num(r.get("percentile")) if r else None
+        circle = bool(r) and num(r.get("percentile_circle")) is not None     # v5: 같은 반경 원 평균끼리 비교
+        pct = (num(r.get("percentile_circle")) if circle else num(r.get("percentile"))) if r else None
+        t10 = r.get("top10_circle") if circle else (r.get("top10") if r else None)
         site_rows.append({"name": label, "percentile": pct, "top_text": f"상위 {max(0.1, (1 - pct) * 100):.1f}%" if pct is not None else None,
-                          "top10": ("포함" if truthy(r.get("top10")) else "미포함") if r and pct is not None else None,
+                          "top10": ("포함" if truthy(t10) else "미포함") if r and pct is not None else None, "mode": "circle" if circle else "grid",
                           "hbi": f_num(num(r.get("hbi_mean"))) if r else None})
     B.table("VALID.sites", "선정지 5곳 백분위·상위10% 여부", ["validation_sites.csv"], site_rows if vs else [])
+    B.fields["VALID.pct_mode"] = {"value": ("circle" if any(x["mode"] == "circle" for x in site_rows) else "grid") if vs else None,
+                                  "label": "선정지 백분위 비교 방식", "need": ["validation_sites.csv"], "optional": True}
     n_top = sum(1 for s in site_rows if s["top10"] == "포함")
     B.put("VALID.top10_count", "상위 10% 안에 든 선정지 수", ["validation_sites.csv"], f"{n_top}/5" if vs else None)
     routes = R("validation_routes.csv") or []
@@ -231,7 +245,11 @@ def main():
     meas = [(r["name"], num(r.get("adult_min")), num(r.get("measured_min"))) for r in routes]
     meas = [m for m in meas if m[1] is not None and m[2] is not None]
     r_meas = pearson([m[1] for m in meas], [m[2] for m in meas]) if len(meas) >= 3 else None
-    B.put("VALID.meas_n", "현장 실측 경로 수", ["validation_routes.csv (measured_min)"], str(len(meas)) if meas else None)
+    vm = (R("validation_measured.csv") or [None])[0]            # v5: 04 가 r 을 파일로 저장
+    if vm and num(vm.get("r_adult_pred_vs_measured")) is not None:
+        r_meas = num(vm["r_adult_pred_vs_measured"])
+    B.put("VALID.meas_n", "현장 실측 경로 수", ["validation_routes.csv (measured_min)"],
+          (f_int(num(vm["n"])) if vm and num(vm.get("n")) else (str(len(meas)) if meas else None)))
     B.put("VALID.meas_r", "실측 vs 예측(성인 1.1m/s) 상관계수 r", ["validation_routes.csv (measured_min 3개 이상)"], f_num(r_meas))
     B.table("VALID.meas_rows", "실측 경로별 비교", ["validation_routes.csv (measured_min)"],
             [[n, f"{p:.1f}분", f"{m:.1f}분"] for n, p, m in meas])
@@ -288,58 +306,60 @@ def main():
     B.put("CROSS.kcb_overlap", "HBI 상위 25% × KCB 소득 하위 25% 행정동 수", ["join_KCB_*.csv (07_join_dong.py)"], f"{overlap}곳" if overlap is not None else None)
     skt_rows = R(f"join_{skt_key}.csv") if skt_key else None
 
-    # ── 22장 한 사람의 변화 ──
-    cand = []
+    # ── 22장 한 사람의 변화: 실측 구간 + intervention_summary 의 선정지(planned) 행 (v5) ──
+    isum = R("intervention_summary.csv") or []
+    planned = [r for r in isum if r.get("target") == T0 and not r.get("facility", "").startswith("ALL")
+               and ("planned" in r.get("facility", "").lower() or "선정" in r.get("facility", ""))]
+    route = None
     for r in routes:
-        e, fl, mm = num(r.get("elder_min")), num(r.get("flat_min")), num(r.get("measured_min"))
-        if e and fl and mm is not None and "대현산" not in r.get("name", ""):
-            cand.append((e / fl, r["name"], e, fl, mm))
-    if cand:
-        ratio, nm, e, fl, mm = max(cand)
-        after = fl + IMPACT["wait_min"] / 2
-        B.put("ONE.mode", "한 사람의 변화 계산 근거", ["validation_routes.csv"], "measured")
-        B.put("ONE.route", "실측 구간 이름", ["validation_routes.csv"], nm)
-        B.put("ONE.before", "현재 소요(분)", ["validation_routes.csv"], f"{round(e)}분")
-        B.put("ONE.after", "시설 설치 후(분)", ["validation_routes.csv"], f"약 {round(after)}분")
-        B.put("ONE.ratio", "구간 배수", ["validation_routes.csv"], f"{ratio:.2f}")
-        B.put("ONE.measured", "팀 실측(분)", ["validation_routes.csv"], f"{mm:g}분")
+        e, ad, mm = num(r.get("elder_min")), num(r.get("adult_min")), num(r.get("measured_min"))
+        if e and ad and mm is not None and "대현산" not in r.get("name", ""):
+            route = route or (r["name"], e, ad, mm)
+    need22 = ["intervention_summary.csv (v5, 선정지 planned 행)", "validation_routes.csv (measured_min)"]
+    if planned and route:
+        pr = max(planned, key=lambda r: num(r.get("sum_saved_bld_min")) or 0)
+        hb, ha = num(pr.get("hbi_before")), num(pr.get("hbi_after"))
+        ok = hb is not None and ha is not None
+        B.put("ONE.mode", "한 사람의 변화 계산 근거", need22, "intervention" if ok else "example")
+        if ok:
+            B.put("ONE.facility", "선정지 시설", need22, "선정지 " + re.sub(r"^\s*(planned|선정지)\s*[:_\-]?\s*", "", pr["facility"], flags=re.I))
+            B.put("ONE.hbi_before", "설치 전 HBI(수혜 건물 평균)", need22, f"{hb:.2f}")
+            B.put("ONE.hbi_after", "설치 후 HBI(수혜 건물 평균)", need22, f"{ha:.2f}")
+            B.put("ONE.saved", "수혜 건물 평균 왕복 단축(분)", need22, f_num(num(pr.get("mean_saved_min")), 1))
+            B.put("ONE.saved_max", "최대 왕복 단축(분)", need22, f_num(num(pr.get("max_saved_min")), 1))
+            B.put("ONE.n_benefit", "수혜 주거 건물 수", need22, f_int(num(pr.get("n_benefit"))))
+            B.put("ONE.route", "실측 구간 이름", need22, route[0])
+            B.put("ONE.route_model", "실측 구간 모델 예측(성인, 분)", need22, f"{route[2]:.1f}분")
+            B.put("ONE.measured", "팀 실측(분)", need22, f"{route[3]:g}분")
     else:
-        B.put("ONE.mode", "한 사람의 변화 계산 근거", ["validation_routes.csv"], "example")
+        B.put("ONE.mode", "한 사람의 변화 계산 근거", need22, "example")
 
-    # ── 23장 공익 효과 ──
-    impact_min, impact_n = None, None
-    med_cells = [g for g in grid if g["target"] == T0]
-    if med_cells and ew:
-        dongs = load_dongs(TARGET_GU)
-        de = {r["adm_cd"]: r for r in ew}
-        pts = []
-        for g in med_cells:
-            x, y = num(g["cell_x"]), num(g["cell_y"])
-            d = dong_of(x, y, dongs)
-            r = de.get(d["adm_cd"]) if d else None
-            if not r:
-                continue
-            pop, wa = num(r.get("pop65")), num(r.get("weight_all"))
-            e, fl, w = num(g["elder_min"]), num(g["flat_min"]), num(g["weight"])
-            if not (pop and wa and e and fl and w):
-                continue
-            saved = max(0.0, e - fl - IMPACT["wait_min"]) * pop * w / wa * IMPACT["trips_per_year"]
-            pts.append((saved, x, y))
-        pts.sort(reverse=True)
-        pick = []
-        for s, x, y in pts:
-            if all(math.hypot(x - px, y - py) >= IMPACT["min_gap_m"] for _, px, py in pick):
-                pick.append((s, x, y))
-            if len(pick) == IMPACT["top_n"]:
-                break
-        if pick:
-            impact_n, impact_min = len(pick), sum(p[0] for p in pick)
-    need_i = ["grid_hbi.csv", "dong_hbi_with_elderly.csv (analysis/hbi/tools/outside_elderly.py)"]
-    B.put("IMPACT.n_sites", "공익효과 후보지 수", need_i, f"{impact_n}곳" if impact_n else None)
-    B.put("IMPACT.minutes", "연간 절감 시간(만 분)", need_i, (f"약 {impact_min / 10000:,.0f}만 분" if impact_min >= 1e5 else f"약 {impact_min:,.0f}분") if impact_min else None)
-    B.fields["IMPACT.assume"] = {"value": (f"가정: 250m 격자 중 절감량 상위 {IMPACT['top_n']}곳(서로 {IMPACT['min_gap_m']}m 이상), 시설이 경사 부담을 평지 수준으로 낮춤, "
-                                           f"대기·탑승 왕복 {IMPACT['wait_min']:g}분, 고령자 1인 연 {IMPACT['trips_per_year']}회 의료시설 왕복, "
-                                           "격자 고령인구 = 행정동 65세 이상 × 격자 연면적 비율 (상한 추정)"), "label": "공익효과 가정", "need": [], "optional": True}
+    # ── 23장 공익 효과: Σ_동 pop65 × weight_x_saved_min ÷ weight_all (1회 왕복 기준, v5) ──
+    #   연간 환산은 하지 않음: 외출 빈도 등 출처 있는 가정이 확보되지 않았음
+    idong = R("intervention_dong.csv") or []
+    all_name = next((r["facility"] for r in isum if r.get("facility", "").startswith("ALL")), None)
+    popd = {r["adm_cd"]: num(r.get("pop65")) for r in (ew or [])}
+    people = minutes = None
+    if all_name and idong and popd:
+        rows = [r for r in idong if r.get("facility") == all_name and r.get("target") == T0]
+        acc_p = acc_m = 0.0
+        used = 0
+        for r in rows:
+            p65, wa = popd.get(r["adm_cd"]), num(r.get("weight_all"))
+            if p65 and wa:
+                acc_p += p65 * (num(r.get("weight_benefit")) or 0) / wa
+                acc_m += p65 * (num(r.get("weight_x_saved_min")) or 0) / wa
+                used += 1
+        if used:
+            people, minutes = acc_p, acc_m
+    n_fac = len({r["facility"] for r in isum if r.get("target") == T0 and not r.get("facility", "").startswith("ALL")})
+    need_i = ["intervention_summary.csv (v5)", "intervention_dong.csv (v5)", "dong_hbi_with_elderly.csv (analysis/hbi/tools/outside_elderly.py)"]
+    B.put("IMPACT.n_sites", "개입 후보지 수", ["intervention_summary.csv (v5)"], f"{n_fac}곳" if n_fac else None)
+    B.put("IMPACT.people", "수혜 고령인구(추정)", need_i, f_about(people) if people else None)
+    B.put("IMPACT.minutes", "1회 왕복당 합계 단축(분)", need_i,
+          (f"{minutes / 10000:,.1f}만 분" if minutes >= 1e5 else f"{f_about(minutes)}분") if minutes else None)
+    B.fields["IMPACT.note"] = {"value": "1회 왕복 기준: 동별 65세 이상 인구 × (수혜 건물 연면적 × 단축 분 ÷ 동 주거 연면적)의 합. 연간 환산은 출처 있는 외출 빈도 가정이 없어 하지 않음",
+                               "label": "공익효과 계산식", "need": [], "optional": True}
 
     # ── 부록 민감도 ──
     sens = R("sensitivity.csv") or []
@@ -485,7 +505,7 @@ def make_plots(B, grid, targets, T0, vs, site_rows, skt_key, skt_rows, skt_r, sk
         ax.axvline(90, color="#B23A2A", lw=1.2); ax.text(90, len(sr) - 0.45, " 상위 10% 기준", fontsize=7.5, color="#B23A2A", va="bottom")
         ax.set_yticks(ys); ax.set_yticklabels([s["name"] for s in sr], fontsize=8.5, color=INK)
         ax.set_xlim(0, 100); ax.set_ylim(-0.6, len(sr) - 0.1); ax.set_xticks([0, 25, 50, 75, 90, 100])
-        ax.set_xlabel("전체 250m 격자 중 백분위", fontsize=8, color=MUTED)
+        ax.set_xlabel("같은 반경 300m 원 평균끼리 비교한 백분위" if sr[0].get("mode") == "circle" else "전체 250m 격자 중 백분위", fontsize=8, color=MUTED)
         style(ax); fig.tight_layout(pad=0.3); fig.savefig(P("sites.png"), transparent=True); plt.close(fig)
         B.img("sites", "선정지 백분위 막대", ["validation_sites.csv"], P("sites.png"))
     else:

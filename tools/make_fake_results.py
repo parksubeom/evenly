@@ -6,6 +6,8 @@ tools/make_fake_results.py ─ 반출 결과와 똑같은 형식의 "가짜" 결
        미리 확인하려고, analysis/hbi/04~08 이 쓰는 파일 형식을 그대로 흉내 낸 가짜 파일을 만듭니다.
 [실행] python3 tools/make_fake_results.py              → results/fake_export/ (전체)
        python3 tools/make_fake_results.py --partial    → join_*, parcel_*, sensitivity, map_* 없이 (누락 처리 시험)
+       python3 tools/make_fake_results.py --schema v4  → v4(1차 방문) 형식. 기본 v5 는 intervention_*·validation_measured,
+                                                         percentile_circle, station_ev, "(경계 제외)" 지표 이름이 추가됨
 [주의] 여기서 나온 숫자는 전부 지어낸 값입니다. 이 폴더로 만든 PPT에는 "테스트 데이터 — 제출 금지"
        워터마크가 붙고, 파일명도 deliverables/_test_기획서.pptx 로 따로 나옵니다.
        표준 라이브러리만 씁니다 (matplotlib 이 있으면 map_*.png 도 그림).
@@ -71,8 +73,13 @@ def main():
     ap.add_argument("--out", default=os.path.join(ROOT, "results", "fake_export"))
     ap.add_argument("--partial", action="store_true", help="join_*, parcel_*, sensitivity, map_* 를 빼고 생성")
     ap.add_argument("--seed", type=int, default=20261015)
+    ap.add_argument("--schema", choices=["v4", "v5"], default="v5", help="분석 코드 버전별 반출 형식")
     a = ap.parse_args()
     rnd = random.Random(a.seed)
+    V5 = a.schema == "v5"
+    targets = TARGETS + (["station_ev"] if V5 else [])
+    TPROF["station_ev"] = (18, 55, 1.2)
+    suf = lambda name, inner=None: (f"{name[:-1]}, 경계 제외)" if inner else f"{name}(경계 제외)") if V5 else name
     out = os.path.abspath(a.out)
     if os.path.basename(out) == "raw_export":
         raise SystemExit("가짜 데이터를 raw_export 에 만들 수 없습니다")
@@ -113,7 +120,7 @@ def main():
 
     grid_rows, summary = [], []
     by_target = {}
-    for T in TARGETS:
+    for T in targets:
         lo_t, hi_t, k = TPROF[T]
         rows = []
         for c in cells:
@@ -136,12 +143,12 @@ def main():
         wt_hi = sum(r["wt"] * r["share"] for r in rows)
         summary += [[T, "분석 건물 수", nb],
                     [T, "경계 500m 이내라 제외한 건물 수", rnd.randint(9000, 16000)],
-                    [T, "HBI 중앙값", round(hbis[len(hbis) // 2] - 0.02, 3)],
+                    [T, suf("HBI 중앙값"), round(hbis[len(hbis) // 2] - 0.02, 3)],
                     [T, f"HBI {LO}~{HI} 비율", round(mid_n / nb, 3)],
                     [T, f"HBI {HI} 이상 비율", round(hi_n / nb, 3)],
                     [T, f"HBI {HI} 이상 건물 수", hi_n],
-                    [T, "귀갓길(목적지→집) 편도 배수 중앙값", round(1 + (hbis[len(hbis) // 2] - 1) * 1.6, 3)],
-                    [T, "고령자 왕복 중앙값(분)", round(sorted(r["elder"] for r in rows)[len(rows) // 2], 1)],
+                    [T, suf("귀갓길(목적지→집) 편도 배수 중앙값"), round(1 + (hbis[len(hbis) // 2] - 1) * 1.6, 3)],
+                    [T, suf("고령자 왕복 중앙값(분)", True), round(sorted(r["elder"] for r in rows)[len(rows) // 2], 1)],
                     [T, "휠체어 도달불가 비율", round(rnd.uniform(0.01, 0.05), 3)],
                     [T, f"HBI {HI} 이상 건물의 연면적 합(㎡, 고령인구 배분용)", round(wt_hi)],
                     [T, "분석 건물 연면적 합(㎡)", round(sum(r["wt"] for r in rows))]]
@@ -183,8 +190,13 @@ def main():
         hm = sum(r["hbi"] * r["c"]["n"] for r in near) / n
         pct = sum(1 for v in cm if v < hm) / len(cm)
         site_h.append(hm)
-        vs.append([s["name"], n, round(hm, 3), round(sum(r["share"] * r["c"]["n"] for r in near) / n, 3), round(pct, 3), pct >= 0.9])
-    write_csv(P("validation_sites.csv"), ["name", "n_bld", "hbi_mean", "share_high", "percentile", "top10"], vs)
+        row = [s["name"], n, round(hm, 3), round(sum(r["share"] * r["c"]["n"] for r in near) / n, 3), round(pct, 3), pct >= 0.9]
+        if V5:   # 같은 반경 원 평균끼리 비교 (격자 평균보다 분포가 좁아 백분위가 조금 낮게 나오도록)
+            pc = max(0.0, pct - rnd.uniform(0.01, 0.06))
+            row += [round(pc, 3), pc >= 0.9]
+        vs.append(row)
+    write_csv(P("validation_sites.csv"), ["name", "n_bld", "hbi_mean", "share_high", "percentile", "top10"]
+              + (["percentile_circle", "top10_circle"] if V5 else []), vs)
     thr = min(site_h)
     cand = [r for r in med if r["hbi"] > thr and all(math.hypot(r["c"]["x"] - s["x"], r["c"]["y"] - s["y"]) > 500 for s in sites)]
     cand.sort(key=lambda r: -r["hbi"])
@@ -196,6 +208,39 @@ def main():
         ["현장실측1", 402, 468.0, 15.6, 11.3, 1180.0, 9.8, 12.0],
         ["현장실측2", 310, 377.0, 10.9, 7.9, 655.0, 7.9, 8.5],
         ["현장실측3", 455, 520.0, 13.4, 9.7, 980.0, 10.8, 10.5]])
+    if V5:
+        write_csv(P("validation_measured.csv"), ["n", "r_adult_pred_vs_measured"], [[3, 0.981]])
+        # 개입 효과 (v5): 선정지 5곳(planned) + 신규 후보 상위 5곳, 마지막 행 ALL
+        wall = {r[0]: r[6] for r in dong_rows}
+        facs = [(f"planned:{s['name']}", s["x"], s["y"]) for s in sites] + [(f"cand:{i + 1:02d}", r["c"]["x"], r["c"]["y"]) for i, r in enumerate(cand[:5])]
+        isum, idong, igrid, allb = [], {}, [], {}
+        for T in ["medical", "station_ev"]:
+            for fname, fx, fy in facs + [("ALL(후보 전체)", None, None)]:
+                if fx is None:
+                    ben = list(allb.get(T, {}).values())
+                else:
+                    ben = [r for r in by_target[T] if math.hypot(r["c"]["x"] - fx, r["c"]["y"] - fy) <= 450]
+                    for r in ben:
+                        allb.setdefault(T, {})[(r["c"]["gx"], r["c"]["gy"])] = r
+                if not ben:
+                    continue
+                sv = [max(0.0, (r["elder"] - r["flat"]) * rnd.uniform(0.4, 0.7)) for r in ben]
+                nb = sum(r["c"]["n"] for r in ben)
+                hb = sum(r["hbi"] * r["c"]["n"] for r in ben) / nb
+                isum.append([fname, T, nb, round(sum(r["wt"] for r in ben)), round(sum(v * r["c"]["n"] for v, r in zip(sv, ben)) / nb, 1), round(max(sv), 1),
+                             round(sum(v * r["c"]["n"] for v, r in zip(sv, ben))), round(hb, 3), round(1 + (hb - 1) * rnd.uniform(0.3, 0.45), 3),
+                             rnd.randint(0, 40) if T == "station_ev" else 0, rnd.randint(10, 90) if T == "station_ev" else 0])
+                for v, r in zip(sv, ben):
+                    k = (fname, T, r["c"]["dong"]["adm_cd"])
+                    g = idong.setdefault(k, [0, 0.0, 0.0])
+                    g[0] += r["c"]["n"]; g[1] += r["wt"]; g[2] += r["wt"] * v
+                    igrid.append([fname, T, r["c"]["x"], r["c"]["y"], r["c"]["n"], round(v, 1)])
+        write_csv(P("intervention_summary.csv"), ["facility", "target", "n_benefit", "weight_benefit", "mean_saved_min", "max_saved_min", "sum_saved_bld_min",
+                                                  "hbi_before", "hbi_after", "wheel_newly_reachable", "wheel_benefit"], isum)
+        write_csv(P("intervention_dong.csv"), ["facility", "target", "adm_cd", "n_benefit", "weight_benefit", "weight_all", "weight_x_saved_min"],
+                  [[f, t, cd, g[0], round(g[1]), wall.get(cd, round(g[1] * 3)), round(g[2])] for (f, t, cd), g in idong.items()])
+        write_csv(P("intervention_grid.csv"), ["facility", "target", "cell_x", "cell_y", "n_benefit", "mean_saved_min"], igrid)
+
     # 검증 ③ 기여도 (04_validate.py 와 같은 문구)
     write_csv(P("validation_ablation.csv"), ["scenario", "metric", "value"], [
         ["DEM 제외(평지 가정)", "경사 반영 상위10% 취약건물 중 평지 기준으로는 상위10%가 아닌 비율", 0.463],
@@ -234,7 +279,7 @@ def main():
                 js.append([name, f"{gname} 평균값", ""])
         write_csv(P("join_summary.csv"), ["data", "metric", "value"], js)
         # 민감도 (08_sensitivity.py)
-        base_med = [x for x in summary if x[0] == "medical" and x[1] == "HBI 중앙값"][0][2]
+        base_med = [x for x in summary if x[0] == "medical" and x[1] == suf("HBI 중앙값")][0][2]
         base_sh = [x for x in summary if x[0] == "medical" and x[1] == f"HBI {HI} 이상 비율"][0][2]
         sens = [["기본값", base_med, base_sh, 1.0, 1.0]]
         for nm, dm, ds, rc, ov in zip(SENS, [0.0, 0.0, -0.041, 0.052, 0.018, -0.012], [0.0, 0.0, -0.019, 0.027, 0.009, -0.006],
@@ -246,7 +291,7 @@ def main():
             import matplotlib
             matplotlib.use("Agg")
             import matplotlib.pyplot as plt
-            for T in TARGETS:
+            for T in targets:
                 fig, ax = plt.subplots(figsize=(6, 6), dpi=80)
                 rs = by_target[T]
                 ax.scatter([r["c"]["x"] for r in rs], [r["c"]["y"] for r in rs], c=[r["hbi"] for r in rs], s=2, marker="s", vmin=1, vmax=2.2)
@@ -260,8 +305,8 @@ def main():
                   f, ensure_ascii=False, indent=1)
     with open(P(FAKE_MARKER), "w", encoding="utf-8") as f:
         f.write("이 폴더의 파일은 tools/make_fake_results.py 가 만든 가짜(테스트) 데이터입니다.\n제출물에 절대 쓰지 마세요.\n"
-                f"옵션: {'--partial' if a.partial else '전체'}, seed={a.seed}\n")
-    print(f"가짜 결과 {len(os.listdir(out))}개 파일 → {os.path.relpath(out, ROOT)}  (격자 {len(cells)}칸 × 목적지 {len(TARGETS)}종"
+                f"옵션: {a.schema}, {'--partial' if a.partial else '전체'}, seed={a.seed}\n")
+    print(f"가짜 결과 {len(os.listdir(out))}개 파일 → {os.path.relpath(out, ROOT)}  ({a.schema}, 격자 {len(cells)}칸 × 목적지 {len(targets)}종"
           + (", --partial" if a.partial else "") + ")")
 
 
