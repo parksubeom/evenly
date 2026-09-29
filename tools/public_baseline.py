@@ -10,7 +10,8 @@ tools/public_baseline.py ─ [안심구역 밖] 공개데이터만으로 같은 
   --network  : 서울시 자치구별 도보 네트워크 CSV (WGS84). LINESTRING WKT 가 든 열을 자동으로 찾음
   --stations : name, lon, lat (역 좌표. tools/prep_points.py 로 만들 수 있음)
   --backend  : auto(기본) / osgeo / pyproj. auto 는 osgeo 로 실제 변환·이미지 읽기를 한 번 해 보고 실패하면 pyproj + Pillow
-[모델]  analysis/hbi/lib 의 model.run_scenario·qgraph 를 **그대로** 불러 씀 (수정하지 않음). 링크 30m 분할, 1m 안 점은 같은 노드
+[모델]  analysis/hbi/lib 의 model.run_scenario·qgraph 를 **그대로** 불러 씀 (수정하지 않음). 링크 30m 분할,
+        노드는 analysis 와 같게 1m 반올림(--snap round, 기본). --snap tol 은 1m 허용거리 비교용
 [지형]  AWS Terrain Tiles terrarium z15 (약 30m급 공개 표고). 캐시: data_public/raw/terrain_cache
         높이 = R×256 + G + B/256 − 32768
 [결과]  results/public_baseline/
@@ -187,13 +188,21 @@ def lines_from_csv(path, bbox):
     return col, len(rows), out
 
 
-def build(backend, lines):
-    """선 → 30m 이하 조각, 1m 안 점은 같은 노드 → (노드 xy, 링크 u·v·길이)"""
+def build(backend, lines, snap="round"):
+    """선 → 30m 이하 조각 → (노드 xy, 링크 u·v·길이)
+    snap="round" : analysis/hbi/lib/qnetwork.py 와 같은 규칙 (좌표를 1m 단위로 반올림해 같으면 같은 노드, 노드 좌표 = 반올림 값)
+    snap="tol"   : 1m 허용거리 (이웃 칸까지 보고 1m 안이면 같은 노드). 비교 조건을 맞추려고 기본은 round"""
     allpts = np.array([p for ln in lines for p in ln], float)
     X, Y = backend.to_m(allpts[:, 0], allpts[:, 1])
     ids, nxy, U, V, L = {}, [], [], [], []
 
-    def nid(x, y):
+    def nid_round(x, y):
+        k = (int(np.round(x / SNAP)), int(np.round(y / SNAP)))
+        if k not in ids:
+            ids[k] = len(nxy); nxy.append((k[0] * SNAP, k[1] * SNAP))
+        return ids[k]
+
+    def nid_tol(x, y):
         """1m(SNAP) 안에 이미 노드가 있으면 그 노드, 없으면 새 노드. 1m 칸과 이웃 8칸을 같이 봄
         (반올림만 하면 0.4m 떨어진 두 점이 칸 경계를 사이에 두고 다른 노드가 될 수 있어서)"""
         kx, ky = int(math.floor(x / SNAP)), int(math.floor(y / SNAP))
@@ -204,6 +213,7 @@ def build(backend, lines):
                         return n
         ids.setdefault((kx, ky), []).append(len(nxy)); nxy.append((x, y))
         return len(nxy) - 1
+    nid = nid_round if snap == "round" else nid_tol
     i = 0
     for ln in lines:
         xs, ys = X[i:i + len(ln)], Y[i:i + len(ln)]
@@ -230,15 +240,16 @@ def main():
     ap.add_argument("--target", default="station")
     ap.add_argument("--bbox", help="lon0,lat0,lon1,lat1")
     ap.add_argument("--backend", default="auto", choices=["auto", "osgeo", "pyproj"])
+    ap.add_argument("--snap", default="round", choices=["round", "tol"], help="노드 합치기 규칙 (기본 round = analysis 와 같음)")
     ap.add_argument("--out", default=os.path.join(ROOT, "results", "public_baseline"))
     a = ap.parse_args()
     bbox = [float(v) for v in a.bbox.split(",")] if a.bbox else None
     B = pick_backend(a.backend)
-    print(f"백엔드: {B.name}")
+    print(f"백엔드: {B.name}, 노드 합치기: {a.snap}")
 
     col, nrows, lines = lines_from_csv(a.network, bbox)
     print(f"네트워크: {nrows:,}행 중 선 {len(lines):,}개 (WKT 열 '{col}')")
-    nxy, U, V, L = build(B, lines)
+    nxy, U, V, L = build(B, lines, a.snap)
     lon, lat = B.to_ll(nxy[:, 0], nxy[:, 1])
     z, nt = elevation(B, lon, lat)
     s = (z[V] - z[U]) / L                                       # 링크 경사 (u → v 방향)
