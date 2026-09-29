@@ -26,7 +26,7 @@ CAPTION = "화면 예시 — 실제 화면과 글꼴·색·숫자가 다를 수 
 
 CSS = """
 @page { size: A4; margin: 12mm 13mm 12mm 13mm; }   /* 쪽 번호는 넣지 않음: 제목의 "0쪽~8쪽" 과 헷갈리지 않게 */
-body { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; font-size: 12pt; line-height: 1.42; color: #000; margin: 0; }
+body { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; font-size: 12pt; line-height: 1.34; color: #000; margin: 0; }
 h1 { font-size: 19pt; margin: 0 0 6pt; }
 h2 { font-size: 16pt; margin: 0 0 5pt; padding: 3pt 8pt; background: #1f3b2d; color: #fff; break-before: page; }
 h2.first { break-before: auto; margin-top: 10pt; }
@@ -34,40 +34,40 @@ h1.part { font-size: 20pt; break-before: page; margin: 0 0 6pt; padding: 6pt 10p
 h3 { font-size: 13.5pt; margin: 10pt 0 3pt; border-bottom: 1.2pt solid #1f3b2d; break-after: avoid; }
 table.wide td code { font-size: 8.2pt; white-space: nowrap; }
 pre.cmdbox.small { font-size: 9pt; font-weight: normal; }
-p { margin: 3pt 0; } ol, ul { margin: 3pt 0 4pt 20pt; padding: 0; } li { margin: 2pt 0; }
-.todo { font-size: 15pt; font-weight: bold; border: 2pt solid #1f3b2d; background: #eef5f0; padding: 5pt 9pt; margin: 4pt 0 7pt; }
+p { margin: 2pt 0; } ol, ul { margin: 2pt 0 3pt 20pt; padding: 0; } li { margin: 1pt 0; }
+.todo { font-size: 14pt; font-weight: bold; border: 2pt solid #1f3b2d; background: #eef5f0; padding: 3pt 9pt; margin: 3pt 0 5pt; }
 .todo small { display: block; font-size: 10pt; font-weight: normal; color: #1f3b2d; }
 code { font-family: Menlo, Consolas, monospace; font-size: 11pt; background: #eee; padding: 0 2pt; overflow-wrap: anywhere; }
 pre.cmdbox { font-family: Menlo, Consolas, monospace; font-size: 13pt; font-weight: bold; border: 1.6pt solid #000; background: #fff;
              padding: 4pt 9pt; margin: 4pt 0; white-space: pre-wrap; overflow-wrap: anywhere; break-inside: avoid; }
 table { border-collapse: collapse; width: 100%; table-layout: fixed; margin: 5pt 0; break-inside: avoid; }
-th, td { border: 0.9pt solid #555; padding: 3pt 5pt; vertical-align: top; font-size: 11pt; line-height: 1.3; overflow-wrap: anywhere; }
+th, td { border: 0.9pt solid #555; padding: 2pt 5pt; vertical-align: top; font-size: 10.5pt; line-height: 1.26; overflow-wrap: anywhere; }
 th { background: #ddd; }
 td code { font-size: 10pt; }
 table.bbox td { vertical-align: middle; white-space: nowrap; font-size: 12pt; }
 table.bbox td code { font-size: 15pt; font-weight: bold; background: none; }
-table.memo td { height: 26pt; }
-.run { margin: 4pt 0 5pt; break-inside: avoid; }
+table.memo td { height: 22pt; }
+.run { margin: 3pt 0 3pt; break-inside: avoid; }
 .run .what { font-size: 10.5pt; color: #1f3b2d; margin: 0 0 1.5pt 1pt; }
 .run .what b { background: #e3efe6; padding: 0 4pt; margin-right: 4pt; border-radius: 2pt; }
 .run .box { display: flex; border: 1.4pt solid #111; background: #1e1e1e; }
 .run .tag { background: #f2c94c; color: #000; font: bold 10pt 'Apple SD Gothic Neo', sans-serif; padding: 4pt 6pt; display: flex; align-items: center; }
-.run pre { flex: 1; min-width: 0; margin: 0; padding: 4pt 9pt; color: #fff; font: bold 13pt/1.35 Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.run pre { flex: 1; min-width: 0; margin: 0; padding: 2.5pt 9pt; color: #fff; font: bold 13pt/1.35 Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 .run.small pre { font-size: 9.5pt; font-weight: normal; }
 kbd { font: bold 10.5pt Menlo, Consolas, monospace; background: #1e1e1e; color: #fff; padding: 0.5pt 4pt; border-radius: 2pt; overflow-wrap: anywhere; }
 td kbd { font-size: 9.5pt; }
-.okbad { display: flex; gap: 6pt; margin: 7pt 0 0; break-inside: avoid; }
-.okbad div { flex: 1; border: 1.6pt solid; padding: 4pt 7pt; font-size: 11pt; }
+.okbad { display: flex; gap: 6pt; margin: 5pt 0 0; break-inside: avoid; }
+.okbad div { flex: 1; border: 1.6pt solid; padding: 3pt 7pt; font-size: 10.5pt; line-height: 1.3; }
 .okbad .ok { border-color: #2e7d32; background: #eef7ee; } .okbad .bad { border-color: #c62828; background: #fdeeee; }
 .okbad b.h { display: block; font-size: 12pt; margin-bottom: 2pt; }
-.shot { margin: 4pt 0 4pt; break-inside: avoid; }
+.shot { margin: 3pt 0 3pt; break-inside: avoid; }
 .shot .cap { font-size: 8.5pt; color: #666; margin-top: 2pt; }
 .shot .lab { font-size: 10pt; font-weight: bold; margin-bottom: 2pt; }
 .win { border: 1pt solid #777; box-shadow: 1.5pt 1.5pt 0 #bbb; }
 .win .tb { font: 9.5pt 'Segoe UI', 'Apple SD Gothic Neo', sans-serif; padding: 2pt 6pt; background: #f0f0f0; border-bottom: 1pt solid #ccc; display: flex; justify-content: space-between; }
 .win .tb .ctl { letter-spacing: 9pt; color: #444; }
 .win.cmd .tb { background: #fff; }
-.win.cmd .body { background: #0c0c0c; color: #cccccc; font: 9.2pt/1.38 Menlo, Consolas, monospace; padding: 5pt 7pt; white-space: pre-wrap; overflow-wrap: anywhere; }
+.win.cmd .body { background: #0c0c0c; color: #cccccc; font: 8.8pt/1.32 Menlo, Consolas, monospace; padding: 5pt 7pt; white-space: pre-wrap; overflow-wrap: anywhere; }
 .win.note .menu { font: 9pt 'Apple SD Gothic Neo', sans-serif; padding: 1pt 6pt; border-bottom: 1pt solid #ddd; color: #333; word-spacing: 6pt; }
 .win.note .body { background: #fff; color: #000; font: 9.4pt/1.38 Menlo, Consolas, monospace; padding: 5pt 7pt; white-space: pre-wrap; overflow-wrap: anywhere; }
 .win.start { width: 60%; background: #f3f3f3; }
@@ -195,8 +195,9 @@ def convert(md):
         m = re.match(r"^(\d+\.|-)\s+(.*)$", ln)
         if m:
             tag = "ol" if m.group(1)[0].isdigit() else "ul"
-            if lst != tag:
-                close(); out.append(f"<{tag}>"); lst = tag
+            if lst != tag:                                   # 번호 목록이 상자 뒤에서 다시 시작해도 번호를 이어감 (예: 2. 부터)
+                num = int(m.group(1)[:-1]) if tag == "ol" else 1
+                close(); out.append(f'<{tag} start="{num}">' if num > 1 else f"<{tag}>"); lst = tag
             out.append(f"<li>{inline(m.group(2))}</li>")
             i += 1
             continue
