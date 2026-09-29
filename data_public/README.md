@@ -6,7 +6,7 @@
 
 | 파일 | 받는 곳 | 쓰는 도구 | 상태 |
 |---|---|---|---|
-| 행정동별 성별 연령별 인구 | 공공데이터포털 "행정안전부_지역별(행정동) 성별 연령별 주민등록 인구수" | `tools/prep_elderly_pop.py` → `elderly_pop.csv` (adm_cd, pop65, base_ym) | 받음 9/29, 기준 2026-08-31. 서울 427동, 경계 425/426, 대상 88/88 |
+| 행정동별 성별 연령별 인구 | 공공데이터포털 "행정안전부_지역별(행정동) 성별 연령별 주민등록 인구수" | `tools/prep_elderly_pop.py` → `elderly_pop.csv` (adm_cd, pop65, base_ym) | 받음 9/29, 기준 2026-08-31. 서울 427동, 경계 425/426, 대상 88/88. `--min-age 60` 으로 `pop60.csv` (adm_cd, pop60, base_ym) 도 만듦: 19장 외출 지수 분모 (SKT·KCB 가 60세 이상이라). 종로구 60세 이상 42,067명 |
 | 장애인 현황 (장애유형별/동별) | 서울시 통계 (201_DT_201004_F040005, 세로 형식) | `tools/outside_join_dong.py --label 장애인_유형 --cols 지체,뇌병변` | 받음 9/29, 동 단위 88/88 |
 | 장애인 현황 (장애정도별/동별) | 서울시 통계 (장애인+현황(등급별_동별)) | `tools/outside_join_dong.py --label 장애인_정도 --cols "심한 장애"` | 받음 9/29, 동 단위 88/88 |
 | 동별 독거노인 현황 (성별) | 서울 열린데이터광장 | `tools/outside_join_dong.py --cols 합계` | 받음 9/29 (동 단위, 5개 구 88/88 동 결합) |
@@ -26,7 +26,7 @@
 | `prep_points.py` | 아무 점 CSV | `name, lon, lat` CSV | 이름·좌표 열 자동 인식, 미터 좌표면 경위도로 변환, `--seoul` 서울 경계 안만 |
 | `outside_elderly.py` | 반출 `dong_hbi.csv` + `elderly_pop.csv` | 같은 폴더 `dong_hbi_with_elderly.csv` (+ pop65, base_ym) | **밖에서는 이 파일을 씀.** `analysis/hbi/tools/outside_elderly.py`(번들 안)는 예전 인구 형식용이라 쓰지 않음 |
 | `merge_exports.py` | 1차 방문 구역별 반출 폴더 A~D | `results/raw_export` + `merge_notes.txt` | 대상 구 안 격자·동만 합치고 선정지 백분위·신규 후보는 다시 계산 (docs/1차방문_구역별실행.md) |
-| `prep_elderly_pop.py` | 주민등록 고령 인구현황 CSV | `elderly_pop.csv` (adm_cd, pop65) | 동 단위 행만. 구 단위 파일이면 저장하지 않음 |
+| `prep_elderly_pop.py` | 행안부 연령별 인구 CSV(형식 A) 또는 주민등록 고령 인구현황 CSV(형식 B) | `elderly_pop.csv` (adm_cd, pop65). `--min-age 60` 이면 `pop60.csv` (형식 A 만) | 동 단위 행만. 구 단위 파일이면 저장하지 않음 |
 
 실행 환경: 일반 Python 3 + numpy. `public_baseline.py` 는 osgeo(QGIS Python) 또는 pyproj + Pillow 가 필요합니다
 (`--backend auto` 가 실제로 한 번 변환·이미지 읽기를 해 보고 되는 쪽을 고름).
