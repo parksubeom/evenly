@@ -355,7 +355,7 @@ def main():
     interp = None
     if skt_r is not None and skt_p is not None:
         if skt_r < 0 and skt_p < 0.05:
-            interp = f"가설 지지: HBI가 높은 동일수록 고령자 유동인구가 적습니다 (r = {skt_r:.2f})"
+            interp = f"가설 지지: HBI가 높은 동일수록 60세 이상 유동인구가 적습니다 (r = {skt_r:.2f})"
         elif skt_r < 0:
             interp = f"같은 방향이지만 통계적으로 뚜렷하지 않습니다 (r = {skt_r:.2f}, p = {skt_p:.2f})"
         else:
@@ -370,7 +370,7 @@ def main():
             hq = sorted(v[0] for v in vals)[int(len(vals) * 0.75)]
             iq = sorted(v[1] for v in vals)[int(len(vals) * 0.25)]
             overlap = sum(1 for h, i in vals if h >= hq and i <= iq)
-    B.put("CROSS.kcb_overlap", "HBI 상위 25% × KCB 소득 하위 25% 행정동 수", ["join_KCB_*.csv (07_join_dong.py)"], f"{overlap}곳" if overlap is not None else None)
+    B.put("CROSS.kcb_overlap", "HBI 상위 25% × KCB 60세 이상 소득 하위 25% 행정동 수", ["join_KCB_*.csv (07_join_dong.py)"], f"{overlap}곳" if overlap is not None else None)
     skt_rows = R(f"join_{skt_key}.csv") if skt_key else None
 
     # ── 22장 한 사람의 변화: 실측 구간 + intervention_summary 의 선정지(planned) 행 (v5) ──
