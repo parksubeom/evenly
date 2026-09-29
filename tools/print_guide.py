@@ -8,7 +8,8 @@ tools/print_guide.py ─ docs/1차방문_안내서.md → 인쇄용 A4 PDF (docs
   ## 제목          → 새 쪽 (한 쪽에 한 단계). 부 표지 바로 뒤의 첫 ## 은 같은 쪽
   ### 제목         → 쪽을 넘기지 않는 작은 제목
   할 일: …          → 쪽 맨 위 큰 글씨 칸
-  ```               → 명령 상자 (13pt 고정폭, 한 상자에 한 가지 일)
+  ```run 하는 일    → 입력 상자: 위에 "하는 일"(설명, 입력 안 함), 아래 검은 코드 상자(이 글자만 입력). 13pt 고정폭, 한 상자에 한 가지 일
+  `$ 명령`         → 문장·표 속 입력할 명령 (검은 칸). 그냥 `이름` 은 회색 칸 = 찾을 글자, 입력 안 함
   ```screen 종류 제목 → 화면 예시 그림. 종류: cmd(OSGeo4W Shell) plaincmd(일반 명령 프롬프트) notepad(메모장) start(시작 메뉴 검색) explorer(탐색기 주소창) folder(폴더 목록)
       ⟦1⟧글자⟦/⟧   → 빨간 테두리 + 번호 동그라미 ① (본문 번호와 맞춤)
   | 성공하면 | 이상하면 |  → 초록·빨강 두 칸
@@ -46,6 +47,15 @@ td code { font-size: 10pt; }
 table.bbox td { vertical-align: middle; white-space: nowrap; font-size: 12pt; }
 table.bbox td code { font-size: 15pt; font-weight: bold; background: none; }
 table.memo td { height: 26pt; }
+.run { margin: 4pt 0 5pt; break-inside: avoid; }
+.run .what { font-size: 10.5pt; color: #1f3b2d; margin: 0 0 1.5pt 1pt; }
+.run .what b { background: #e3efe6; padding: 0 4pt; margin-right: 4pt; border-radius: 2pt; }
+.run .box { display: flex; border: 1.4pt solid #111; background: #1e1e1e; }
+.run .tag { background: #f2c94c; color: #000; font: bold 10pt 'Apple SD Gothic Neo', sans-serif; padding: 4pt 6pt; display: flex; align-items: center; }
+.run pre { flex: 1; min-width: 0; margin: 0; padding: 4pt 9pt; color: #fff; font: bold 13pt/1.35 Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.run.small pre { font-size: 9.5pt; font-weight: normal; }
+kbd { font: bold 10.5pt Menlo, Consolas, monospace; background: #1e1e1e; color: #fff; padding: 0.5pt 4pt; border-radius: 2pt; overflow-wrap: anywhere; }
+td kbd { font-size: 9.5pt; }
 .okbad { display: flex; gap: 6pt; margin: 7pt 0 0; break-inside: avoid; }
 .okbad div { flex: 1; border: 1.6pt solid; padding: 4pt 7pt; font-size: 11pt; }
 .okbad .ok { border-color: #2e7d32; background: #eef7ee; } .okbad .bad { border-color: #c62828; background: #fdeeee; }
@@ -79,7 +89,8 @@ def inline(t):
     codes = []
 
     def keep(m):
-        codes.append(f"<code>{html.escape(m.group(1))}</code>")
+        c = m.group(1)
+        codes.append(f"<kbd>{html.escape(c[2:])}</kbd>" if c.startswith("$ ") else f"<code>{html.escape(c)}</code>")
         return f"\x00{len(codes) - 1}\x00"
     e = html.escape(re.sub(r"`([^`]*)`", keep, t))
     e = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", e)
@@ -147,7 +158,11 @@ def convert(md):
             while not lines[j].startswith("```"):
                 j += 1
             body = "\n".join(lines[i + 1:j])
-            if info.startswith("screen"):
+            if info.startswith("run"):
+                small = " small" if max(len(x) for x in body.split("\n")) > 60 else ""
+                what = f'<div class="what"><b>하는 일</b>{inline(info[3:].strip())}</div>' if info[3:].strip() else ""
+                out.append(f'<div class="run{small}">{what}<div class="box"><span class="tag">입력</span><pre>{html.escape(body)}</pre></div></div>')
+            elif info.startswith("screen"):
                 parts = info.split(None, 2)
                 html_ = screen(parts[1], parts[2] if len(parts) > 2 else "", body)
                 short = parts[1] not in ("cmd", "plaincmd") and max(len(x) for x in body.split("\n")) <= 48
