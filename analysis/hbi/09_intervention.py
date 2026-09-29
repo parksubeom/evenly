@@ -16,10 +16,13 @@
   JS로 치면: 지도 앱 길찾기 그래프에 "지름길 간선" 하나를 추가(push)하고 모든 집의 길찾기를 다시 돌려 before/after 를 비교하는 것
 [결과] (output/ → 반출 대상. 기획서 22·23장)
   intervention_summary.csv : 시설·목적지별 수혜 건물 수, 평균·최대 단축(분), 설치 전후 HBI(수혜 건물 평균, 분모는 설치 전 평지 시간),
-                             휠체어로 새로 갈 수 있게 된 건물 수(wheel_newly_reachable), 휠체어 1분 이상 단축 건물 수(wheel_benefit)
+                             휠체어로 새로 갈 수 있게 된 건물 수(wheel_newly_reachable), 휠체어 1분 이상 단축 건물 수(wheel_benefit),
+                             [v5 추가, 맨 뒤 열] 고립 위험 탈출 n_exit_high(설치 전 HBI ≥ 1.8 → 후 < 1.8 건물 수),
+                             weight_exit_high(그 건물 연면적 합, MIN_COUNT 개 미만이면 빈 칸), n_exit_mid(≥ 1.3 → < 1.3 건물 수)
   intervention_grid.csv    : 250m 격자별 수혜 건물 수·평균 단축(분) (수혜 건물 MIN_COUNT 개 이상 격자만)
   intervention_dong.csv    : 행정동별 수혜 건물 수·연면적, 동 전체 주거 연면적, 연면적×단축분 합 (MIN_COUNT 개 이상 동만)
                              → 밖에서 "수혜 고령자·분 = 65세 이상 인구 × weight_x_saved_min ÷ weight_all" 로 환산
+                             [v5 추가, 맨 뒤 열] weight_exit_high (그 동에서 HBI 1.8 아래로 내려온 건물 연면적, MIN_COUNT 개 미만이면 빈 칸)
 [결과 보는 법] 화면의 "수혜 건물 N동, 평균 M분 단축" 을 보고, N 이 0 이면 끝점 좌표(경고)와 BENEFIT_MIN_S 를 확인
 """
 import os, numpy as np
@@ -121,10 +124,16 @@ for name, extra in scen:
         nb = int(ben.sum())
         hb = float(np.mean(te0[ben] / tfl[ben])) if nb else np.nan    # 수혜 건물 평균 HBI (분모 = 설치 전 평지 시간)
         ha = float(np.mean(te1[ben] / tfl[ben])) if nb else np.nan
+        # [v5 추가] 고립 위험 탈출: 설치 전 HBI ≥ 1.8 → 설치 후 < 1.8 (분모는 설치 전 평지 시간), 1.3 도 같은 방식
+        h0, h1 = np.where(ok, te0 / tfl, np.nan), np.where(ok, te1 / tfl, np.nan)
+        ex_hi = ok & (h0 >= C.HBI_BANDS[1]) & (h1 < C.HBI_BANDS[1])
+        ex_mid = ok & (h0 >= C.HBI_BANDS[0]) & (h1 < C.HBI_BANDS[0])
+        n_hi = int(ex_hi.sum())
         f = lambda v, d=3: round(v, d) if np.isfinite(v) else ""
         summ.append([name, T, nb, round(float(b["weight"][ben].sum())), f(float(np.mean(saved[ben])) / 60 if nb else np.nan, 2),
                      f(float(np.max(saved[ben])) / 60 if nb else np.nan, 2), round(float(saved[ben].sum()) / 60, 1),
-                     f(hb), f(ha), int(newly.sum()), int(wben.sum())])
+                     f(hb), f(ha), int(newly.sum()), int(wben.sum()),
+                     n_hi, round(float(b["weight"][ex_hi].sum())) if n_hi >= C.MIN_COUNT else "", int(ex_mid.sum())])
         log(f"  {name} · {T}: 수혜 건물 {nb:,}동, 평균 {np.mean(saved[ben]) / 60 if nb else 0:.1f}분 단축, 휠체어 새로 도달 {int(newly.sum())}동")
         # 격자별 (수혜 건물 MIN_COUNT 이상)
         if nb:
@@ -139,15 +148,18 @@ for name, extra in scen:
             for k, code in enumerate(dcode):
                 m = ben & (which == k)
                 if m.sum() >= C.MIN_COUNT:
+                    mx = ex_hi & (which == k)
                     drows.append([name, T, code, int(m.sum()), round(float(b["weight"][m].sum())), round(float(wall[k])),
-                                  round(float((b["weight"][m] * saved[m] / 60).sum()), 1)])
+                                  round(float((b["weight"][m] * saved[m] / 60).sum()), 1),
+                                  round(float(b["weight"][mx].sum())) if mx.sum() >= C.MIN_COUNT else ""])
 
 write_csv(os.path.join(C.OUTPUT, "intervention_summary.csv"),
           ["facility", "target", "n_benefit", "weight_benefit", "mean_saved_min", "max_saved_min", "sum_saved_bld_min",
-           "hbi_before", "hbi_after", "wheel_newly_reachable", "wheel_benefit"], summ)
+           "hbi_before", "hbi_after", "wheel_newly_reachable", "wheel_benefit",
+           "n_exit_high", "weight_exit_high", "n_exit_mid"], summ)
 write_csv(os.path.join(C.OUTPUT, "intervention_grid.csv"), ["facility", "target", "cell_x", "cell_y", "n_benefit", "mean_saved_min"], grows)
 write_csv(os.path.join(C.OUTPUT, "intervention_dong.csv"),
-          ["facility", "target", "adm_cd", "n_benefit", "weight_benefit", "weight_all", "weight_x_saved_min"], drows)
+          ["facility", "target", "adm_cd", "n_benefit", "weight_benefit", "weight_all", "weight_x_saved_min", "weight_exit_high"], drows)
 if not bd:
     log("  external/dong_boundary.geojson 없음 → intervention_dong.csv 는 머리 줄만")
 log(f"완료 → output/intervention_summary.csv ({len(summ)}행), intervention_grid.csv ({len(grows)}행), intervention_dong.csv ({len(drows)}행)")
