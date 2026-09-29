@@ -256,6 +256,7 @@ B.RES1 = () => {
   const bt = (R.tables['RES1.by_target'] || {}).rows || [];
   s.addNotes('안심구역 분석 결과로 자동 생성된 장표입니다 (tools/prepare_deck_data.py). ___ 가 남아 있으면 deck/data/missing.txt 를 확인하세요.'
     + (bt.length ? ' 목적지별 HBI 1.8 이상 비율: ' + bt.map(r => `${r[0]} ${r[1]}(중앙값 ${r[2]})`).join(', ') + '.' : '')
+    + (has('RES1.elderly') ? ` 고령인구 추정은 행정동 65세 이상 인구(기준 ${Q('RES1.elderly_ym', '표시 없음')}) × HBI 1.8 이상 건물 연면적 비율.` : '')
     + edgeNote() + (has('RES1.wheel_ev') ? ` 휠체어 도달불가 비율(엘리베이터 있는 역 기준) ${Q('RES1.wheel_ev', '')}.` : ''));
 };
 

@@ -215,6 +215,8 @@ def main():
     B.put("RES1.elderly", f"HBI {HI} 이상 건물 거주 고령인구 추정", ["dong_hbi_with_elderly.csv (analysis/hbi/tools/outside_elderly.py)"],
           f_about(eld_total))
     B.put("RES1.elderly_src", "고령인구 추정 출처 파일", ["dong_hbi_with_elderly.csv"], eld_src)
+    ym = sorted({r.get("base_ym", "") for r in (ew or []) if r.get("base_ym")})
+    B.fields["RES1.elderly_ym"] = {"value": ",".join(ym) or None, "label": "고령인구 기준연월", "need": ["dong_hbi_with_elderly.csv (tools/outside_elderly.py)"], "optional": True}
     ps = {r["metric"].strip(): num(r["value"]) for r in (R("parcel_summary.csv") or [])}
     B.put("RES1.parcel_share", "국토정보필지(지목 '대') HBI 1.8 이상 비율", ["parcel_summary.csv"], f_pct(ps.get("'대' 필지 HBI 1.8 이상 비율")))
     B.put("RES1.parcel_n", "HBI 산출 필지 수", ["parcel_summary.csv"], f_int(ps.get("HBI 산출 필지 수")))
@@ -282,6 +284,12 @@ def main():
     optional = lambda key, label, need, value: B.fields.__setitem__(key, {"value": value, "label": label, "need": need, "optional": True})
     cp = opt_file(os.path.join("public_baseline", "compare_station.csv"))
     cmpd = {r["metric"].strip(): r["value"] for r in (read_csv(cp) or [])} if cp else {}
+    if cp and not fake:
+        # 가드: 실제 빌드에서는 "실제 LX 결과와 비교한" compare 만 받음 (public_baseline.py 가 lx_grid 출처를 기록)
+        prov = (cmpd.get("lx_grid 출처") or "").strip()
+        if prov != "real":
+            raise SystemExit(f"!! {os.path.relpath(cp, ROOT)} 는 lx_grid 출처가 '{prov or '기록 없음'}' 입니다 (입력: {cmpd.get('lx_grid 입력', '-')}).\n"
+                             "   가짜 결과와 비교한 파일일 수 있어 실제 기획서에 넣지 않습니다. 반출 grid_hbi.csv 로 public_baseline.py 를 다시 돌리거나 이 파일을 지우세요.")
     rho_pub = num(cmpd.get("순위상관(스피어만, LX vs 공개)"))
     miss_pub = num(cmpd.get("그중 공개데이터로 1.3 미만(놓침) 비율"))
     optional("ABL.pub_rho", "공개데이터 대조군 순위상관", ["results/public_baseline/compare_station.csv"], f_num(rho_pub))
