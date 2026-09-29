@@ -81,8 +81,8 @@ def main():
     TPROF["station_ev"] = (18, 55, 1.2)
     suf = lambda name, inner=None: (f"{name[:-1]}, 경계 제외)" if inner else f"{name}(경계 제외)") if V5 else name
     out = os.path.abspath(a.out)
-    if os.path.basename(out) == "raw_export":
-        raise SystemExit("가짜 데이터를 raw_export 에 만들 수 없습니다")
+    if os.path.basename(out) == "raw_export" or os.path.abspath(out).startswith(os.path.join(ROOT, "results", "raw_export")):
+        raise SystemExit("가짜 데이터를 results/raw_export 에 만들 수 없습니다")
     if os.path.isdir(out):
         shutil.rmtree(out)
     os.makedirs(out)
@@ -338,6 +338,8 @@ def main():
     with open(P("deck_inputs.json"), "w", encoding="utf-8") as f:
         json.dump({"team_name": "테스트팀", "visit_dates": ["2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-19"]},
                   f, ensure_ascii=False, indent=1)
+    with open(P("_source.txt"), "w", encoding="utf-8") as f:     # 출처 표지 (merge_exports·prepare_deck_data 가 읽음)
+        f.write(f"fake\nmake_fake_results.py {a.schema}{' --partial' if a.partial else ''}\n")
     with open(P(FAKE_MARKER), "w", encoding="utf-8") as f:
         f.write("이 폴더의 파일은 tools/make_fake_results.py 가 만든 가짜(테스트) 데이터입니다.\n제출물에 절대 쓰지 마세요.\n"
                 f"옵션: {a.schema}, {'--partial' if a.partial else '전체'}, seed={a.seed}\n")

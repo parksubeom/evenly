@@ -12,7 +12,7 @@ import argparse, json, math, os, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "tools"))
-from evenly_common import (ROOT, TARGET_GU, TARGET_LABEL, FAKE_MARKER, load_dongs, load_sites, dong_of, simplify, read_csv, num, truthy)
+from evenly_common import (ROOT, TARGET_GU, TARGET_LABEL, FAKE_MARKER, is_fake_dir, load_dongs, load_sites, dong_of, simplify, read_csv, num, truthy)
 
 SHORT = {"중곡": "광진구 중곡동 (무지개계단)", "화곡": "강서구 화곡동", "봉천": "관악구 봉천동 (비안어린이공원)", "숭인": "종로구 숭인동 (창신역 일대 계단)", "신당": "중구 신당동 (청구동 마을마당)"}
 
@@ -23,7 +23,7 @@ def main():
     ap.add_argument("--out", default=os.path.join(HERE, "evenly_demo.html"))
     a = ap.parse_args()
     src = os.path.abspath(a.src)
-    fake = os.path.exists(os.path.join(src, FAKE_MARKER)) or os.path.basename(src) == "fake_export"
+    fake = is_fake_dir(src) or os.path.basename(src) == "fake_export"
     grid = read_csv(os.path.join(src, "grid_hbi.csv"))
     if not grid:
         raise SystemExit(f"grid_hbi.csv 가 없습니다: {src}")

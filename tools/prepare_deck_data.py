@@ -15,7 +15,7 @@ tools/prepare_deck_data.py ─ 반출 결과 파일 → 기획서에 넣을 값(
 import argparse, datetime, json, math, os, re, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from evenly_common import (ROOT, TARGET_GU, TARGET_LABEL, FAKE_MARKER, load_dongs, dong_of, read_csv, num, truthy)
+from evenly_common import (ROOT, TARGET_GU, TARGET_LABEL, FAKE_MARKER, RAW_EXPORT, is_fake_dir, load_dongs, dong_of, read_csv, num, truthy)
 
 HI, LO = 1.8, 1.3
 DECK = os.path.join(ROOT, "deck")
@@ -129,13 +129,22 @@ class Box:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--src", default=os.path.join(ROOT, "results", "raw_export"))
+    ap.add_argument("--expect", choices=["real", "fake"], help="build:real 은 real: 가짜 표지가 있으면 멈춤")
     a = ap.parse_args()
     src = os.path.abspath(a.src)
     if not os.path.isdir(src):
         raise SystemExit(f"결과 폴더가 없습니다: {src}")
-    fake = os.path.exists(os.path.join(src, FAKE_MARKER)) or os.path.basename(src) == "fake_export"
-    if fake and os.path.basename(src) == "raw_export":
-        print("!! raw_export 안에 가짜 데이터 표시 파일이 있습니다 → 가짜(fake)로 처리합니다. 폴더를 확인하세요.")
+    # 출처 판정: 가짜 표지(_source.txt=fake 또는 _FAKE_DATA_README.txt)가 있으면 fake.
+    #   real 은 "가짜 표지가 없고, 폴더가 results/raw_export" 일 때만 (실제 반출 파일에는 표지가 없음)
+    fake = is_fake_dir(src) or os.path.basename(src) == "fake_export"
+    is_raw = os.path.abspath(src) == os.path.abspath(RAW_EXPORT)
+    if a.expect == "real" and fake:
+        raise SystemExit(f"!! {os.path.relpath(src, ROOT)} 에 가짜 표지(_source.txt=fake)가 있습니다 → 실제 기획서를 만들지 않습니다. 폴더 내용을 확인하세요")
+    if not fake and not is_raw:
+        raise SystemExit(f"!! 가짜 표지가 없는데 폴더가 results/raw_export 가 아닙니다: {os.path.relpath(src, ROOT)}\n"
+                         "   실제 결과는 results/raw_export 에서만 빌드합니다. 시험이면 make_fake_results.py 로 만든 폴더를 쓰세요")
+    if a.expect == "fake" and not fake:
+        raise SystemExit("!! --expect fake 인데 가짜 표지가 없습니다")
     source = "fake" if fake else "real"
     S = lambda n: os.path.join(src, n)
     R = lambda n: read_csv(S(n))
@@ -212,7 +221,7 @@ def main():
         if vals:
             eld_total, eld_src = sum(vals), fn
             break
-    B.put("RES1.elderly", f"HBI {HI} 이상 건물 거주 고령인구 추정", ["dong_hbi_with_elderly.csv (analysis/hbi/tools/outside_elderly.py)"],
+    B.put("RES1.elderly", f"HBI {HI} 이상 건물 거주 고령인구 추정", ["dong_hbi_with_elderly.csv (tools/outside_elderly.py)"],
           f_about(eld_total))
     B.put("RES1.elderly_src", "고령인구 추정 출처 파일", ["dong_hbi_with_elderly.csv"], eld_src)
     ym = sorted({r.get("base_ym", "") for r in (ew or []) if r.get("base_ym")})
@@ -411,7 +420,7 @@ def main():
         if used:
             people, minutes = acc_p, acc_m
     n_fac = len({r["facility"] for r in isum if r.get("target") == T0 and not r.get("facility", "").startswith("ALL")})
-    need_i = ["intervention_summary.csv (v5)", "intervention_dong.csv (v5)", "dong_hbi_with_elderly.csv (analysis/hbi/tools/outside_elderly.py)"]
+    need_i = ["intervention_summary.csv (v5)", "intervention_dong.csv (v5)", "dong_hbi_with_elderly.csv (tools/outside_elderly.py)"]
     B.put("IMPACT.n_sites", "개입 후보지 수", ["intervention_summary.csv (v5)"], f"{n_fac}곳" if n_fac else None)
     B.put("IMPACT.people", "수혜 고령인구(추정)", need_i, f_about(people) if people else None)
     B.put("IMPACT.minutes", "1회 왕복당 합계 단축(분)", need_i,
