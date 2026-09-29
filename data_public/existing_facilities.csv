@@ -1,14 +1,14 @@
 ﻿name,gu,type,status,opened,lon,lat,length_m,rise_m,note,source
-용산구 후암동 108하늘계단,용산구,elevator,existing,2018.11,,,,,"서울 최초, 계단 53m",내 손안에 서울
-서대문구 북아현동 경사형 엘리베이터,서대문구,elevator,existing,2023.01,,,,,"높이 20m·42m 운행, 이대역 접근",경향신문 2023.01.28
+용산구 후암동 108하늘계단,용산구,elevator,existing,2018.11,,,,,"서울 최초, 계단 53m",내 손안에 서울 mediahub.seoul.go.kr/archives/2010393
+서대문구 북아현동 경사형 엘리베이터,서대문구,elevator,existing,2023.01,,,,,"높이 20m·42m 운행, 이대역 접근",경향신문 2023.01.28 khan.co.kr/article/202301281125001
 중구 대현산배수지공원 모노레일,중구,monorail,existing,,127.02077,37.55930,110,,좌표 = 하부 승강장,서울시 보도자료 2020.11 news.seoul.go.kr/citybuild/archives/510605
 성동구 행당2동 대현산공원 모노레일,성동구,monorail,existing(확인필요),,127.02825,37.55365,,,좌표 = 공원 근사,
-성동구 옥수교회 옆 수직 엘리베이터,성동구,vertical,existing,2022,,,,,,
-금천구 금동초교 수직 엘리베이터,금천구,vertical,existing,2022,126.91590,37.44750,,,"보행데크 포함, 수혜 약 5,500명(서울시 추산), 좌표 = 학교",
-금천구 장미공원 수직 엘리베이터,금천구,vertical,existing(확인필요),,,,,,시흥4동 마을버스 접근,
-중구 금호터널 옆 옹벽 수직 엘리베이터,중구,vertical,existing(확인필요),,127.01271,37.55280,,,"수혜 약 1,600명, 좌표 = 종점 약수동 마을마당",
-강북구 미아동 오동근린공원 수직 엘리베이터,강북구,vertical,existing(확인필요),,,,,,"2기, 미아역 접근",
-중구 남산오르미,중구,elevator,existing,,,,,,"관광용, 참고",
+성동구 옥수교회 옆 수직 엘리베이터,성동구,vertical,existing,2022,,,,,,경향신문 2023.01.28 khan.co.kr/article/202301281125001
+금천구 금동초교 수직 엘리베이터,금천구,vertical,existing,2022,126.91590,37.44750,,,"보행데크 포함, 수혜 약 5,500명(서울시 추산), 좌표 = 학교",서울시 보도자료 2020.11 news.seoul.go.kr/citybuild/archives/510605
+금천구 장미공원 수직 엘리베이터,금천구,vertical,existing(확인필요),,,,,,시흥4동 마을버스 접근,서울시 보도자료 2020.11 news.seoul.go.kr/citybuild/archives/510605
+중구 금호터널 옆 옹벽 수직 엘리베이터,중구,vertical,existing(확인필요),,127.01271,37.55280,,,"수혜 약 1,600명, 좌표 = 종점 약수동 마을마당",서울시 보도자료 2020.11 news.seoul.go.kr/citybuild/archives/510605
+강북구 미아동 오동근린공원 수직 엘리베이터,강북구,vertical,existing(확인필요),,,,,,"2기, 미아역 접근",경향신문 2020.04.23 m.khan.co.kr/local/local-general/article/202004231059001
+중구 남산오르미,중구,elevator,existing,,,,,,"관광용, 참고",내 손안에 서울 mediahub.seoul.go.kr/archives/2003863
 종로구 숭인동 창신역 일대 계단,종로구,elevator,planned(2027),,127.01508,37.57933,,,"계단 115m·경사 30도 이상, 좌표 = 창신역 1번출구",내 손안에 서울 2025.06.13 mediahub.seoul.go.kr/archives/2014779
 중구 신당동 청구동 마을마당 앞 계단,중구,elevator,planned(2027),,127.01642,37.55602,,,,내 손안에 서울 2025.06.13 mediahub.seoul.go.kr/archives/2014779
 관악구 봉천동 비안어린이공원 인근,관악구,vertical,planned(2027),,126.94017,37.48075,,,,내 손안에 서울 2025.06.13 mediahub.seoul.go.kr/archives/2014779
