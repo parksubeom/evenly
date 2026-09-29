@@ -7,8 +7,11 @@ npm run build:fake       # 가짜 결과로 시험 → ../deliverables/_test_기
 npm run build:real       # 실제 반출 결과 → ../deliverables/언덕위우리동네_기획서_final.pptx
 ```
 - 걸리는 시간: `npm run build:fake` 1회 약 2초 (가짜 결과 생성 + 변환 + pptx). 처음 한 번은 matplotlib 글꼴 캐시를 만드느라 10~15초
-- 파이썬 쪽 그림(지도·산점도)은 matplotlib 이 필요합니다: `python3 -m pip install --user matplotlib`
-  (없어도 빌드는 되고, 그림 자리가 주황 점선 박스로 남고 누락 목록에 적힙니다)
+- 파이썬 쪽 그림(지도·산점도)은 matplotlib 이 필요합니다. npm 스크립트는 `deck/py.js` 로 Python 을 고릅니다:
+  (1) 환경변수 `EVENLY_PY` → (2) 이 맥의 QGIS 내장 Python (`/Applications/QGIS*.app/Contents/MacOS/python3.x`, matplotlib 포함) → (3) 시스템 `python3`.
+  실행할 때 첫 줄에 `[py.js] 파이썬: QGIS Python (...)` 처럼 어느 것을 썼는지 나옵니다. 시스템 python3 에는 matplotlib 이 없습니다
+  - `build:real` : matplotlib 이 없으면 **멈추고 pptx 를 만들지 않습니다** (그림 빠진 제출본 방지)
+  - `build:fake*` : 경고만 하고 그림 자리를 주황 점선 박스 + 누락 목록으로 남깁니다
 - 흐름: `results/<폴더>` → `tools/prepare_deck_data.py` → `deck/data/results.json` + `deck/img/results/*.png` → `build_deck.js` → pptx
 - 값이 없는 칸은 `___` / 주황 점선 박스로 남고 `deck/data/missing.txt` 에 "누락: 슬라이드, 값, 필요한 파일"이 적힙니다
 - 팀명·방문일은 반출 파일에 없어서 `deck/inputs.json` 에 직접 적습니다
