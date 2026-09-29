@@ -20,10 +20,13 @@
 
 - 작업 요청서의 "12장 HBI 정의"는 현재 번호로 **15장**(핵심 지표)입니다. 15장에 반영했습니다.
 - 13장 도구 문구·부록 2(기술 스택)·부록 3(코드)은 실제 코드 기준으로 고쳤습니다: QGIS 3.32 내장 Python, numpy + GDAL/OGR,
-  scipy 선택, 최단경로는 lib/qgraph.py 자체 다익스트라. 부록 3 코드는 **main(v4)** 의 lib/model.py·lib/qgraph.py 에서 발췌했습니다.
-  v5 브랜치(15a850c)를 받지 못한 상태라, 받은 뒤 v5 의 같은 함수와 달라진 곳이 없는지 대조가 필요합니다.
+  scipy 선택, 최단경로는 lib/qgraph.py 자체 다익스트라. 부록 3 코드는 lib/model.py·lib/qgraph.py 에서 발췌했습니다.
+  v5 브랜치(d4cf61e)와 대조함: v5 의 lib 변경은 run_with_extra 추가뿐이라 발췌한 함수는 v4·v5 가 같습니다.
 - 9장·부록1 의 DEM 기간은 "2024.11 (2021 기준)"으로 적었습니다. 제공 명세의 제작 기준연도를 한 번 더 확인하세요.
 - 23장 공익 효과는 v5 intervention_dong.csv 로 **1회 왕복 기준**만 표기합니다(연간 환산 없음). 이전 버전의 격자 기반 상한 추정
   (주 1회 왕복·대기 3분 등 출처 없는 가정)은 삭제했습니다.
 - 22장은 v5 intervention_summary.csv 의 선정지 행을 facility 이름에 "planned" 또는 "선정"이 들어간 행으로 찾습니다. v5 의 실제 facility 이름 규칙 확인 필요.
 - 렌더 확인은 LibreOffice(맑은 고딕 대신 Apple SD Gothic Neo)로 했습니다. 제출 전 PowerPoint로 한 번 열어 보세요.
+- 18장 공개데이터 대조군, 23장 장애인·독거노인 "_in_high", 19장 점 자료 보조 근거는 **있을 때만** 들어가고 없으면 빈칸 없이 생략합니다
+  (필수 값이 아님). 가짜 빌드는 results/fake_export 안의 파일만 읽고, 실제 빌드는 raw_export → results/ 순서로 찾습니다.
+- 이 브랜치의 b79e54f 커밋이 같은 한글 파일을 NFC·NFD 두 경로로 넣었던 문제는 9a59409 에서 NFD 경로를 지워 고쳤습니다(내용 동일).

@@ -329,19 +329,24 @@ B.ABL = () => {
     [ sc('500m 격자로 뭉뚱그림', '동네 안 경사 편차'), r(`HBI 1.8 이상 건물의 ${V('ABL.grid_hidden', '___%')}가 평균에 가려짐`) ],
   ];
   if (has('ABL.dem1m')) rows.push([ sc('DEM 5m ↔ 1m (관악구)', '해상도 차이'), c(`HBI 순위상관 ${V('ABL.dem1m')} → 5m로도 결론 유지`, { bold:true, fontSize:9.5 }) ]);
-  TB(s, rows, { x:0.5, y:1.35, w:5.55, colW:[2.05,3.5], rowH:[0.34, ...rows.slice(1).map(() => (rows.length > 5 ? 0.44 : 0.56))], fontFace:F, border:{type:'solid',color:C.line,pt:0.75} });
+  const pub = has('ABL.pub_rho');
+  if (pub) rows.push([ sc('공개데이터 대조군*', '공개 도보망 + 약 30m 지형'), r(`순위상관 ${Q('ABL.pub_rho', '')}, LX 1.3 이상 격자의 ${Q('ABL.pub_miss', '-')}를 놓침`) ]);
+  TB(s, rows, { x:0.5, y:1.35, w:5.55, colW:[2.05,3.5], rowH:[0.34, ...rows.slice(1).map(() => (rows.length > 6 ? 0.355 : rows.length > 5 ? 0.44 : 0.56))], fontFace:F, border:{type:'solid',color:C.line,pt:0.75} });
   const rk = IMG('ranks');
   if (rk) {
     s.addImage({ path: rk, x:6.2, y:1.3, w:3.3, h:2.66 });
   } else {
     ph(s, 6.2, 1.35, 3.3, 2.55, '순위 역전 산점도\n격자별 평지 기준 vs 경사 반영 왕복 시간', 10, 'img:ranks');
   }
-  card(s, 0.5, 4.05, 9, 0.95, C.dark);
+  const cy = rows.length > 6 ? 4.2 : 4.05, ch = rows.length > 6 ? 0.8 : 0.95;   // 표가 7줄이면 결론 카드를 조금 아래로
+  card(s, 0.5, cy, 9, ch, C.dark);
   T(s, [
     { text:'결론: ', options:{ bold:true, color:C.orange } },
     { text:`DEM 없이 분석하면 가장 취약한 건물의 ${V('ABL.dem_top10', '___%')}를 놓칩니다. LX 데이터 3종은 "있으면 좋은" 데이터가 아니라 이 문제를 볼 수 있게 하는 유일한 데이터입니다.`, options:{ bold:true, color:C.white } },
-  ], { x:0.75, y:4.05, w:8.5, h:0.95, fontSize:11.5, valign:'middle' });
-  src(s, `순위상관(경사 반영 vs 평지, Spearman) ${V('ABL.rank_corr', '____')} · 그림: 250m 격자, 주황 = 평지 기준 '가까움'인데 HBI 1.8 이상`);
+  ], { x:0.75, y:cy, w:8.5, h:ch, fontSize:rows.length > 6 ? 11 : 11.5, valign:'middle' });
+  src(s, pub ? `* 공개데이터 대조군 (공통 격자 ${Q('ABL.pub_n', '-')}개): ${Q('ABL.pub_note', '')}`
+            : `순위상관(경사 반영 vs 평지, Spearman) ${V('ABL.rank_corr', '____')} · 그림: 250m 격자, 주황 = 평지 기준 '가까움'인데 HBI 1.8 이상`);
+  if (pub) s.addNotes(`경사 반영 vs 평지 순위상관 ${Q('ABL.rank_corr', '-')}. 공개데이터 대조군은 tools/public_baseline.py 결과(results/public_baseline/compare_station.csv).`);
   s.addNotes('본선 데이터 활용성 30점의 "분석결과 미개방데이터 활용 기여도"에 직접 답하는 장표입니다.');
 };
 
@@ -361,7 +366,8 @@ B.CROSS = () => {
   T(s, [
     { text:'결과 해석: ', options:{ bold:true, color:C.orange } },
     { text:V('CROSS.interp', '____________________________'), options:{ bold:true, color:C.dark } },
-  ], { x:5.1, y:4.25, w:4.4, h:0.75, fontSize:10.5, valign:'top' });
+  ], { x:5.1, y:4.25, w:4.4, h:has('CROSS.points') ? 0.55 : 0.75, fontSize:10.5, valign:'top' });
+  if (has('CROSS.points')) T(s, '보조 근거 · ' + Q('CROSS.points', ''), { x:5.1, y:4.82, w:4.4, h:0.36, fontSize:7.5, color:C.muted });
   src(s, '※ SKT·KCB 데이터의 공간 단위와 연계 가능 여부는 제공 명세 및 사무국 확인 후 확정');
   s.addNotes('상호제공데이터 연계 가점 장표. 가설이 기각되더라도 그 자체가 인사이트이니 결과를 그대로 보고합니다.');
 };
@@ -371,7 +377,7 @@ B.IMPACT = () => {
   const impact = `후보지 ${V('IMPACT.n_sites', '___곳')} 설치 시 고령자 약 ${V('IMPACT.people')}명 수혜`;
   const impact2 = `1회 왕복마다 합계 약 ${V('IMPACT.minutes', '___분')} 단축`;
   const cols = [
-    ['공익적 효과', C.dark, [impact, impact2, '민원 이전에 취약지를 먼저 발견']],
+    ['공익적 효과', C.dark, [impact, impact2, ...(has('IMPACT.joined') ? [`HBI 1.8 이상 거주 추정: ${Q('IMPACT.joined', '')}`] : []), '민원 이전에 취약지를 먼저 발견']],
     ['산업적 효과', C.orange, ['지도앱 도보 경로에 경사 반영 옵션', '휠체어·유아차 이용자용 경로 안내', '부동산·돌봄 서비스의 입지 분석 지표']],
     ['확산 가능성', C.sage, ['국토정보필지는 전국 단위로 제공', 'DEM 확보 시 부산 산복도로 등 구릉지 도시로 확장', '연 1회 갱신으로 시설 설치 효과 추적']],
   ];
@@ -382,7 +388,8 @@ B.IMPACT = () => {
     T(s, c[0], { x:x+0.65, y:1.48, w:2.0, h:0.35, fontSize:13.5, bold:true, valign:'middle' });
     c[2].forEach((t, j) => {
       const hot = t === impact || t === impact2;
-      T(s, t, { x:x+0.2, y:2.0 + j*0.68, w:2.45, h:0.6, fontSize:10.5, color: t.includes('___')?'C0612F':(hot?C.orange:C.ink), bold: hot });
+      const n = c[2].length, gap = n > 3 ? 0.51 : 0.68;
+      T(s, t, { x:x+0.2, y:2.0 + j*gap, w:2.45, h:gap - 0.06, fontSize:n > 3 ? 10 : 10.5, color: t.includes('___')?'C0612F':(hot?C.orange:C.ink), bold: hot });
     });
   });
   // 서비스명 evenly

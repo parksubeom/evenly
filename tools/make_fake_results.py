@@ -300,6 +300,36 @@ def main():
         except ImportError:
             pass
 
+    if V5 and not a.partial:
+        # 밖 도구 결과 흉내 (실제로는 results/ 에 생김. 가짜는 이 폴더 안에만 둠)
+        os.makedirs(P("public_baseline"), exist_ok=True)
+        write_csv(P(os.path.join("public_baseline", "compare_station.csv")), ["metric", "value"], [
+            ["공통 격자 수", 412], ["순위상관(스피어만, LX vs 공개)", 0.58], ["LX 상위10% 중 공개도 상위10% 비율", 0.41],
+            ["LX HBI 1.3 이상 격자 수", 96], ["그중 공개데이터로 1.3 미만(놓침) 비율", 0.34], ["평균 절대차", 0.17],
+            ["중앙값 LX", 1.14], ["중앙값 공개", 1.09], ["비고", "LX = 건물 평균, 공개 = 길 노드 평균, 공개 지형 약 30m급, 2020 네트워크, 계단 미사용"]])
+        jh = hdr + ["disabled_합계", "disabled_합계_in_high", "alone65_합계", "alone65_합계_in_high"]
+        jr = []
+        for r in dong_rows:
+            dis, alo = rnd.randint(300, 1600), rnd.randint(150, 900)
+            jr.append(r + [dis, round(dis * r[7] / r[6], 1) if r[6] else "", alo, round(alo * r[7] / r[6], 1) if r[6] else ""])
+        write_csv(P("dong_joined.csv"), jh, jr)
+        pd = [[r[0], r[3], r[4], max(0, int(r[3] * (0.004 + 0.01 * (r[4] - 1)) + rnd.randint(-2, 2))), 0] for r in dong_rows]
+        for x in pd:
+            x[4] = round(x[3] / x[1] * 100, 3)
+        write_csv(P("points_교통사고_고령보행자_dong.csv"), ["adm_cd", "n_bld", "hbi_mean", "n_points", "per100_bld"], pd)
+        write_csv(P("points_교통사고_고령보행자_grid.csv"), ["cell_x", "cell_y", "n_bld", "hbi_mean", "n_points", "per100_bld"],
+                  [[r["c"]["x"], r["c"]["y"], r["c"]["n"], round(r["hbi"], 3), 0, 0.0] for r in med[:50]])
+        hh = sorted(x[2] for x in pd)
+        q1, q3 = hh[len(hh) // 4], hh[len(hh) * 3 // 4]
+        lo_ = sum(x[4] for x in pd if x[2] <= q1) / max(1, sum(1 for x in pd if x[2] <= q1))
+        hi_ = sum(x[4] for x in pd if x[2] >= q3) / max(1, sum(1 for x in pd if x[2] >= q3))
+        nm = "교통사고_고령보행자"
+        write_csv(P("points_summary.csv"), ["data", "metric", "value"], [
+            [nm, "전체 행 수", 5210], [nm, "조건 통과", 1390], [nm, "좌표 있음", 1371], [nm, "분석 범위 안", 1204],
+            [nm, "격자 합계(건물 5개 이상 격자)", 1090], [nm, "행정동 합계(건물 5개 이상 동)", sum(x[3] for x in pd)],
+            [nm, "동별 HBI 평균 vs 건물 100개당 점 수: 스피어만", 0.31],
+            [nm, "HBI 하위 25% 동 평균(건물 100개당)", round(lo_, 3)], [nm, "HBI 상위 25% 동 평균(건물 100개당)", round(hi_, 3)]])
+
     with open(P("deck_inputs.json"), "w", encoding="utf-8") as f:
         json.dump({"team_name": "테스트팀", "visit_dates": ["2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-19"]},
                   f, ensure_ascii=False, indent=1)

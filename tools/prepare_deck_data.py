@@ -271,6 +271,51 @@ def main():
     dem1 = abl.get(("DEM 5m vs 1m", "HBI 순위상관(Spearman)"))
     B.fields["ABL.dem1m"] = {"value": f_num(dem1), "label": "DEM 5m vs 1m 순위상관", "need": ["validation_ablation.csv"], "optional": True}
 
+    # ── 밖 도구 결과 (있을 때만, 없으면 표시 안 함) ──
+    #   가짜 결과는 <src> 안에서만, 실제 결과는 <src> → results/ 순서로 찾음 (가짜가 실제 기획서에 섞이지 않도록)
+    def opt_file(rel):
+        for base in ([src] if fake else [src, os.path.join(ROOT, "results")]):
+            pth = os.path.join(base, rel)
+            if os.path.exists(pth):
+                return pth
+        return None
+    optional = lambda key, label, need, value: B.fields.__setitem__(key, {"value": value, "label": label, "need": need, "optional": True})
+    cp = opt_file(os.path.join("public_baseline", "compare_station.csv"))
+    cmpd = {r["metric"].strip(): r["value"] for r in (read_csv(cp) or [])} if cp else {}
+    rho_pub = num(cmpd.get("순위상관(스피어만, LX vs 공개)"))
+    miss_pub = num(cmpd.get("그중 공개데이터로 1.3 미만(놓침) 비율"))
+    optional("ABL.pub_rho", "공개데이터 대조군 순위상관", ["results/public_baseline/compare_station.csv"], f_num(rho_pub))
+    optional("ABL.pub_miss", "공개데이터로 놓치는 LX 1.3 이상 격자 비율", ["results/public_baseline/compare_station.csv"], f_pct(miss_pub, 0))
+    optional("ABL.pub_note", "공개데이터 대조군 비고", ["results/public_baseline/compare_station.csv"], cmpd.get("비고") or None)
+    optional("ABL.pub_n", "공통 격자 수", ["results/public_baseline/compare_station.csv"], cmpd.get("공통 격자 수") or None)
+    dj = opt_file("dong_joined.csv")
+    jrows = read_csv(dj) if dj else None
+    LABEL_KO = {"disabled": "장애인", "alone65": "독거노인", "alone": "독거노인"}
+    parts = []
+    if jrows:
+        seen_lab = []
+        for c in jrows[0]:
+            if c.endswith("_in_high"):
+                lab = c.split("_")[0]
+                if lab in seen_lab:
+                    continue                                   # 라벨마다 첫 열(보통 합계)만
+                seen_lab.append(lab)
+                tot = sum(num(r.get(c)) or 0 for r in jrows)
+                parts.append(f"{LABEL_KO.get(lab, lab)} 약 {f_about(tot)}명")
+    optional("IMPACT.joined", "HBI 1.8 이상 거주 추정(장애인·독거노인)", ["results/dong_joined.csv (tools/outside_join_dong.py)"], ", ".join(parts) or None)
+    pts = {}
+    for r in R("points_summary.csv") or []:
+        pts.setdefault(r["data"], {})[r["metric"].strip()] = num(r["value"])
+    ptxt = None
+    for nm, m in pts.items():
+        lo_, hi_, rho_ = (m.get("HBI 하위 25% 동 평균(건물 100개당)"), m.get("HBI 상위 25% 동 평균(건물 100개당)"),
+                          m.get("동별 HBI 평균 vs 건물 100개당 점 수: 스피어만"))
+        if lo_ is not None and hi_ is not None:
+            ptxt = (f"{nm.replace('_', ' ')}: HBI 상위 25% 동 건물 100개당 {hi_:.2f}건 vs 하위 25% 동 {lo_:.2f}건"
+                    + (f", 순위상관 ρ = {rho_:.2f}" if rho_ is not None else "") + " (상관이며 인과 아님)")
+            break
+    optional("CROSS.points", "보조 근거: 점 자료 결합", ["points_summary.csv (10_points_join.py, v5)"], ptxt)
+
     # ── 19장 상호제공데이터 ──
     js = {}
     for r in R("join_summary.csv") or []:
