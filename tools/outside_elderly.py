@@ -55,6 +55,10 @@ def main():
             total += est
         out.append({**d, "elderly_in_high_est": est, "pop65": "" if p is None else round(p), "base_ym": base_ym})
     dst = os.path.join(os.path.dirname(os.path.abspath(dong)), "dong_hbi_with_elderly.csv")
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from evenly_common import is_fake_dir, refuse_raw_export
+    if is_fake_dir(os.path.dirname(dst)):
+        refuse_raw_export(os.path.dirname(dst), "입력 폴더에 가짜 표지(_source.txt=fake)가 있습니다")
     with open(dst, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, fieldnames=list(out[0].keys()))
         w.writeheader()

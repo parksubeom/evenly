@@ -16,6 +16,27 @@ SITES_CSV = os.path.join(ROOT, "analysis", "hbi", "external", "sites.csv")
 TARGET_GU = ["종로구", "중구", "관악구", "광진구", "강서구"]
 TARGET_LABEL = {"medical": "의료시설", "bus": "버스정류장", "elderly": "노유자시설", "station": "지하철역", "station_ev": "지하철역(엘리베이터)", "pharmacy": "약국"}
 FAKE_MARKER = "_FAKE_DATA_README.txt"      # 가짜 결과 폴더에만 있는 표시 파일
+SOURCE_FILE = "_source.txt"                # 출처 표지: 내용이 "fake" 면 가짜. 실제 반출 폴더에는 없음
+RAW_EXPORT = os.path.join(ROOT, "results", "raw_export")
+
+
+def is_fake_dir(d):
+    """폴더가 가짜 결과인가: _source.txt 가 fake 이거나 옛 표시 파일(_FAKE_DATA_README.txt)이 있으면"""
+    p = os.path.join(d, SOURCE_FILE)
+    if os.path.exists(p) and open(p, encoding="utf-8").read().strip().lower().startswith("fake"):
+        return True
+    return os.path.exists(os.path.join(d, FAKE_MARKER))
+
+
+def mark_fake(d, note=""):
+    with open(os.path.join(d, SOURCE_FILE), "w", encoding="utf-8") as f:
+        f.write("fake\n" + note + ("\n" if note else ""))
+
+
+def refuse_raw_export(d, why):
+    """시험·가짜 결과를 results/raw_export 에 쓰려 하면 멈춤"""
+    if os.path.abspath(d) == os.path.abspath(RAW_EXPORT):
+        raise SystemExit(f"!! results/raw_export 에는 실제 반출 파일만 둡니다. {why} → 다른 폴더(--out)에 쓰세요")
 
 # ── EPSG:5186 (Korea 2000 / Central Belt 2010) ─────────────────────────
 _A = 6378137.0

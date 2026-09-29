@@ -26,7 +26,7 @@ tools/merge_exports.py ─ [안심구역 밖] 1차 방문(v4)에서 구역별로
 import csv, math, os, shutil, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from evenly_common import ROOT, load_dongs, dong_of, load_sites, read_csv, write_csv, num, truthy
+from evenly_common import ROOT, load_dongs, dong_of, load_sites, read_csv, write_csv, num, truthy, is_fake_dir, mark_fake, refuse_raw_export
 
 ZONES = {"A": ["종로구", "중구"], "B": ["관악구"], "C": ["광진구"], "D": ["강서구"]}
 # 1차 방문 구역별 AREA_BBOX (EPSG:5186, 대상 구 범위 + 1,000m, 100m 단위). docs/1차방문_구역별실행.md 와 같은 값
@@ -85,6 +85,9 @@ def main():
     zones, out = parse_args(sys.argv[1:])
     if os.path.abspath(out) in zones.values():
         raise SystemExit("--out 은 구역 폴더와 달라야 합니다")
+    fake_in = [z for z, d in zones.items() if is_fake_dir(d)]          # 출처 표지: 하나라도 가짜면 결과도 가짜
+    if fake_in:
+        refuse_raw_export(out, f"입력 구역 {fake_in} 이 가짜(_source.txt=fake) 입니다")
     os.makedirs(out, exist_ok=True)
     dongs = load_dongs(sum(ZONES.values(), []))
     gu_code = {}
@@ -251,6 +254,9 @@ def main():
             if f.endswith((".gpkg", ".png")):
                 shutil.copy2(P(z, f), os.path.join(out, f"{z}_{f}"))
     notes.append("grid_hbi_*.gpkg·map_*.png: 구역 이름을 앞에 붙여 복사 (A_grid_hbi_medical.gpkg …). QGIS 에서 함께 열면 됨")
+    if fake_in:
+        mark_fake(out, f"merge_exports: 가짜 입력 구역 {fake_in}")
+        notes.append(f"출처: 가짜 (입력 구역 {fake_in} 이 fake) → _source.txt=fake")
     with open(os.path.join(out, "merge_notes.txt"), "w", encoding="utf-8") as f:
         f.write("\n".join(notes) + "\n")
     print("\n".join(notes))
