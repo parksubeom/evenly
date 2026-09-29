@@ -62,23 +62,70 @@ def find_header(rows, skip):
     raise SystemExit("머리 줄을 찾지 못했습니다 (\"동\"·\"행정동\"·\"동별\"·\"읍면동\" 칸이 없음) → --skip 으로 머리 줄 번호를 지정하세요")
 
 
+def compound_headers(rows):
+    """서울시 통계 시스템 형식: 앞의 여러 줄이 모두 "동별(1)" 로 시작하는 머리 줄 → 열마다 이름을 이어 붙임
+    예) ["2025", "합계", "지체", "계"] → "합계_지체_계" (연도·같은 말 반복은 뺌). 반환: (머리 줄 수, 이름 목록) 또는 None"""
+    k = 0
+    while k < len(rows) and rows[k] and str(rows[k][0]).startswith("동별("):
+        k += 1
+    if k == 0:
+        return None
+    names = []
+    for j in range(len(rows[0])):
+        toks = []
+        for i in range(k):
+            t = re.sub(r"\s+", "", rows[i][j]) if j < len(rows[i]) else ""
+            if not t or re.fullmatch(r"\d{4}", t) or (toks and toks[-1] == t):
+                continue
+            toks.append(t)
+        names.append("_".join(toks))
+    return k, names
+
+
+def match_col(want, names, data_cols):
+    """요청한 열(예: "지체", "합계")과 맞는 실제 열 번호. 토큰이 모두 들어 있는 열 중
+    계·소계(총계) 토큰이 있는 것 → 토큰 수가 적은 것 → 왼쪽 것 순으로 고름"""
+    w = [t for t in re.split(r"[_·,]", re.sub(r"\s+", "", want)) if t]
+    cand = [j for j in data_cols if all(t in names[j].split("_") for t in w)]
+    if not cand:
+        return None
+    return sorted(cand, key=lambda j: (not any(t in ("계", "소계") for t in names[j].split("_")[len(w):] + names[j].split("_")),
+                                       len(names[j].split("_")), j))[0]
+
+
 def parse_stat(path, cols, skip):
     rows = read_rows(path)
-    h = find_header(rows, skip)
-    head = rows[h]
-    # 머리 줄이 두 줄에 걸친 경우(아래 줄에 실제 열 이름): 요청한 열이 없으면 다음 줄에서 찾음
-    names = head[:]
-    if not all(c in names for c in cols) and h + 1 < len(rows):
-        names = [b if b else a for a, b in zip(head, rows[h + 1] + [""] * (len(head) - len(rows[h + 1])))]
-        start = h + 2
-    else:
-        start = h + 1
-    miss = [c for c in cols if c not in names]
-    if miss:
-        raise SystemExit(f"{os.path.basename(path)}: 열 {miss} 없음. 머리 줄: {names}")
-    di = next(i for i, c in enumerate(head) if c in HEAD_KEYS)
-    gi = next((i for i, c in enumerate(head) if c in GU_KEYS), None)
-    ci = [names.index(c) for c in cols]
+    ch = compound_headers(rows) if skip is None else None
+    if ch:                                       # ── 서울시 통계 시스템 형식 (동별(1)·(2)·(3), 여러 줄 머리)
+        k, names = ch
+        lab = [j for j, c in enumerate(rows[0]) if str(c).startswith("동별(")]
+        data_cols = [j for j in range(len(names)) if j not in lab]
+        di, gi = lab[-1], (lab[-2] if len(lab) >= 2 else None)
+        if len(lab) < 3:
+            print(f"  !! {os.path.basename(path)}: 행 쪽 열이 {[rows[0][j] for j in lab]} 뿐 → 동 단위 열(동별(3))이 없는 구 단위 통계로 보임")
+        ci = []
+        for c in cols:
+            j = match_col(c, names, data_cols)
+            if j is None:
+                raise SystemExit(f"{os.path.basename(path)}: 열 '{c}' 을 찾지 못함. 열 이름: {[names[j] for j in data_cols]}")
+            ci.append(j)
+        print(f"  {os.path.basename(path)}: 머리 줄 {k}줄, 실제 열 이름 {len(data_cols)}개, 고른 열: " + ", ".join(f"{c} → '{names[j]}'" for c, j in zip(cols, ci)))
+        start, head = k, rows[0]
+    else:                                        # ── 일반 형식 (머리 줄 한 줄, 또는 두 줄)
+        h = find_header(rows, skip)
+        head = rows[h]
+        names = head[:]
+        if not all(c in names for c in cols) and h + 1 < len(rows):
+            names = [b if b else a for a, b in zip(head, rows[h + 1] + [""] * (len(head) - len(rows[h + 1])))]
+            start = h + 2
+        else:
+            start = h + 1
+        miss = [c for c in cols if c not in names]
+        if miss:
+            raise SystemExit(f"{os.path.basename(path)}: 열 {miss} 없음. 머리 줄: {names}")
+        di = next(i for i, c in enumerate(head) if c in HEAD_KEYS)
+        gi = next((i for i, c in enumerate(head) if c in GU_KEYS), None)
+        ci = [names.index(c) for c in cols]
     out, gu = {}, ""
     for r in rows[start:]:
         if len(r) <= max([di] + ci):

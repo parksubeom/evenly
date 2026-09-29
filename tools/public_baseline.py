@@ -32,7 +32,11 @@ CACHE = os.path.join(ROOT, "data_public", "raw", "terrain_cache")
 TILE = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
 Z = 15
 SEG, SNAP, GRID, MIN_NODES = 30.0, 1.0, 250, 3
-NOTE = "LX = 건물 평균, 공개 = 길 노드 평균, 공개 지형 약 30m급, 2020 네트워크, 계단 미사용"
+BAD_LOW = -20.0          # 이보다 낮은 타일 픽셀은 이상값으로 봄
+KEEP_SHARE = 0.05        # 가장 큰 연결망의 5% 이상인 연결망은 모두 남김 (떨어진 구가 여럿일 때)
+FIXED = [0, 0]           # [이상값 픽셀 수, 전체 픽셀 수]
+NOTE = ("LX = 건물 평균, 공개 = 길 노드 평균, 공개 지형 약 30m급, 2020 네트워크, "
+        "계단 미사용(공개 도보 네트워크에는 계단 구분이 없음: 링크 유형 코드는 통행 주체만 구분)")
 
 
 # ── 좌표·이미지 백엔드 ──────────────────────────────────────
@@ -134,7 +138,21 @@ def get_tile(backend, tx, ty):
         with open(p, "wb") as f:
             f.write(data)
     rgb = backend.decode_png(open(p, "rb").read())
-    return rgb[..., 0] * 256 + rgb[..., 1] + rgb[..., 2] / 256 - 32768      # terrarium 디코드
+    h = rgb[..., 0] * 256 + rgb[..., 1] + rgb[..., 2] / 256 - 32768          # terrarium 디코드
+    # 공개 타일의 이상값(강·호수 주변 -수백~-2천 m 튀는 픽셀) → 주변 정상값 평균으로 메움 (서울 실제 고도 약 0~836m)
+    bad = h < BAD_LOW
+    FIXED[0] += int(bad.sum()); FIXED[1] += h.size
+    for _ in range(64):
+        if not bad.any():
+            break
+        v = np.where(bad, 0.0, h); w = (~bad).astype(float)
+        pv, pw = np.pad(v, 1), np.pad(w, 1)
+        sv = sum(pv[1 + dy:pv.shape[0] - 1 + dy, 1 + dx:pv.shape[1] - 1 + dx] for dy in (-1, 0, 1) for dx in (-1, 0, 1))
+        sw = sum(pw[1 + dy:pw.shape[0] - 1 + dy, 1 + dx:pw.shape[1] - 1 + dx] for dy in (-1, 0, 1) for dx in (-1, 0, 1))
+        fill = bad & (sw > 0)
+        h = np.where(fill, sv / np.maximum(sw, 1), h)
+        bad = bad & ~fill
+    return h
 
 
 def elevation(backend, lon, lat):
@@ -142,10 +160,12 @@ def elevation(backend, lon, lat):
     px, py = tile_xy(lon, lat)
     px, py = px - 0.5, py - 0.5
     x0, y0 = np.floor(px).astype(np.int64), np.floor(py).astype(np.int64)
-    tiles = {}
-    for tx in range(int(x0.min() // 256), int((x0.max() + 1) // 256) + 1):
-        for ty in range(int(y0.min() // 256), int((y0.max() + 1) // 256) + 1):
-            tiles[(tx, ty)] = get_tile(backend, tx, ty)
+    need = set()                                   # 노드가 실제로 있는 타일만 (+ 보간용 오른쪽·아래 이웃)
+    for a, b in zip(x0 // 256, y0 // 256):
+        need.add((int(a), int(b)))
+    for a, b in zip((x0 + 1) // 256, (y0 + 1) // 256):
+        need.add((int(a), int(b)))
+    tiles = {k: get_tile(backend, *k) for k in sorted(need)}
 
     def at(xx, yy):
         out = np.empty(len(xx))
@@ -168,8 +188,19 @@ def read_any(p):
     raise SystemExit(f"인코딩을 알 수 없음: {p}")
 
 
-def lines_from_csv(path, bbox):
+def lines_from_csv(path, bbox, gus=None):
     rows = read_any(path)
+    if gus:
+        gc = next((c for c in rows[0] if c.replace(" ", "") in ("시군구명", "자치구", "구명")), None)
+        if not gc:
+            raise SystemExit(f"--gu 를 쓰려면 시군구명 열이 필요합니다. 열: {list(rows[0])}")
+        rows = [r for r in rows if r.get(gc, "").strip() in gus]
+    tc = next((c for c in rows[0] if c.replace(" ", "") == "링크유형코드"), None)
+    if tc:                                         # 링크 유형 코드 첫 자리 = 보행자 통행 가능 (유형코드표: 1xxx = 보행자 포함)
+        before = sum(1 for r in rows if str(r.get("노드링크 유형", "LINK")).strip().upper() == "LINK")
+        rows = [r for r in rows if str(r.get("노드링크 유형", "LINK")).strip().upper() != "LINK" or str(r.get(tc, "")).strip().zfill(4)[0] == "1"]
+        after = sum(1 for r in rows if str(r.get("노드링크 유형", "LINK")).strip().upper() == "LINK")
+        print(f"  링크 유형 코드: 보행자 통행 불가 링크 {before - after}개 제외 ({before:,} → {after:,})")
     col = next((c for c in rows[0] if any(str(r.get(c, "")).upper().lstrip().startswith(("LINESTRING", "MULTILINESTRING")) for r in rows[:200])), None)
     if not col:
         raise SystemExit(f"LINESTRING WKT 열을 찾지 못함. 열: {list(rows[0])}")
@@ -239,6 +270,7 @@ def main():
     ap.add_argument("--lx-grid")
     ap.add_argument("--target", default="station")
     ap.add_argument("--bbox", help="lon0,lat0,lon1,lat1")
+    ap.add_argument("--gu", help="시군구명 열로 거를 구 (쉼표). 예) 종로구,중구,관악구,광진구,강서구")
     ap.add_argument("--backend", default="auto", choices=["auto", "osgeo", "pyproj"])
     ap.add_argument("--snap", default="round", choices=["round", "tol"], help="노드 합치기 규칙 (기본 round = analysis 와 같음)")
     ap.add_argument("--out", default=os.path.join(ROOT, "results", "public_baseline"))
@@ -247,7 +279,10 @@ def main():
     B = pick_backend(a.backend)
     print(f"백엔드: {B.name}, 노드 합치기: {a.snap}")
 
-    col, nrows, lines = lines_from_csv(a.network, bbox)
+    import time
+    t0 = time.time()
+    gus = [g.strip() for g in a.gu.split(",")] if a.gu else None
+    col, nrows, lines = lines_from_csv(a.network, bbox, gus)
     print(f"네트워크: {nrows:,}행 중 선 {len(lines):,}개 (WKT 열 '{col}')")
     nxy, U, V, L = build(B, lines, a.snap)
     lon, lat = B.to_ll(nxy[:, 0], nxy[:, 1])
@@ -256,8 +291,11 @@ def main():
     s = np.clip(s, -C.SLOPE_CLIP, C.SLOPE_CLIP)
     e = {"u": U, "v": V, "length": L, "is_stair": np.zeros(len(U), bool)}
     comp = components(U, V, len(nxy))
-    giant = comp == np.bincount(comp).argmax()
-    print(f"노드 {len(nxy):,}, 링크 {len(U):,}, 최대 연결망 {giant.mean():.1%}, 지형 타일 {nt}장, 고도 {z.min():.0f}~{z.max():.0f}m")
+    cnt = np.bincount(comp)
+    keep = np.where(cnt >= KEEP_SHARE * cnt.max())[0]                # 떨어진 구마다 하나씩 생기는 큰 연결망을 모두 남김
+    giant = np.isin(comp, keep)
+    print(f"연결망: {int((cnt > 0).sum())}개 중 가장 큰 것의 {KEEP_SHARE:.0%} 이상 {len(keep)}개 남김 (크기 {sorted(cnt[keep].tolist(), reverse=True)}), 이상 고도 픽셀 {FIXED[0]:,}/{FIXED[1]:,} 메움")
+    print(f"노드 {len(nxy):,}, 링크 {len(U):,}, 남긴 연결망 노드 {giant.mean():.1%}, 지형 타일 {nt}장, 고도 {z.min():.0f}~{z.max():.0f}m")
 
     st = read_any(a.stations)
     sx, sy = B.to_m([float(r["lon"]) for r in st], [float(r["lat"]) for r in st])
@@ -286,7 +324,7 @@ def main():
     os.makedirs(a.out, exist_ok=True)
     with open(os.path.join(a.out, f"grid_public_{a.target}.csv"), "w", encoding="utf-8-sig", newline="") as f:
         w = csv.writer(f); w.writerow(["cell_x", "cell_y", "n_nodes", "hbi_mean", "elder_min", "flat_min"]); w.writerows(rows)
-    print(f"→ grid_public_{a.target}.csv (격자 {len(rows)}개, 노드 {MIN_NODES}개 이상)")
+    print(f"→ grid_public_{a.target}.csv (격자 {len(rows)}개, 노드 {MIN_NODES}개 이상), 걸린 시간 {time.time() - t0:.0f}초")
 
     if a.lx_grid:
         lx = {(round(float(g["cell_x"])), round(float(g["cell_y"]))): float(g["hbi_mean"])
