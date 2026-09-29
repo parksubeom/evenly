@@ -21,10 +21,11 @@
 | 4 | `04_validate.py` | 검증·기여도 분석 | 5분 |
 | 5 | `05_export.py` | 반출용 결과 만들기 | 5분 |
 | 6 | `06_parcel.py` | 국토정보필지에 결과 붙이기 (방문 때 센터가 제공) | 10분 |
-| 7 | `07_join_dong.py` | SKT 유동인구·KCB 소득과 행정동 결합·상관분석 (안심구역에서 받으면) | 2분 |
+| 7 | `07_join_dong.py` | KCB 소득 등 행정동 코드가 있는 표를 행정동과 결합·상관분석 (구분자 `,`·`|`·탭 자동, config.JOIN_DATA) | 2분 |
 | 8 | `08_sensitivity.py` | 민감도 분석: 설정을 바꿔도 결론이 유지되나 (질의응답 대비) | 10~30분 |
 | 9 | `09_intervention.py` | [v5] 이동편의시설(엘리베이터·모노레일) 설치 효과: 몇 집이 몇 분 덜 걷나 (external/interventions.csv) | 시설당 1~5분 |
-| 10 | `10_points_join.py` | [v5] 점 자료(교통사고 위치 등)를 행정동·격자로 세어 HBI 와 비교 (config.POINT_DATA) | 2분 |
+| 10 | `10_points_join.py` | [v5] 좌표가 있는 점 자료를 행정동·격자로 세거나(개수) 값을 더해(SKT 유동인구 `agg: "sum"`) HBI 와 비교 (config.POINT_DATA) | 2분 |
+| 11 | `11_legal_dong_join.py` | [v5] 좌표 없이 법정동 이름만 있는 자료(한국도로교통공단 교통사고)를 법정동별로 세어 06 필지 HBI 와 비교 (config.LEGAL_DONG_DATA, 06 먼저) | 1분 |
 
 **폴더 구조**
 ```
@@ -152,10 +153,11 @@ python 01_inspect.py
 | 3 | `external/od_pairs.csv`, `sites.csv` 를 메모장으로 열어 현장실측 좌표·시간, 화곡동 좌표 입력 | |
 | 4 | `python 04_validate.py` | 선정지 percentile, 대현산 wheel_path_m, 기여도 표 |
 | 3 | `config.py` 에 `DATA_ROOT_PARCEL`(센터가 준 필지 폴더, 서울 파일만 있는 폴더) 입력 → `python 06_parcel.py` | "필지 N개", 지목 '대' 필지 수 |
-| 3 | SKT·KCB 파일을 받았으면 `config.py` 맨 아래 `JOIN_DATA` 채우기 → `python 07_join_dong.py` | "코드 방식 ... 로 N/M개 행정동 결합" 에서 N이 충분한지 |
+| 3 | KCB 파일을 받았으면 `config.py` 의 `JOIN_DATA` 경로 채우기 → `python 07_join_dong.py` (filter 의 `"__LATEST__"` = 그 열의 가장 늦은 값, `base_cols` = 분모 열 합) | "코드 방식 ... 로 N/M개 행정동 결합" 에서 N이 충분한지 |
 | 4 | `python 08_sensitivity.py` (선택) | 순위상관이 0.9 이상이면 "가정을 바꿔도 결론 유지" |
 | 4 | `external/interventions.csv` 에 시설 양 끝 좌표(현장실측 기록지) 입력 → `python 09_intervention.py` | "끝점이 길에서 N m 떨어져 있음" 경고가 없는지 / 시설별 "수혜 건물 N동, 평균 M분 단축" |
-| 4 | 교통사고 등 점 파일을 받았으면 `config.py` 의 `POINT_DATA` 채우기 → `python 10_points_join.py` | "전체 → 조건 통과 → 좌표 있음 → 범위 안" 행 수가 예상과 맞는지 |
+| 4 | SKT 유동인구 파일을 받았으면 `config.py` 의 `POINT_DATA` 경로 채우기 → `python 10_points_join.py` | "전체 → 조건 통과 → 좌표 있음 → 범위 안" 행 수와 "값 합계"(기간 수로 나눈 월평균) |
+| 4 | 교통사고 파일을 받았으면 `config.py` 의 `LEGAL_DONG_DATA` 경로 채우기 → `python 11_legal_dong_join.py` | "전체 → 조건 통과 → 법정동 이름 있음 → 붙은 법정동" 건수, 06 결과에 법정동 이름(emd_nm)이 있는지 |
 | 5 | `python 05_export.py` 를 한 번 더(최종) → 아래 "반출 전 체크리스트" 확인 → **반출 신청** |  |
 
 한 번에 돌리려면 `python run_all.py` (DEM 1m 포함 `--dem1m`, 민감도 포함 `--sens`)
@@ -170,9 +172,10 @@ python 01_inspect.py
 - [ ] `validation_sites.csv`, `validation_routes.csv`, `validation_new_candidates.csv`, `validation_ablation.csv` (17·18장)
 - [ ] `validation_measured.csv` — [v5] 실측 vs 예측 상관계수 (실측 3구간 이상일 때, 17장)
 - [ ] `intervention_summary.csv`, `intervention_grid.csv`, `intervention_dong.csv` — [v5] 시설 설치 효과 (22·23장)
-- [ ] `points_summary.csv`, `points_*_dong.csv`, `points_*_grid.csv` — [v5] 점 자료 결합 (개수만, 좌표 없음)
+- [ ] `points_summary.csv`, `points_*_dong.csv`, `points_*_grid.csv` — [v5] 점 자료 결합 (개수·값 합계만, 좌표 없음)
+- [ ] `legal_summary.csv`, `legal_*.csv` — [v5] 법정동별 교통사고 건수 (행 단위 사고 없음)
 - [ ] `parcel_summary.csv`, `parcel_by_legal_dong.csv` (필지 결합)
-- [ ] `join_summary.csv`, `join_*.csv` (SKT·KCB 를 썼다면, 19장)
+- [ ] `join_summary.csv`, `join_*.csv` (KCB 를 썼다면, 19장)
 - [ ] `sensitivity.csv` (민감도, 질의응답)
 - [ ] `map_*.png` (matplotlib 이 있을 때만. 없으면 gpkg 로 밖에서 지도 제작)
 

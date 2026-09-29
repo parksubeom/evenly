@@ -145,9 +145,17 @@ SENSITIVITY = {
 #   value_cols: 분석할 숫자 열 이름 목록 (예: 65세 이상 유동인구 열들을 모두 적으면 합계를 사용)
 #   base_col  : (선택) 나눌 기준 열. 예) 전체 유동인구 → 비율로 비교. 없으면 None
 #   filter    : (선택) {"열이름": "값"} 조건에 맞는 행만 사용. 예) {"성별": "전체"}
+#   sep       : (선택) 구분자. 비우면 쉼표·| ·탭 자동 인식 [v5]
+#   base_cols : (선택) 나눌 기준 열 여러 개의 합 [v5]. filter 값은 목록·"__LATEST__"(그 열의 가장 늦은 값) 가능 [v5]
+#  [v5] 아래 기본값은 한국데이터산업진흥원 데이터정의서(KCB_데이터정의서.xlsx) 의 실제 열·코드값입니다.
+#   KCB 행정동 단위 소득관련 통계정보(TB_KCB_INCOME_STAT_DATASET.csv): 분기(BS_YR_QT) × 성 × 연령 × 월소득 구간 대상자 수(C1~C22)
+#   → 60세 이상(AGE_CD 60: 60~69세, 70: 70세 이상. 65세 구분은 없음), 거주지 기준(RES_COM_CD 1), 가장 최근 분기에서
+#     월 200만원 이하(C1~C3) 대상자 비율 = C1~C3 합 ÷ C1~C22 합 (정의서에 총인원 열이 없어 구간 합을 분모로 씀)
+#   SKT 유동인구는 행정동 코드가 없는 50m 셀 자료라 여기가 아니라 아래 POINT_DATA(10_points_join.py) 에서 붙임
 JOIN_DATA = {
-    "SKT_고령유동인구": {"path": None, "code_col": "ADM_CD", "value_cols": ["POP_65_OVER"], "base_col": None, "filter": {}},
-    "KCB_소득": {"path": None, "code_col": "ADM_CD", "value_cols": ["AVG_INCOME"], "base_col": None, "filter": {}},
+    "KCB_60세이상_월200만원이하비율": {"path": None, "code_col": "EMD_CD", "value_cols": ["C1_CNT", "C2_CNT", "C3_CNT"],
+                                "base_cols": [f"C{i}_CNT" for i in range(1, 23)],
+                                "filter": {"RES_COM_CD": "1", "AGE_CD": ["60", "70"], "BS_YR_QT": "__LATEST__"}},
 }
 
 # ────────────────────────────────────────────────────────────────────
@@ -176,7 +184,26 @@ INTERVENTION_SNAP_WARN = 50   # 시설 끝점이 길에서 이 거리(m) 넘게 
 #   crs      : 좌표계 (예: "EPSG:5179", 경위도면 "EPSG:4326")
 #   filter   : {"열": "값"} 정확히 일치 (값을 리스트로 주면 그중 하나). 예) {"피해자연령대": ["65세이상", "70대"]}
 #   contains : {"열": "글자"} 글자가 들어 있으면 통과. 예) {"사고유형": "보행자"}
+#   [v5] 값 합계 모드: value_cols(더할 열), agg="sum", period_col(기간 열, 예: 월) → 점 수 대신 값의 기간 평균 합
+#   sep: (선택) 구분자. 비우면 자동 (SKT 파일은 "|")
+#  아래 SKT 기본값은 SKT_데이터정의서.xlsx 의 실제 열: 50m 셀 중심 X_COORD·Y_COORD (UTM-K = EPSG:5179),
+#   값은 "월의 일평균" 유동인구. 연령은 10세 단위라 65세 구분이 없어 "60대 이상"(…_60GU) 을 씀. 12개월이면 월 평균
 POINT_DATA = {
-    "교통사고_고령보행자": {"path": None, "x_col": "X", "y_col": "Y", "crs": "EPSG:5179",
+    "SKT_60대이상유동인구": {"path": None, "x_col": "X_COORD", "y_col": "Y_COORD", "crs": "EPSG:5179",
+                          "value_cols": ["MAN_FLOW_POP_CNT_60GU", "WMAN_FLOW_POP_CNT_60GU"], "agg": "sum", "period_col": "STD_YM",
                           "filter": {}, "contains": {}},
+    "SKT_낮시간유동인구": {"path": None, "x_col": "X_COORD", "y_col": "Y_COORD", "crs": "EPSG:5179",   # seoul_flow_time.csv, 전 연령
+                        "value_cols": [f"TMST_{h:02d}" for h in range(9, 18)], "agg": "sum", "period_col": "STD_YM",
+                        "filter": {}, "contains": {}},
+}
+
+# ────────────────────────────────────────────────────────────────────
+# 10. [v5] 법정동 이름 자료 결합 (11_legal_dong_join.py) — 좌표 없이 법정동 이름만 있는 자료
+# ────────────────────────────────────────────────────────────────────
+#  한국도로교통공단 교통사고 데이터(TB_KRD_ACCIDENT_DATA.csv): 시도·시군구·법정동 이름만 있고 좌표 없음.
+#  06_parcel.py 결과의 법정동 이름(필지 SGG_NM·EMD_NM) 과 붙입니다. 아래 코드값은 한국도로교통공단_데이터정의서.xlsx 그대로:
+#   accident_type_lv1 "차대사람" (보행자 사고), victim_age "65세이상", sido_nm 에 "서울" 포함
+LEGAL_DONG_DATA = {
+    "교통사고_고령보행자": {"path": None, "sgg_col": "sigungu_nm", "dong_col": "bjd_nm",
+                          "filter": {"accident_type_lv1": "차대사람", "victim_age": "65세이상"}, "contains": {"sido_nm": "서울"}},
 }
