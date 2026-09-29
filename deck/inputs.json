@@ -1,0 +1,5 @@
+{
+ "_설명": "실제 기획서(build:real)에 들어갈 값 중 반출 파일에 없는 것. 비워 두면(null) 빈칸 그대로 두고 missing.txt 에 적힘",
+ "team_name": null,
+ "visit_dates": [null, null, null, null, null]
+}

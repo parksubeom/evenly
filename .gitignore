@@ -21,3 +21,10 @@ docs/photos/*
 # 밖 도구 결과 (반출 결과에서 만들어짐)
 results/dong_joined.csv
 results/public_baseline/
+# 파이프라인 산출물 (결과 파일에서 매번 다시 만듦)
+results/fake_export/
+deck/data/
+deck/img/results/
+deliverables/_*
+demo/evenly_demo.html
+_render/
