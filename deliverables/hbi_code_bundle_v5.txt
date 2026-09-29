@@ -905,10 +905,13 @@ FILES['hbi/09_intervention.py'] = r'''# -*- coding: utf-8 -*-
   JS로 치면: 지도 앱 길찾기 그래프에 "지름길 간선" 하나를 추가(push)하고 모든 집의 길찾기를 다시 돌려 before/after 를 비교하는 것
 [결과] (output/ → 반출 대상. 기획서 22·23장)
   intervention_summary.csv : 시설·목적지별 수혜 건물 수, 평균·최대 단축(분), 설치 전후 HBI(수혜 건물 평균, 분모는 설치 전 평지 시간),
-                             휠체어로 새로 갈 수 있게 된 건물 수(wheel_newly_reachable), 휠체어 1분 이상 단축 건물 수(wheel_benefit)
+                             휠체어로 새로 갈 수 있게 된 건물 수(wheel_newly_reachable), 휠체어 1분 이상 단축 건물 수(wheel_benefit),
+                             [v5 추가, 맨 뒤 열] 고립 위험 탈출 n_exit_high(설치 전 HBI ≥ 1.8 → 후 < 1.8 건물 수),
+                             weight_exit_high(그 건물 연면적 합, MIN_COUNT 개 미만이면 빈 칸), n_exit_mid(≥ 1.3 → < 1.3 건물 수)
   intervention_grid.csv    : 250m 격자별 수혜 건물 수·평균 단축(분) (수혜 건물 MIN_COUNT 개 이상 격자만)
   intervention_dong.csv    : 행정동별 수혜 건물 수·연면적, 동 전체 주거 연면적, 연면적×단축분 합 (MIN_COUNT 개 이상 동만)
                              → 밖에서 "수혜 고령자·분 = 65세 이상 인구 × weight_x_saved_min ÷ weight_all" 로 환산
+                             [v5 추가, 맨 뒤 열] weight_exit_high (그 동에서 HBI 1.8 아래로 내려온 건물 연면적, MIN_COUNT 개 미만이면 빈 칸)
 [결과 보는 법] 화면의 "수혜 건물 N동, 평균 M분 단축" 을 보고, N 이 0 이면 끝점 좌표(경고)와 BENEFIT_MIN_S 를 확인
 """
 import os, numpy as np
@@ -1010,10 +1013,16 @@ for name, extra in scen:
         nb = int(ben.sum())
         hb = float(np.mean(te0[ben] / tfl[ben])) if nb else np.nan    # 수혜 건물 평균 HBI (분모 = 설치 전 평지 시간)
         ha = float(np.mean(te1[ben] / tfl[ben])) if nb else np.nan
+        # [v5 추가] 고립 위험 탈출: 설치 전 HBI ≥ 1.8 → 설치 후 < 1.8 (분모는 설치 전 평지 시간), 1.3 도 같은 방식
+        h0, h1 = np.where(ok, te0 / tfl, np.nan), np.where(ok, te1 / tfl, np.nan)
+        ex_hi = ok & (h0 >= C.HBI_BANDS[1]) & (h1 < C.HBI_BANDS[1])
+        ex_mid = ok & (h0 >= C.HBI_BANDS[0]) & (h1 < C.HBI_BANDS[0])
+        n_hi = int(ex_hi.sum())
         f = lambda v, d=3: round(v, d) if np.isfinite(v) else ""
         summ.append([name, T, nb, round(float(b["weight"][ben].sum())), f(float(np.mean(saved[ben])) / 60 if nb else np.nan, 2),
                      f(float(np.max(saved[ben])) / 60 if nb else np.nan, 2), round(float(saved[ben].sum()) / 60, 1),
-                     f(hb), f(ha), int(newly.sum()), int(wben.sum())])
+                     f(hb), f(ha), int(newly.sum()), int(wben.sum()),
+                     n_hi, round(float(b["weight"][ex_hi].sum())) if n_hi >= C.MIN_COUNT else "", int(ex_mid.sum())])
         log(f"  {name} · {T}: 수혜 건물 {nb:,}동, 평균 {np.mean(saved[ben]) / 60 if nb else 0:.1f}분 단축, 휠체어 새로 도달 {int(newly.sum())}동")
         # 격자별 (수혜 건물 MIN_COUNT 이상)
         if nb:
@@ -1028,15 +1037,18 @@ for name, extra in scen:
             for k, code in enumerate(dcode):
                 m = ben & (which == k)
                 if m.sum() >= C.MIN_COUNT:
+                    mx = ex_hi & (which == k)
                     drows.append([name, T, code, int(m.sum()), round(float(b["weight"][m].sum())), round(float(wall[k])),
-                                  round(float((b["weight"][m] * saved[m] / 60).sum()), 1)])
+                                  round(float((b["weight"][m] * saved[m] / 60).sum()), 1),
+                                  round(float(b["weight"][mx].sum())) if mx.sum() >= C.MIN_COUNT else ""])
 
 write_csv(os.path.join(C.OUTPUT, "intervention_summary.csv"),
           ["facility", "target", "n_benefit", "weight_benefit", "mean_saved_min", "max_saved_min", "sum_saved_bld_min",
-           "hbi_before", "hbi_after", "wheel_newly_reachable", "wheel_benefit"], summ)
+           "hbi_before", "hbi_after", "wheel_newly_reachable", "wheel_benefit",
+           "n_exit_high", "weight_exit_high", "n_exit_mid"], summ)
 write_csv(os.path.join(C.OUTPUT, "intervention_grid.csv"), ["facility", "target", "cell_x", "cell_y", "n_benefit", "mean_saved_min"], grows)
 write_csv(os.path.join(C.OUTPUT, "intervention_dong.csv"),
-          ["facility", "target", "adm_cd", "n_benefit", "weight_benefit", "weight_all", "weight_x_saved_min"], drows)
+          ["facility", "target", "adm_cd", "n_benefit", "weight_benefit", "weight_all", "weight_x_saved_min", "weight_exit_high"], drows)
 if not bd:
     log("  external/dong_boundary.geojson 없음 → intervention_dong.csv 는 머리 줄만")
 log(f"완료 → output/intervention_summary.csv ({len(summ)}행), intervention_grid.csv ({len(grows)}행), intervention_dong.csv ({len(drows)}행)")
@@ -1284,6 +1296,478 @@ write_csv(os.path.join(C.OUTPUT, "legal_summary.csv"), ["data", "metric", "value
 log("완료 → output/legal_*.csv, legal_summary.csv (행 단위 사건은 저장하지 않음)")
 '''
 
+# ---------------------------------------------------------------- hbi/12_isochrone.py
+FILES['hbi/12_isochrone.py'] = r'''# -*- coding: utf-8 -*-
+"""
+12_isochrone.py ─ [v5] 시설 주변 "몇 분 안에 걸어서 올 수 있는 범위"(등시선)를 평지·고령자·휠체어로 비교
+
+[실행]  python 12_isochrone.py      (run_all.py 가 끝난 뒤 한 줄 따로. 02·03 결과를 읽기만 함)
+[준비]  external/iso_points.csv 에 점마다 한 줄 (메모장·엑셀로 열어 입력)
+          name(이름), lon, lat(경위도), minutes(분, "5;10;15" 처럼 ; 로 여러 개), note(메모)
+[하는 일]
+  1. 점을 가장 가까운 길 노드에 연결 (SNAP_WARN_M 보다 멀면 경고 → 좌표 확인)
+  2. 길 네트워크(work/network.npz)에서 모든 노드 → 그 점까지 "걸어오는" 시간을 세 방식으로 계산 (집 → 시설 방향)
+       flat  : 평지 가정 (고령자 속도, 경사 무시)
+       elder : 고령자, 경사 반영 (lib/model.py 의 elder_time, 03_hbi.py 와 같은 식)
+       wheel : 휠체어 (lib/model.py 의 wheel_time, 계단은 못 지나감)
+  3. 제한 시간 안에 양 끝이 모두 닿는 링크 → 25m 버퍼 → 합침 → 10m 단순화 = 도달 범위 면 하나 (방식 × 분마다)
+  4. 도달 범위 안 주거 건물 수를 세고 (MIN_COUNT 개 미만이면 빈 칸), 면적을 평지와 비교
+  JS로 치면: 지도 앱의 "걸어서 10분 권역"을 경사가 있는 경우와 없는 경우로 두 번 그려 겹쳐 보는 것
+[결과] (output/ → 반출 대상)
+  isochrone_<점이름>.gpkg   : 시설 주변 도보 도달 범위를 나타낸 면 도형(길 중심선 25m 버퍼, 10m 단순화). 건물·필지 단위 정보 없음
+                              열: name, mode(flat/elder/wheel), minutes, area_km2
+  isochrone_summary.csv     : name, mode, minutes, area_km2, ratio_to_flat(평지 면적 대비), n_res_bld(범위 안 주거 건물 수)
+  map_isochrone_<점이름>.png : matplotlib 이 있을 때만. 분마다 한 칸, 세 방식을 색으로 겹쳐 그림
+[결과 보는 법]
+  - ratio_to_flat 이 1 보다 작을수록 경사 때문에 같은 시간에 갈 수 있는 범위가 줄어든 것
+  - 화면에 "!! 검사" 가 나오면 계산이 이상한 것 (경사 반영 범위가 평지보다 넓거나, 경사가 있는데 면적이 평지와 같음)
+  - 휠체어는 계단을 못 지나가서 모양 자체가 달라질 수 있음
+"""
+import os, re, numpy as np
+np.seterr(invalid="ignore", divide="ignore")
+from osgeo import ogr
+import config as C
+from lib.qio import log, read_csv, write_csv, transform_xy, transformer, TARGET
+from lib.qgraph import NearestIndex, Graph
+from lib.netload import load
+from lib.bload import load_buildings, usable
+from lib.model import elder_time, wheel_time, directed
+from lib.deps import HAS_MPL
+
+# ── 이 스크립트만의 설정 (config.py 는 바꾸지 않음) ─────────────
+BUFFER_M = 25          # 도달한 길 중심선 양쪽으로 몇 m 까지 면으로 칠지
+SIMPLIFY_M = 10        # 면 테두리 단순화 (m). 반출 도형을 가볍게, 건물 윤곽이 드러나지 않게
+SNAP_WARN_M = 60       # 점이 가장 가까운 길에서 이보다 멀면 경고
+SLOPE_CHECK = 0.01     # 도달 범위 안 링크의 평균 경사(절댓값)가 이보다 크면 "경사가 있는 곳" 으로 보고 면적 검사
+MODES = [("flat", "평지 가정"), ("elder", "고령자 경사 반영"), ("wheel", "휠체어")]
+COLORS = {"flat": "#9aa5ad", "elder": "#e8743b", "wheel": "#2f6fb0"}
+
+os.makedirs(C.OUTPUT, exist_ok=True)
+pts = read_csv(os.path.join(C.EXTERNAL, "iso_points.csv"))
+if not pts:
+    raise SystemExit("external/iso_points.csv 가 없거나 비어 있습니다 → 건너뜀")
+
+net = load()
+nodes, e, s = net["nodes"], net["e"], net["s5"]
+N = len(nodes)
+u, v, L, ss, st = directed(e, s)                                  # 양방향 간선 (오르막·내리막 구분)
+W = {"flat": L / C.ELDER_SPEED,                                   # 평지 가정: 거리 ÷ 고령자 속도 (경사 무시)
+     "elder": elder_time(L, ss, st),                              # 고령자 경사 반영
+     "wheel": wheel_time(L, ss, st)}                              # 휠체어 (계단 = 무한대)
+G = {m: Graph(u, v, W[m], N) for m, _ in MODES}
+b = load_buildings()
+bx, by = b["x"][usable(b)], b["y"][usable(b)]                     # 데이터 경계 근처 건물은 세지 않음
+gi = np.where(net["giant"])[0]
+idx = NearestIndex(nodes[gi])
+tf = transformer("EPSG:4326")
+
+
+def reach_polygon(t, limit_s):
+    """노드별 도착 시간 t(초) → 제한 시간 안에 양 끝이 모두 닿는 링크를 버퍼로 합친 면 (없으면 None)"""
+    ok = (t[e["u"]] <= limit_s) & (t[e["v"]] <= limit_s)
+    if not ok.any():
+        return None, ok
+    ml = ogr.Geometry(ogr.wkbMultiLineString)
+    for a, c in zip(e["u"][ok], e["v"][ok]):
+        ln = ogr.Geometry(ogr.wkbLineString)
+        ln.AddPoint_2D(float(nodes[a, 0]), float(nodes[a, 1]))
+        ln.AddPoint_2D(float(nodes[c, 0]), float(nodes[c, 1]))
+        ml.AddGeometry(ln)
+    return ml.Buffer(BUFFER_M).SimplifyPreserveTopology(SIMPLIFY_M), ok
+
+
+def count_inside(poly):
+    """면 안의 주거 건물 수 (먼저 사각 범위로 거른 뒤 하나씩 확인)"""
+    x0, x1, y0, y1 = poly.GetEnvelope()
+    cand = np.where((bx >= x0) & (bx <= x1) & (by >= y0) & (by <= y1))[0]
+    n = 0
+    for i in cand:
+        p = ogr.Geometry(ogr.wkbPoint)
+        p.AddPoint_2D(float(bx[i]), float(by[i]))
+        n += poly.Contains(p)
+    return n
+
+
+def safe(name):
+    return re.sub(r"[\\/:*?\"<>|\s]+", "_", name.strip())
+
+
+summary, fails = [], 0
+for r in pts:
+    name = (r.get("name") or "").strip()
+    try:
+        lon, lat = float(r["lon"]), float(r["lat"])
+    except (KeyError, TypeError, ValueError):
+        log(f"  !! {name or '(이름 없음)'}: lon·lat 이 비어 있어 건너뜀")
+        continue
+    mins = [int(float(x)) for x in re.split(r"[;,\s]+", r.get("minutes") or "") if x.strip()] or [5, 10, 15]
+    (px,), (py,) = transform_xy(tf, [lon], [lat])
+    d, i = idx.query(np.array([[px, py]]))
+    node = int(gi[i[0]])
+    if d[0] > SNAP_WARN_M:
+        log(f"  !! {name}: 가장 가까운 길이 {d[0]:.0f}m 떨어져 있음 → 좌표 확인 (그대로 계산은 함)")
+    log(f"{name}: 길 노드에 연결 ({d[0]:.0f}m), {'·'.join(map(str, mins))}분")
+    T = {m: G[m].dijkstra(np.array([node]), reverse=True) for m, _ in MODES}   # 각 노드 → 이 점까지 걸어오는 시간(초)
+    polys = []
+    for mi in mins:
+        area = {}
+        for m, _ in MODES:
+            poly, ok = reach_polygon(T[m], mi * 60)
+            a = poly.GetArea() / 1e6 if poly is not None else 0.0
+            area[m] = a
+            n = count_inside(poly) if poly is not None else 0
+            polys.append((m, mi, a, poly))
+            summary.append([name, m, mi, round(a, 4), None, n if n >= C.MIN_COUNT else ""])
+            if m == "flat":
+                slope = float(np.nanmean(np.abs(s[ok]))) if ok.any() else 0.0
+        for row in summary[-len(MODES):]:
+            row[4] = round(row[3] / area["flat"], 3) if area["flat"] > 0 else ""
+        # 검사: 고령자 시간은 링크마다 평지 시간 이상이므로 면적도 평지 이하여야 함. 경사가 있는 곳이면 더 작아야 함
+        if area["elder"] > area["flat"] * 1.001:
+            log(f"  !! 검사: {name} {mi}분 고령자 경사 반영 면적({area['elder']:.3f}km²)이 평지({area['flat']:.3f}km²)보다 넓음 → 계산 확인")
+            fails += 1
+        elif slope > SLOPE_CHECK and area["flat"] > 0 and area["elder"] >= area["flat"] * 0.999:
+            log(f"  !! 검사: {name} {mi}분 경사가 있는데(평균 {slope:.1%}) 고령자 면적이 평지와 같음 → 평지 방식에 경사가 섞였는지 확인")
+            fails += 1
+        log(f"  {mi}분: 평지 {area['flat']:.3f}km², 고령자 {area['elder']:.3f}km² ({area['elder'] / area['flat']:.0%}), "
+            f"휠체어 {area['wheel']:.3f}km² ({area['wheel'] / area['flat']:.0%})" if area["flat"] > 0 else f"  {mi}분: 도달 범위 없음")
+    # 도형 저장
+    path = os.path.join(C.OUTPUT, f"isochrone_{safe(name)}.gpkg")
+    drv = ogr.GetDriverByName("GPKG")
+    if os.path.exists(path):
+        drv.DeleteDataSource(path)
+    ds = drv.CreateDataSource(path)
+    lyr = ds.CreateLayer("isochrone", TARGET, ogr.wkbMultiPolygon)
+    for k, t_ in (("name", ogr.OFTString), ("mode", ogr.OFTString), ("minutes", ogr.OFTInteger), ("area_km2", ogr.OFTReal)):
+        lyr.CreateField(ogr.FieldDefn(k, t_))
+    for m, mi, a, poly in sorted(polys, key=lambda x: -x[1]):      # 큰 범위부터 (QGIS 에서 작은 범위가 위에 보이게)
+        if poly is None:
+            continue
+        f = ogr.Feature(lyr.GetLayerDefn())
+        f.SetField("name", name); f.SetField("mode", m); f.SetField("minutes", mi); f.SetField("area_km2", round(a, 4))
+        f.SetGeometry(ogr.ForceToMultiPolygon(poly))
+        lyr.CreateFeature(f)
+    ds = None
+    # 그림
+    if HAS_MPL:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from matplotlib.patches import Polygon as MPoly, Patch
+        from matplotlib import font_manager as fm
+        have = {f.name for f in fm.fontManager.ttflist}
+        plt.rcParams["font.family"] = next((f for f in ("Malgun Gothic", "Apple SD Gothic Neo", "AppleGothic", "NanumGothic") if f in have), "sans-serif")
+        big = [p for m, mi, a, p in polys if p is not None]
+        env = [p.GetEnvelope() for p in big]                          # 모든 칸을 같은 축척으로 (가장 큰 범위 기준)
+        lim = (min(x[0] for x in env), max(x[1] for x in env), min(x[2] for x in env), max(x[3] for x in env)) if env else None
+        fig, axes = plt.subplots(1, len(mins), figsize=(4 * len(mins), 4), squeeze=False)
+        for ax, mi in zip(axes[0], mins):
+            for m, label in MODES:
+                for mm, mii, a, poly in polys:
+                    if mm != m or mii != mi or poly is None:
+                        continue
+                    for k in range(poly.GetGeometryCount() if poly.GetGeometryName() == "MULTIPOLYGON" else 1):
+                        pg = poly.GetGeometryRef(k) if poly.GetGeometryName() == "MULTIPOLYGON" else poly
+                        ring = np.array(pg.GetGeometryRef(0).GetPoints())[:, :2]
+                        ax.add_patch(MPoly(ring, closed=True, facecolor=COLORS[m], edgecolor=COLORS[m], alpha=0.35, lw=1))
+            ax.plot(px, py, "k*", ms=10)
+            ax.set_title(f"{mi}분"); ax.set_aspect("equal"); ax.set_xticks([]); ax.set_yticks([])
+            if lim:
+                ax.set_xlim(lim[0] - 50, lim[1] + 50); ax.set_ylim(lim[2] - 50, lim[3] + 50)
+        axes[0][-1].legend(handles=[Patch(color=COLORS[m], alpha=0.5, label=f"{m} ({lab})") for m, lab in MODES], loc="lower right", fontsize=8)
+        fig.suptitle(f"{name}: 걸어서 올 수 있는 범위 (★ = 시설)"); fig.tight_layout()
+        fig.savefig(os.path.join(C.OUTPUT, f"map_isochrone_{safe(name)}.png"), dpi=120); plt.close(fig)
+
+write_csv(os.path.join(C.OUTPUT, "isochrone_summary.csv"), ["name", "mode", "minutes", "area_km2", "ratio_to_flat", "n_res_bld"], summary)
+log(f"완료 → output/isochrone_*.gpkg, isochrone_summary.csv ({len(summary)}행)" + (f"  !! 검사 실패 {fails}건" if fails else ""))
+'''
+
+# ---------------------------------------------------------------- hbi/13_siting.py
+FILES['hbi/13_siting.py'] = r'''# -*- coding: utf-8 -*-
+"""
+13_siting.py ─ [v5] 이동편의시설(엘리베이터 등) 자리 주변 땅이 어떤 땅인지: 지목별 면적 비율
+
+[실행]  python 13_siting.py      (run_all.py 가 끝난 뒤 한 줄 따로. config.py 의 DATA_ROOT_PARCEL 필요)
+[준비]  external/interventions.csv 의 a_lon, a_lat(아래 끝), b_lon, b_lat(위 끝) 좌표 (09_intervention.py 와 같은 파일)
+        좌표 4개가 다 있는 행만 계산합니다. 빈 행은 건너뛰고 화면에 적습니다.
+[하는 일]
+  1. 시설 a–b 선분 둘레 BUFFER_M(30m) 안의 국토정보필지를 찾음 (PARCEL_ENCODING 으로 읽기만 함)
+  2. 필지마다 그 둘레와 겹치는 면적을 재서, 지목을 아래 JIMOK_CLASS 표로 7가지로 나눠 더함
+       도로 / 공원 / 대 / 임야 / 학교 / 하천·구거 / 기타
+  3. 분류별 면적 ÷ 전체 면적 = 비율 (합 = 1.0). 필지가 MIN_COUNT 개 미만이면 비율은 빈 칸
+  ※ 필지의 지목(JIMOK)과 모양만 읽습니다. 소유·공시지가·필지번호(PNU)는 읽지도 저장하지도 않습니다
+  JS로 치면: 선분 주위에 30m 폭 띠를 그리고, 띠와 겹치는 땅 조각을 종류별로 groupBy 해서 면적 합을 구하는 것
+[결과] (output/ → 반출 대상. 기획서 23장)
+  siting_summary.csv : facility, status, buffer_m, n_parcels, area_m2, share_도로, share_공원, share_대, share_임야,
+                       share_학교, share_하천구거, share_기타
+[결과 보는 법]
+  - share_도로·share_공원 이 크면 공공 땅 위주 (설치 협의가 쉬운 편), share_대 가 크면 사유지 주거 땅이 많음
+  - 화면의 "분류 안 된 지목" 에 ??? 같은 깨진 글자가 많으면 config.PARCEL_ENCODING 확인 (01_inspect.py 의 JIMOK 예시)
+"""
+import os, numpy as np
+from osgeo import ogr
+import config as C
+from lib.qio import log, read_csv, write_csv, transform_xy, transformer, find_files, iter_layer
+
+# ── 이 스크립트만의 설정 (config.py 는 바꾸지 않음) ─────────────
+BUFFER_M = 30
+# 지목 → 분류. 국토정보필지 JIMOK 은 "대장지목명"(LX 데이터정의서). 이름("도로")으로 오든 한 글자 부호("도")로 오든 맞도록 둘 다 적음.
+#   부호는 지적 지목 부호 (도로=도, 공원=공, 대=대, 임야=임, 학교용지=학, 하천=천, 구거=구). 01_inspect.py 의 "JIMOK(지목) 예시" 로 실제 값 확인
+JIMOK_CLASS = {
+    "도로": ["도로", "도"],
+    "공원": ["공원", "공"],
+    "대": ["대"],
+    "임야": ["임야", "임"],
+    "학교": ["학교용지", "학"],
+    "하천구거": ["하천", "천", "구거", "구"],
+}
+ORDER = ["도로", "공원", "대", "임야", "학교", "하천구거", "기타"]
+LOOKUP = {v: k for k, vs in JIMOK_CLASS.items() for v in vs}
+
+if not C.DATA_ROOT_PARCEL:
+    raise SystemExit("config.DATA_ROOT_PARCEL 이 비어 있습니다 (국토정보필지 폴더) → 건너뜀")
+os.makedirs(C.OUTPUT, exist_ok=True)
+
+
+def fnum(x):
+    x = (x or "").strip()
+    return float(x) if x else None
+
+
+tf = transformer("EPSG:4326")
+fac = []
+for r in read_csv(os.path.join(C.EXTERNAL, "interventions.csv")):
+    c = [fnum(r.get(k)) for k in ("a_lon", "a_lat", "b_lon", "b_lat")]
+    if any(v is None for v in c):
+        log(f"  건너뜀: {r.get('name')} (a·b 좌표가 다 채워지지 않음)")
+        continue
+    (ax, bx), (ay, by) = transform_xy(tf, [c[0], c[2]], [c[1], c[3]])
+    seg = ogr.Geometry(ogr.wkbLineString)
+    seg.AddPoint_2D(float(ax), float(ay)); seg.AddPoint_2D(float(bx), float(by))
+    fac.append((r["name"], (r.get("status") or "").strip(), seg.Buffer(BUFFER_M)))
+if not fac:
+    raise SystemExit("external/interventions.csv 에 a·b 좌표가 모두 있는 행이 없습니다 → 건너뜀")
+
+env = [f[2].GetEnvelope() for f in fac]                           # (x0, x1, y0, y1)
+bbox = [min(e[0] for e in env), min(e[2] for e in env), max(e[1] for e in env), max(e[3] for e in env)]
+files = find_files(C.DATA_ROOT_PARCEL, [""], ".shp")
+parcels = [(g.Clone(), str(a.get("JIMOK") or "").strip())
+           for g, a in iter_layer(files=files, fields=["JIMOK"], bbox=bbox, encoding=C.PARCEL_ENCODING)]
+log(f"시설 {len(fac)}곳 둘레 {BUFFER_M}m, 범위 안 필지 {len(parcels):,}개")
+
+rows, unknown = [], {}
+for name, status, buf in fac:
+    x0, x1, y0, y1 = buf.GetEnvelope()
+    area = dict.fromkeys(ORDER, 0.0)
+    n = 0
+    for g, jm in parcels:
+        gx0, gx1, gy0, gy1 = g.GetEnvelope()
+        if gx1 < x0 or gx0 > x1 or gy1 < y0 or gy0 > y1:
+            continue
+        a = g.Intersection(buf).GetArea() if g.Intersects(buf) else 0.0
+        if a <= 0:
+            continue
+        n += 1
+        cls = LOOKUP.get(jm, "기타")
+        if cls == "기타":
+            unknown[jm] = unknown.get(jm, 0) + 1
+        area[cls] += a
+    if n == 0:
+        log(f"  건너뜀: {name} (둘레 {BUFFER_M}m 안에 필지 없음)")
+        continue
+    tot = sum(area.values())
+    share = [round(area[k] / tot, 4) if n >= C.MIN_COUNT else "" for k in ORDER]
+    rows.append([name, status, BUFFER_M, n, round(tot, 1)] + share)
+    log(f"  {name}: 필지 {n}개, {tot:,.0f}㎡ → " + ", ".join(f"{k} {area[k] / tot:.0%}" for k in ORDER if area[k] > 0)
+        + ("" if n >= C.MIN_COUNT else f"  (필지 {C.MIN_COUNT}개 미만이라 비율은 빈 칸)"))
+if unknown:
+    top = sorted(unknown.items(), key=lambda x: -x[1])[:10]
+    log(f"  분류 안 된 지목(기타로 셈): {top}  ← 깨진 글자가 많으면 config.PARCEL_ENCODING 확인")
+
+write_csv(os.path.join(C.OUTPUT, "siting_summary.csv"),
+          ["facility", "status", "buffer_m", "n_parcels", "area_m2"] + [f"share_{k}" for k in ORDER], rows)
+log(f"완료 → output/siting_summary.csv ({len(rows)}행, 필지 번호·소유 정보는 저장하지 않음)")
+'''
+
+# ---------------------------------------------------------------- hbi/14_dong_context.py
+FILES['hbi/14_dong_context.py'] = r'''# -*- coding: utf-8 -*-
+"""
+14_dong_context.py ─ [v5] 행정동별 "동네 성격" 변수 (외출 지수와 HBI 를 비교할 때 상권·시설 효과를 통제하려고)
+
+[실행]  python 14_dong_context.py      (run_all.py 가 끝난 뒤 한 줄 따로. 02·03(·10)의 결과를 읽기만 함)
+[하는 일]
+  1. 수치지형도 건물을 모두 읽어 행정동별로 셈: 건물 수, 용도별 수·연면적 비율, 평균 층수
+       용도 분류는 아래 USE_CLASS 표 (건물 용도 BPRP_SE 코드, 수치지형도 데이터정의서 별표)
+  2. 역(정거장)·버스정류장 수, 보행 링크 밀도 (행정동 안 링크 길이 km ÷ 행정동 면적 km²)
+  3. [SKT 경로가 config.POINT_DATA 에 있을 때만] SKT 50m 셀을 10_points_join.py 와 같은 규칙으로 읽어서
+       - 모든 셀 합계 (skt_all_sum) : 10 의 행정동 합과 같아야 함 (화면에서 대조 = 가드)
+       - "주거 칸" 합계 (skt_res_sum): 셀 중심 25m 안에 주거 건물이 있고, 근린생활·상업 건물이 없는 셀만
+     → 상점가를 지나가는 사람을 빼고 "집 근처에서 움직이는 사람" 만 보려는 것
+  JS로 치면: 건물 배열을 행정동별로 groupBy 해서 용도별 count·sum 을 구하고, 셀도 조건으로 filter 한 뒤 합치는 것
+[결과] (output/ → 반출 대상. 기획서 19장 통제 변수)
+  dong_context.csv : 행정동(건물 MIN_COUNT 개 이상)마다
+      adm_cd, n_bld_all, n_share_<용도>, w_share_<용도>(연면적 비율), mean_floors, n_station, n_bus_stop, link_km_per_km2,
+      skt_res_sum, skt_all_sum, n_cells_res, n_cells_all (SKT 가 없으면 빈 칸)
+  개별 건물·셀 좌표는 저장하지 않습니다.
+[결과 보는 법]
+  - n_share_·w_share_ 는 각각 더하면 1.0
+  - 화면의 "SKT 대조" 가 "같음" 이 아니면 10 과 읽는 규칙이 어긋난 것 → 멈추고 확인
+  - 링크 밀도는 받은 지도 범위 밖으로 걸친 동에서 작게 나옴 (동 면적 전체로 나누므로)
+"""
+import os, numpy as np
+np.seterr(invalid="ignore", divide="ignore")
+from osgeo import ogr
+import config as C
+from lib.qio import log, read_csv, write_csv, find_files, iter_layer, transform_xy, transformer, read_any
+from lib.qgraph import NearestIndex
+from lib.qnetwork import points_in_polygons
+from lib.netload import load
+from lib.bload import load_buildings, usable
+
+# ── 이 스크립트만의 설정 (config.py 는 바꾸지 않음) ─────────────
+# 건물 용도 코드 → 분류 (수치지형도 데이터정의서 별표, BPRP_SE "용도 구분코드")
+#   BDU001 주거용단독주택, BDU002 주거용공동주택, BDU003 제1종근린생활시설, BDU004 제2종근린생활시설,
+#   BDU007 판매시설, BDU009 의료시설, BDU011 노유자(노인및어린이)시설, 그 밖의 BDU0xx·BDU999 = 기타
+USE_CLASS = {
+    "주거": ["BDU001", "BDU002"],
+    "근린상업": ["BDU003", "BDU004", "BDU007"],
+    "의료": ["BDU009"],
+    "노유자": ["BDU011"],
+}
+ORDER = ["주거", "근린상업", "의료", "노유자", "기타"]
+LOOKUP = {c: k for k, cs in USE_CLASS.items() for c in cs}
+RES_CELL_M = 25        # SKT 셀 중심에서 이 거리 안에 주거 건물이 있고 근린·상업 건물이 없으면 "주거 칸"
+
+os.makedirs(C.OUTPUT, exist_ok=True)
+
+
+def fnum(v):
+    try:
+        return float(str(v).replace(",", "").strip())
+    except ValueError:
+        return np.nan
+
+
+# ── 1. 건물 (전체 용도) ────────────────────────────────────
+cu, ck, cf = C.COL["bld_use"], C.COL["bld_kind"], C.COL["bld_floor"]
+BX, BY, BC, BF, BW = [], [], [], [], []
+for g, a in iter_layer("building", fields=[cu, ck, cf]):
+    p = g.PointOnSurface()
+    if p is None:
+        continue
+    use = str(a.get(cu) or "").upper()
+    kind = str(a.get(ck) or "").upper()
+    cls = LOOKUP.get(use, "기타")
+    if cls == "기타" and not use.startswith("BDU") and kind in C.RESIDENTIAL_KIND:   # 03_hbi.py 와 같은 규칙: 용도가 비고 종류가 주택이면 주거
+        cls = "주거"
+    try:
+        fl = min(max(float(a.get(cf) or 1), 1), 60)
+    except ValueError:
+        fl = 1.0
+    BX.append(p.GetX()); BY.append(p.GetY()); BC.append(cls); BF.append(fl); BW.append(fl * g.GetArea())
+BX, BY, BF, BW = map(lambda x: np.array(x, float), (BX, BY, BF, BW))
+BC = np.array(BC)
+log(f"건물 {len(BX):,}개: " + ", ".join(f"{k} {int((BC == k).sum()):,}" for k in ORDER))
+
+# ── 2. 행정동 경계 (10_points_join.py 와 같은 방식) ─────────────
+b = load_buildings()
+v = np.isfinite(b["medical_hbi"] if "medical_hbi" in b else b[[k for k in b if k.endswith("_hbi")][0]]) & usable(b)
+bx0, bx1, by0, by1 = np.nanmin(b["x"][v]), np.nanmax(b["x"][v]), np.nanmin(b["y"][v]), np.nanmax(b["y"][v])   # 분석 범위 (10 과 같음)
+bd = find_files(C.EXTERNAL, ["dong_boundary"], ".geojson") + find_files(C.EXTERNAL, ["dong_boundary"], ".shp")
+if not bd:
+    raise SystemExit("external/dong_boundary 가 없습니다 → 건너뜀")
+polys = [(g, a) for g, a in iter_layer(files=bd[:1], bbox=None)]
+ck_ = next(k for k in polys[0][1] if k.upper() in ("ADM_CD", "ADM_DR_CD", "ADSTRD_CD", "CODE"))
+polys = [p for p in polys if not (p[0].GetEnvelope()[1] < bx0 or p[0].GetEnvelope()[0] > bx1 or
+                                  p[0].GetEnvelope()[3] < by0 or p[0].GetEnvelope()[2] > by1)]
+dcode = [str(a[ck_]) for _, a in polys]
+_, bwhich = points_in_polygons(BX, BY, polys)
+
+# 역·정류장, 링크
+def points_of(key):
+    xs, ys = [], []
+    for g, _ in iter_layer(key):
+        p = g if g.GetGeometryName() == "POINT" else g.PointOnSurface()
+        if p is not None:
+            xs.append(p.GetX()); ys.append(p.GetY())
+    return np.array(xs, float), np.array(ys, float)
+sx, sy = points_of("station")
+ux, uy = points_of("bus_stop")
+_, swhich = points_in_polygons(sx, sy, polys) if len(sx) else (None, np.array([], int))
+_, uwhich = points_in_polygons(ux, uy, polys) if len(ux) else (None, np.array([], int))
+net = load()
+e = net["e"]
+_, lwhich = points_in_polygons(e["xm"], e["ym"], polys)          # 링크 가운데점이 든 동
+log(f"역 {len(sx):,}개, 버스정류장 {len(ux):,}개, 링크 {len(e['xm']):,}개")
+
+# ── 3. SKT (10_points_join.py 와 같은 입력·같은 합산 규칙) ───────
+skt = None
+cands = [(k, c) for k, c in C.POINT_DATA.items() if c.get("path") and "SKT" in k.upper() and c.get("agg") == "sum" and c.get("value_cols")]
+cands.sort(key=lambda kc: ("60" not in kc[0], kc[0]))            # 60대 이상 자료 우선
+if cands:
+    name, cfg = cands[0]
+    rows, enc, sep = read_any(cfg["path"], cfg.get("sep"))
+    for col, val in (cfg.get("filter") or {}).items():
+        ok = set(str(x) for x in (val if isinstance(val, (list, tuple)) else [val]))
+        rows = [r for r in rows if str(r.get(col, "")).strip() in ok]
+    for col, txt in (cfg.get("contains") or {}).items():
+        rows = [r for r in rows if str(txt) in str(r.get(col, ""))]
+    xy = np.array([(fnum(r.get(cfg["x_col"])), fnum(r.get(cfg["y_col"]))) for r in rows], float).reshape(-1, 2)
+    val = np.array([np.nansum([fnum(r.get(c)) for c in cfg["value_cols"]]) for r in rows], float)
+    pc = cfg.get("period_col")
+    val = val / max(len({r.get(pc) for r in rows}) if pc else 1, 1)
+    okm = np.isfinite(xy).all(axis=1)
+    xy, val = xy[okm], val[okm]
+    px, py = transform_xy(transformer(cfg.get("crs") or "EPSG:4326"), xy[:, 0], xy[:, 1]) if len(xy) else (np.array([]), np.array([]))
+    inb = (px >= bx0) & (px <= bx1) & (py >= by0) & (py <= by1)
+    px, py, val = px[inb], py[inb], val[inb]
+    _, pwhich = points_in_polygons(px, py, polys)
+    res_i, com_i = np.where(BC == "주거")[0], np.where(BC == "근린상업")[0]
+    near = lambda ids: (NearestIndex(np.c_[BX[ids], BY[ids]]).query(np.c_[px, py])[0] if len(ids) else np.full(len(px), np.inf))
+    is_res = (near(res_i) <= RES_CELL_M) & ~(near(com_i) <= RES_CELL_M)
+    skt = (name, pwhich, val, is_res)
+    log(f"SKT {name}: 범위 안 셀 {len(px):,}개 중 주거 칸 {int(is_res.sum()):,}개 (셀 중심 {RES_CELL_M}m 안 주거 있음·근린상업 없음)")
+else:
+    log("config.POINT_DATA 에 SKT 경로가 없어 SKT 열은 빈 칸")
+
+# ── 4. 행정동별로 모으기 ────────────────────────────────────
+out, check = [], []
+for k, code in enumerate(dcode):
+    m = bwhich == k
+    n = int(m.sum())
+    if n < C.MIN_COUNT:
+        continue
+    area_km2 = polys[k][0].GetArea() / 1e6
+    ns = [round(float((BC[m] == c).sum()) / n, 4) for c in ORDER]
+    wt = BW[m].sum()
+    ws = [round(float(BW[m][BC[m] == c].sum() / wt), 4) if wt > 0 else "" for c in ORDER]
+    link_km = float(e["length"][lwhich == k].sum()) / 1000
+    row = [code, n] + ns + ws + [round(float(BF[m].mean()), 2), int((swhich == k).sum()), int((uwhich == k).sum()),
+                                  round(link_km / area_km2, 2) if area_km2 > 0 else ""]
+    if skt:
+        _, pw, val, isr = skt
+        pm = pw == k
+        row += [round(float(val[pm & isr].sum()), 2), round(float(val[pm].sum()), 2), int((pm & isr).sum()), int(pm.sum())]
+        check.append((code, float(val[pm].sum())))
+    else:
+        row += ["", "", "", ""]
+    out.append(row)
+head = (["adm_cd", "n_bld_all"] + [f"n_share_{c}" for c in ORDER] + [f"w_share_{c}" for c in ORDER]
+        + ["mean_floors", "n_station", "n_bus_stop", "link_km_per_km2", "skt_res_sum", "skt_all_sum", "n_cells_res", "n_cells_all"])
+write_csv(os.path.join(C.OUTPUT, "dong_context.csv"), head, out)
+
+# ── 5. 가드: skt_all_sum 이 10 의 행정동 합과 같은가 ────────────
+if skt:
+    ten = {r["adm_cd"]: fnum(r.get("n_points")) for r in (read_csv(os.path.join(C.OUTPUT, f"points_{skt[0]}_dong.csv")) or [])}
+    if not ten:
+        log(f"  SKT 대조: output/points_{skt[0]}_dong.csv 가 없어 대조 못 함 (10_points_join.py 먼저)")
+    else:
+        common = [(c, s) for c, s in check if c in ten]
+        bad = [(c, s, ten[c]) for c, s in common if abs(round(s, 2) - ten[c]) > 0.011]
+        log(f"  SKT 대조: 10 과 같은 행정동 {len(common)}곳 중 " + ("모두 같음" if not bad else f"!! {len(bad)}곳 다름 {bad[:3]} → 읽는 규칙 확인"))
+log(f"완료 → output/dong_context.csv ({len(out)}행, 건물·셀 좌표는 저장하지 않음)")
+'''
+
 # ---------------------------------------------------------------- hbi/README.md
 FILES['hbi/README.md'] = r'''# 언덕 위 우리동네 – 분석 코드 따라하기 안내서 (v5)
 
@@ -1313,6 +1797,11 @@ FILES['hbi/README.md'] = r'''# 언덕 위 우리동네 – 분석 코드 따라�
 | 9 | `09_intervention.py` | [v5] 이동편의시설(엘리베이터·모노레일) 설치 효과: 몇 집이 몇 분 덜 걷나 (external/interventions.csv) | 시설당 1~5분 |
 | 10 | `10_points_join.py` | [v5] 좌표가 있는 점 자료를 행정동·격자로 세거나(개수) 값을 더해(SKT 유동인구 `agg: "sum"`) HBI 와 비교 (config.POINT_DATA) | 2분 |
 | 11 | `11_legal_dong_join.py` | [v5] 좌표 없이 법정동 이름만 있는 자료(한국도로교통공단 교통사고)를 법정동별로 세어 06 필지 HBI 와 비교 (config.LEGAL_DONG_DATA, 06 먼저) | 1분 |
+| 12 | `12_isochrone.py` | [v5] 시설 주변 몇 분 안에 걸어서 올 수 있는 범위(등시선)를 평지·고령자·휠체어로 비교 (external/iso_points.csv) | 점당 1분 안팎 |
+| 13 | `13_siting.py` | [v5] 시설 a–b 선분 둘레 30m 안 필지의 지목별 면적 비율 (도로·공원·대·임야·학교·하천구거·기타). 지목만 읽음 (external/interventions.csv + DATA_ROOT_PARCEL) | 1분 |
+| 14 | `14_dong_context.py` | [v5] 행정동별 동네 성격 변수: 건물 용도별 수·연면적 비율, 평균 층수, 역·정류장 수, 보행 링크 밀도, (SKT 가 있으면) 주거 칸 한정 유동인구 합 | 2분 |
+
+**12·13·14 는 run_all 뒤에 한 줄씩 따로 실행**합니다 (run_all 은 바꾸지 않음): `python 12_isochrone.py`, `python 13_siting.py`, `python 14_dong_context.py`. 셋 다 앞 단계 결과를 읽기만 하고 바꾸지 않습니다 (14 는 10 결과와 SKT 합계를 대조).
 
 **폴더 구조**
 ```
@@ -1458,12 +1947,15 @@ python 01_inspect.py
 - [ ] `dong_hbi.csv` — 행정동 결과 (weight_all·weight_high 열 포함 → 밖에서 고령인구 추정)
 - [ ] `validation_sites.csv`, `validation_routes.csv`, `validation_new_candidates.csv`, `validation_ablation.csv` (17·18장)
 - [ ] `validation_measured.csv` — [v5] 실측 vs 예측 상관계수 (실측 3구간 이상일 때, 17장)
-- [ ] `intervention_summary.csv`, `intervention_grid.csv`, `intervention_dong.csv` — [v5] 시설 설치 효과 (22·23장)
+- [ ] `intervention_summary.csv`, `intervention_grid.csv`, `intervention_dong.csv` — [v5] 시설 설치 효과 (22·23장). 맨 뒤 열 n_exit_high·weight_exit_high·n_exit_mid (summary), weight_exit_high (dong) = 설치 후 HBI 1.8(1.3) 아래로 내려온 주거 건물 (연면적은 MIN_COUNT 개 미만이면 빈 칸)
 - [ ] `points_summary.csv`, `points_*_dong.csv`, `points_*_grid.csv` — [v5] 점 자료 결합 (개수·값 합계만, 좌표 없음)
 - [ ] `legal_summary.csv`, `legal_*.csv` — [v5] 법정동별 교통사고 건수 (행 단위 사고 없음)
 - [ ] `parcel_summary.csv`, `parcel_by_legal_dong.csv` (필지 결합)
 - [ ] `join_summary.csv`, `join_*.csv` (KCB 를 썼다면, 19장)
 - [ ] `sensitivity.csv` (민감도, 질의응답)
+- [ ] `isochrone_*.gpkg`, `isochrone_summary.csv`, `map_isochrone_*.png` — [v5] 12_isochrone.py. 반출 설명: "시설 주변 도보 도달 범위를 나타낸 면 도형(길 중심선 25m 버퍼, 10m 단순화). 건물·필지 단위 정보 없음" (범위 안 주거 건물 수는 MIN_COUNT 개 미만이면 빈 칸)
+- [ ] `dong_context.csv` — [v5] 14_dong_context.py. 행정동별 용도 비율·층수·역·정류장·링크 밀도·SKT 주거 칸 합 (건물 MIN_COUNT 개 이상 동만, 개별 건물·셀 좌표 없음)
+- [ ] `siting_summary.csv` — [v5] 13_siting.py. 시설 둘레 30m 필지의 지목별 면적 비율만 (필지 번호·소유 정보 없음, 필지 MIN_COUNT 개 미만이면 비율 빈 칸)
 - [ ] `map_*.png` (matplotlib 이 있을 때만. 없으면 gpkg 로 밖에서 지도 제작)
 
 ### 데이터 경계 처리
@@ -1478,13 +1970,14 @@ python 01_inspect.py
 | 파일 | 내용 | 상태 |
 |---|---|---|
 | `sites.csv` | 서울시 2025 선정지 5곳 좌표 (lon=경도, lat=위도) | 입력됨 (근사 좌표, note 열 참고. 화곡동은 수정 권장) |
-| `od_pairs.csv` | 검증 구간 출발·도착 좌표, `measured_min` = 실측 분 | 대현산배수지공원 입력됨, 현장실측 3줄은 직접 입력 |
+| `od_pairs.csv` | 검증 구간 출발·도착 좌표, `measured_min` = 실측 분 | 대현산배수지공원 입력됨. 현장실측 ①②③⑤ 네 줄(구역 B 관악·D 강서, 10/3~4)은 좌표·measured_min 을 직접 입력 |
 | `dong_boundary.geojson` | 서울 행정동 경계 426개 (ADM_CD = 행안부 10자리, ADM_CD_STAT = 통계청 8자리) | 입력됨 |
 | `pharmacy.csv` | 약국 `name, lon, lat` | 비어 있음 (없어도 의료시설 기준으로 분석됨) |
 | `elderly_pop.csv` | 행정동 코드 `adm_cd`, 65세 이상 인구 `pop65` | 비어 있음 → 반출 후 밖에서 `tools/outside_elderly.py` 로 추정 |
 | `pharmacy.csv` 만들기 | 공개 약국 파일 → `python tools/prep_public.py pharmacy 원본.csv [EPSG:5174]` (반입 전, 밖에서) | [v5] 서울·영업 중만 남김 |
 | `subway_elevators.csv` | [v5] 엘리베이터 있는 지하철역 출입구 `name, lon, lat` → 목적지 `station_ev` (휠체어 결과 기준). `python tools/prep_public.py elevator 원본.csv` 로 만듦 | 머리 줄만 (반입 전 채우기) |
-| `interventions.csv` | [v5] 설치 효과를 볼 시설: `name, type(elevator/monorail/vertical/ramp), a_lon, a_lat(아래), b_lon, b_lat(위), wait_s, speed, status(planned/existing), note`. wait_s·speed 를 비우면 `config.FACILITY` 기본값 | 대현산 모노레일 + 2025 선정지 5곳 입력됨. 양 끝 좌표는 현장실측 후 입력 |
+| `interventions.csv` | [v5] 설치 효과를 볼 시설: `name, type(elevator/monorail/vertical/ramp), a_lon, a_lat(아래), b_lon, b_lat(위), wait_s, speed, status(planned/existing), note`. wait_s·speed 를 비우면 `config.FACILITY` 기본값 | 대현산 모노레일 + 2025 선정지 5곳 입력됨. 양 끝 좌표는 현장실측 후 입력 (봉천동·화곡동은 현장실측 10/3~4 에서 입력 예정). 13_siting.py 도 이 좌표를 씀 |
+| `iso_points.csv` | [v5] 12_isochrone.py 의 등시선 점: `name, lon, lat, minutes("5;10;15"), note` | 창신역 1번출구, 대현산배수지공원 모노레일 하부, 신당동 청구동 마을마당, 봉천동 비안어린이공원, 중곡동 용곡중 5곳 (근사 좌표, 현장실측 후 수정 가능) |
 
 CSV는 메모장으로 열어 쉼표로 구분해서 입력하면 됩니다. 좌표는 네이버·카카오 지도에서 위치를 우클릭하면 나오는 **경위도**(예: 127.0215, 37.5569)를 쓰세요. 엑셀로 저장할 때는 "CSV UTF-8" 형식으로 저장하세요.
 
@@ -2184,18 +2677,28 @@ FILES['hbi/external/elderly_pop.csv'] = r'''adm_cd,pop65
 FILES['hbi/external/interventions.csv'] = r'''name,type,a_lon,a_lat,b_lon,b_lat,wait_s,speed,status,note
 대현산배수지공원 모노레일,monorail,127.02077,37.55930,,,,,existing,하부 승강장 좌표(서울시 보도자료 2020.11). 상부(b)는 현장실측 후 입력
 숭인동 창신역 일대 계단,elevator,,,,,,,planned,2025 선정지. 양 끝 좌표는 현장실측 후 입력
-봉천동 비안어린이공원 인근,vertical,,,,,,,planned,2025 선정지. 양 끝 좌표는 현장실측 후 입력
+봉천동 비안어린이공원 인근,vertical,,,,,,,planned,2025 선정지. 양 끝 좌표는 현장실측 후 입력. 현장실측 10/3~4 에서 a·b 입력 예정
 신당동 청구동 마을마당 앞 계단,elevator,,,,,,,planned,2025 선정지. 양 끝 좌표는 현장실측 후 입력
 중곡동 무지개계단,elevator,,,,,,,planned,2025 선정지. 양 끝 좌표는 현장실측 후 입력
-화곡동 487번지 일대,elevator,,,,,,,planned,2025 선정지. 위치 확인 후 입력
+화곡동 487번지 일대,elevator,,,,,,,planned,2025 선정지. 위치 확인 후 입력. 현장실측 10/3~4 에서 a·b 입력 예정
+'''
+
+# ---------------------------------------------------------------- hbi/external/iso_points.csv
+FILES['hbi/external/iso_points.csv'] = r'''name,lon,lat,minutes,note
+창신역 1번출구,127.01508,37.57933,5;10;15,"근사 좌표, 현장실측 후 수정 가능 (출처: docs/06_기설치_이동편의시설.md 와 같음)"
+대현산배수지공원 모노레일 하부,127.02077,37.55930,5;10;15,"근사 좌표, 현장실측 후 수정 가능 (출처: docs/06_기설치_이동편의시설.md 와 같음)"
+신당동 청구동 마을마당,127.01642,37.55602,5;10;15,"근사 좌표, 현장실측 후 수정 가능 (출처: docs/06_기설치_이동편의시설.md 와 같음)"
+봉천동 비안어린이공원,126.94017,37.48075,5;10;15,"근사 좌표, 현장실측 후 수정 가능 (출처: docs/06_기설치_이동편의시설.md 와 같음)"
+중곡동 용곡중,127.08897,37.56587,5;10;15,"근사 좌표, 현장실측 후 수정 가능 (출처: docs/06_기설치_이동편의시설.md 와 같음)"
 '''
 
 # ---------------------------------------------------------------- hbi/external/od_pairs.csv
 FILES['hbi/external/od_pairs.csv'] = r'''name,o_lon,o_lat,d_lon,d_lat,measured_min,note
 대현산배수지공원(모노레일 하부→공원),127.02077,37.55930,127.02149,37.55693,,서울시 발표: 휠체어 약 770m 우회 / 계단 190개
-현장실측1,,,,,,팀 실측 (출발·도착 좌표와 소요 분)
-현장실측2,,,,,,
-현장실측3,,,,,,
+현장실측① 비안어린이공원 인근 계단(아래→위),,,,,,팀 실측 10/3 구역 B (출발·도착 좌표와 오르막 소요 분)
+현장실측② 봉천역→언덕 위 주거지,,,,,,팀 실측 10/3 구역 B (400~600m 오르막 편도)
+현장실측③ 도림천 산책로 평지(대조군),,,,,,팀 실측 10/3 구역 B (400m 안팎)
+현장실측⑤ 까치산역→언덕 위 주거지,,,,,,팀 실측 10/4 구역 D (오르막 편도)
 '''
 
 # ---------------------------------------------------------------- hbi/external/pharmacy.csv
