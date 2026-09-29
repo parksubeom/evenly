@@ -93,8 +93,45 @@ def match_col(want, names, data_cols):
                                        len(names[j].split("_")), j))[0]
 
 
+def parse_long(rows, cols, path):
+    """서울시 통계 '세로' 형식: 동별 | 장애유형별 | 성별 | 항목 | 단위 | 2025 년 (한 줄 = 동 하나 × 분류 하나)
+    구 이름 행 다음에 그 구의 동 행이 이어짐 (구 열이 따로 없음) → 앞의 구 행을 기억해 두고 동에 붙임"""
+    head = rows[0]
+    vi = max(i for i, c in enumerate(head) if re.search(r"\d{4}", c))          # 값 열 (예: "2025 년")
+    dims = [i for i in range(1, vi) if head[i] not in ("항목", "단위")]        # 분류 열 (장애유형별, 성별 …)
+    gus = set()
+    for r in rows[1:]:
+        if r and r[0].endswith("구") and r[0] not in ("합계",):
+            gus.add(r[0])
+    table, gu = {}, None
+    for r in rows[1:]:
+        if len(r) <= vi or not r[0]:
+            continue
+        if r[0] in gus:
+            gu = r[0]
+            continue
+        if gu is None or r[0] in SKIP_WORDS or r[0] == "기타":
+            continue
+        key = "_".join(re.sub(r"\s+", "", r[i]) for i in dims)
+        table.setdefault((gu, r[0]), {})[key] = num(r[vi])
+    names = sorted({k for v in table.values() for k in v})
+    pick_ = []
+    for c in cols:
+        w = [t for t in re.split(r"[_·,]", re.sub(r"\s+", "", c)) if t]
+        cand = [n for n in names if all(t in n.split("_") for t in w)]
+        if not cand:
+            raise SystemExit(f"{os.path.basename(path)}: 분류 '{c}' 없음. 있는 분류: {names[:40]}")
+        cand.sort(key=lambda n: (not any(t in ("계", "소계", "합계") for t in n.split("_") if t not in w), len(n.split("_")), n))
+        pick_.append(cand[0])
+    print(f"  {os.path.basename(path)}: 세로 형식, 분류 열 {[head[i] for i in dims]}, 값 열 '{head[vi]}', 분류 조합 {len(names)}개, "
+          f"고른 분류: " + ", ".join(f"{c} → '{n}'" for c, n in zip(cols, pick_)))
+    return {(norm(g), norm(d)): {"gu": g, "dong": d, "vals": [v.get(n) for n in pick_]} for (g, d), v in table.items()}
+
+
 def parse_stat(path, cols, skip):
     rows = read_rows(path)
+    if skip is None and rows and rows[0] and rows[0][0].replace(" ", "") == "동별" and any(re.search(r"\d{4}", c) for c in rows[0]):
+        return parse_long(rows, cols, path)
     ch = compound_headers(rows) if skip is None else None
     if ch:                                       # ── 서울시 통계 시스템 형식 (동별(1)·(2)·(3), 여러 줄 머리)
         k, names = ch
@@ -134,7 +171,7 @@ def parse_stat(path, cols, skip):
             gu = r[gi]                           # 병합 셀: 구 이름이 첫 행에만 있으면 기억해 두고 아래 행에 채움
         dong = r[di]
         # 소계·합계 행 건너뜀 ("계" 는 정확히 같을 때만: "계동" 같은 동 이름을 지우지 않도록)
-        if not dong or dong in SKIP_WORDS or any(dong.startswith(w) for w in ("소계", "합계", "총계")) or not gu or gu in SKIP_WORDS:
+        if not dong or dong in SKIP_WORDS or dong == "기타" or any(dong.startswith(w) for w in ("소계", "합계", "총계")) or not gu or gu in SKIP_WORDS:
             continue
         out[(norm(gu), norm(dong))] = {"gu": gu, "dong": dong, "vals": [num(r[i]) for i in ci]}
     return out
@@ -186,10 +223,11 @@ def main():
             s = st.get(d["_key"])
             wa, wh = num(d.get("weight_all")), num(d.get("weight_high"))
             for c, v in zip(cols, (s["vals"] if s else [None] * len(cols))):
-                d[f"{label}_{c}"] = "" if v is None else v
-                d[f"{label}_{c}_in_high"] = round(v * wh / wa, 1) if (v is not None and wa and wh is not None) else ""
+                cc = re.sub(r"\s+", "", c)            # 열 이름에는 공백을 넣지 않음 ("심한 장애" → "심한장애")
+                d[f"{label}_{cc}"] = "" if v is None else v
+                d[f"{label}_{cc}_in_high"] = round(v * wh / wa, 1) if (v is not None and wa and wh is not None) else ""
             hit += s is not None
-        head += [f"{label}_{c}{sfx}" for c in cols for sfx in ("", "_in_high")]
+        head += [label + "_" + "".join(c.split()) + sfx for c in cols for sfx in ("", "_in_high")]
         used = {d["_key"] for d in dong}
         unmatched = [f"{v['gu']} {v['dong']}" for k, v in st.items() if k[0] in gus and k not in used]
         nostat = [d["adm_nm"] for d in dong if d["_key"] not in st]

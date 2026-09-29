@@ -6,8 +6,9 @@
 
 | 파일 | 받는 곳 | 쓰는 도구 | 상태 |
 |---|---|---|---|
-| 행정동별 연령별 인구 (65세 이상) | 행정안전부 주민등록 인구통계 (jumin.mois.go.kr) | `tools/prep_elderly_pop.py` → `elderly_pop.csv` → `outside_elderly.py` | **다시 받기**: 9/29 파일은 구 단위(26행)만. 읍면동까지 펼쳐서 받아야 함 |
-| 동별 장애인 현황 (장애유형별) | 서울 열린데이터광장 | `tools/outside_join_dong.py --cols 지체,뇌병변` | **다시 받기**: 9/29 파일은 동별(1)·(2)=구 단위만. 동별(3)까지 선택 |
+| 행정동별 성별 연령별 인구 | 공공데이터포털 "행정안전부_지역별(행정동) 성별 연령별 주민등록 인구수" | `tools/prep_elderly_pop.py` → `elderly_pop.csv` (adm_cd, pop65, base_ym) | 받음 9/29, 기준 2026-08-31. 서울 427동, 경계 425/426, 대상 88/88 |
+| 장애인 현황 (장애유형별/동별) | 서울시 통계 (201_DT_201004_F040005, 세로 형식) | `tools/outside_join_dong.py --label 장애인_유형 --cols 지체,뇌병변` | 받음 9/29, 동 단위 88/88 |
+| 장애인 현황 (장애정도별/동별) | 서울시 통계 (장애인+현황(등급별_동별)) | `tools/outside_join_dong.py --label 장애인_정도 --cols "심한 장애"` | 받음 9/29, 동 단위 88/88 |
 | 동별 독거노인 현황 (성별) | 서울 열린데이터광장 | `tools/outside_join_dong.py --cols 합계` | 받음 9/29 (동 단위, 5개 구 88/88 동 결합) |
 | 자치구별 도보 네트워크 공간정보 (+ 링크노드유형코드.xlsx) | 서울 열린데이터광장 | `tools/public_baseline.py --network --gu …` | 받음 9/29. 유형코드에 계단·엘리베이터·육교·횡단보도 없음 |
 | 지하철 역사 좌표 (역사마스터) | 서울 열린데이터광장 | `tools/prep_points.py … --seoul` → `subway_stations.csv` (400행) | 받음 9/29 |
