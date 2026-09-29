@@ -41,7 +41,7 @@ def main():
         dmeta.append({"gu": d["gu"], "nm": d["adm_nm"].split()[-1]})
     didx = {id(d): i for i, d in enumerate(dongs)}
 
-    targets = [t for t in ["medical", "bus", "station", "elderly", "pharmacy"] if any(g["target"] == t for g in grid)]
+    targets = [t for t in ["medical", "bus", "station", "station_ev", "elderly", "pharmacy"] if any(g["target"] == t for g in grid)]
     cells, tmax = {}, {}
     cache = {}
     for g in grid:
@@ -76,8 +76,10 @@ def main():
         d = dong_of(s["x"], s["y"], dongs)
         sites.append({"name": SHORT.get(k, s["name"]), "short": s["name"].split()[1] if len(s["name"].split()) > 1 else s["name"],
                       "x": round(s["x"]), "y": round(s["y"]), "r": s["radius"], "gu": d["gu"] if d else s["name"].split()[0],
-                      "pct": num(r.get("percentile")) if r else None, "hbi": num(r.get("hbi_mean")) if r else None,
-                      "top10": truthy(r.get("top10")) if r else False})
+                      # v5 는 같은 반경 원끼리 비교한 percentile_circle 을 우선
+                      "pct": (num(r.get("percentile_circle")) if num(r.get("percentile_circle")) is not None else num(r.get("percentile"))) if r else None,
+                      "hbi": num(r.get("hbi_mean")) if r else None,
+                      "top10": truthy(r.get("top10_circle") if num(r.get("percentile_circle")) is not None else r.get("top10")) if r else False})
     base = "medical" if "medical" in targets else targets[0]
     cand = []
     for r in read_csv(os.path.join(src, "validation_new_candidates.csv")) or []:
