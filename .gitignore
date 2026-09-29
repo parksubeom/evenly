@@ -13,3 +13,8 @@ node_modules/
 package-lock.json
 # 맥
 .DS_Store
+# 공개데이터 원본·현장 사진 (용량·초상권: 폴더만 추적)
+data_public/raw/*
+!data_public/raw/.gitkeep
+docs/photos/*
+!docs/photos/.gitkeep

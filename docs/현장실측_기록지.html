@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>현장실측 기록지 (10/3~4)</title>
+<style>
+@page { size: A4; margin: 11mm 11mm 10mm; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; font-size: 9.2pt; line-height: 1.38; color: #000; background: #fff; }
+.page { width: 188mm; }
+.page + .page { break-before: page; page-break-before: always; }
+h1 { font-size: 14pt; margin: 0 0 1.5mm; }
+h2 { font-size: 10.5pt; margin: 3mm 0 1.2mm; border-bottom: 1px solid #000; padding-bottom: .6mm; }
+p, ul, ol { margin: 0 0 1.2mm; }
+ul, ol { padding-left: 4.5mm; }
+li { margin: 0 0 .4mm; }
+table { width: 100%; border-collapse: collapse; }
+th, td { border: 1px solid #000; padding: .8mm 1.2mm; vertical-align: top; text-align: left; }
+th { background: #eee; font-weight: 700; }
+.grid td { height: 9.6mm; }
+.small { font-size: 8.2pt; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+.box { border: 1px solid #000; height: 34mm; }
+.meta { font-size: 8.5pt; }
+@media screen { body { padding: 12px; background: #fff; } .page { margin: 0 auto 24px; } }
+</style>
+</head>
+<body>
+
+<div class="page">
+<h1>현장실측 기록지 · 2026.10.3(토)~10.4(일)</h1>
+<p class="meta">기록자 ______________ · 동행 ______________ · 날씨 ______________ · 기온 ____℃</p>
+
+<div class="two">
+<div>
+<h2>준비물</h2>
+<ul>
+<li>스마트폰 2대 (지도·스톱워치·카메라), 보조배터리</li>
+<li>이 기록지, 펜 2자루, 클립보드</li>
+<li>2인 1조: 한 명은 걷고 재기, 한 명은 기록·사진</li>
+</ul>
+<h2>좌표 찍는 법 (구글지도)</h2>
+<ol>
+<li>지도에서 그 지점을 <b>길게 누르면</b> 빨간 핀과 함께 위쪽에 <b>위도, 경도</b>가 뜸 (예: 37.55930, 127.02077)</li>
+<li>소수점 <b>5자리</b>까지 적기 (약 1m 정밀도)</li>
+<li>구글지도는 <b>위도(37.…)가 앞</b>. CSV 에는 <b>경도(127.…)를 앞</b>에 적으니 옮길 때 순서 주의</li>
+</ol>
+</div>
+<div>
+<h2>재는 법</h2>
+<ul>
+<li>평소 걸음으로 걷는다 (서두르지 않기). 스톱워치는 출발선에서 시작, 도착선에서 정지</li>
+<li>쉬었으면 멈추지 말고 <b>쉰 횟수만</b> 기록 (쉬는 시간도 전체 시간에 포함)</li>
+<li>같은 구간을 <b>반대 방향으로도 한 번</b> (오르막·내리막 따로)</li>
+<li>계단은 칸 수를 센다. 난간·벤치·경사로·노면(미끄러움·깨짐)을 표시</li>
+<li>사진은 출발·도착·중간 가장 가파른 곳. <b>사람 얼굴이 나오지 않게</b></li>
+<li>모노레일·엘리베이터는 <b>대기 시간과 탑승 시간을 따로</b> 잰다</li>
+</ul>
+</div>
+</div>
+
+<h2>동선</h2>
+<table class="small">
+<tr><th style="width:17%">때</th><th style="width:6%">번호</th><th>장소</th><th style="width:36%">할 일</th></tr>
+<tr><td rowspan="2">토요일 오전</td><td>②</td><td>신당동 대현산배수지공원 (하부 승강장 37.55930, 127.02077)</td><td>계단 도보 오르기·내리기 + 모노레일 대기·탑승 시간 따로</td></tr>
+<tr><td>③</td><td>청구동 마을마당 앞 계단 (②에서 약 500m)</td><td>계단 오르기·내리기, 양 끝 좌표</td></tr>
+<tr><td rowspan="2">토요일 오후</td><td>④</td><td>청계천변 평지 (대조군)</td><td>평지 400m 내외 왕복, 평지 걸음 속도 기준</td></tr>
+<tr><td>①</td><td>숭인동 창신역 1번출구 → 언덕 위 (37.57933, 127.01508)</td><td>오르막 왕복, 계단 구간 양 끝 좌표</td></tr>
+<tr><td rowspan="2">일요일</td><td>⑤</td><td>봉천동 비안어린이공원 인근 계단 (37.48075, 126.94017)</td><td>계단 오르기·내리기, 양 끝 좌표</td></tr>
+<tr><td>⑥</td><td>(선택) 북아현동 경사형 엘리베이터</td><td>대기·탑승 시간, 양 끝 좌표</td></tr>
+</table>
+
+<h2>시설 양 끝 좌표 (a = 아래, b = 위)</h2>
+<table class="grid small">
+<tr><th style="width:6%">번호</th><th style="width:16%">장소</th><th>a 위도</th><th>a 경도</th><th>b 위도</th><th>b 경도</th><th style="width:9%">계단 수</th><th style="width:10%">대기(초)</th><th style="width:10%">탑승(초)</th></tr>
+<tr><td>②</td><td>대현산배수지공원</td><td>37.55930</td><td>127.02077</td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>①</td><td>창신역 일대 계단</td><td></td><td></td><td></td><td></td><td></td><td>—</td><td>—</td></tr>
+<tr><td>③</td><td>청구동 마을마당 앞</td><td></td><td></td><td></td><td></td><td></td><td>—</td><td>—</td></tr>
+<tr><td>⑤</td><td>비안어린이공원 인근</td><td></td><td></td><td></td><td></td><td></td><td>—</td><td>—</td></tr>
+<tr><td>⑥</td><td>북아현동 엘리베이터</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+</table>
+<p class="small">②의 a 좌표는 서울시 보도자료(2020.11)의 하부 승강장 위치입니다. 현장에서 확인해 다르면 고쳐 적으세요.</p>
+</div>
+
+<div class="page">
+<h2 style="margin-top:0">구간 기록표</h2>
+<table class="grid small">
+<tr><th style="width:5%">번호</th><th style="width:7%">방향<br>(오름/내림)</th><th style="width:15%">출발 좌표<br>(위도, 경도)</th><th style="width:15%">도착 좌표<br>(위도, 경도)</th><th style="width:8%">시간<br>(분:초)</th><th style="width:5%">쉼<br>(회)</th><th style="width:6%">계단<br>(칸)</th><th style="width:16%">난간·벤치·경사로·노면</th><th style="width:7%">사진<br>번호</th><th>메모</th></tr>
+<tr><td>②</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>②</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>②</td><td>모노레일</td><td colspan="2">대기 ___분 ___초 / 탑승 ___분 ___초</td><td></td><td>—</td><td>—</td><td></td><td></td><td></td></tr>
+<tr><td>③</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>③</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>④</td><td>평지</td><td></td><td></td><td></td><td></td><td>—</td><td></td><td></td><td></td></tr>
+<tr><td>④</td><td>평지</td><td></td><td></td><td></td><td></td><td>—</td><td></td><td></td><td></td></tr>
+<tr><td>①</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>①</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>⑤</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>⑤</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>⑥</td><td>엘리베이터</td><td colspan="2">대기 ___분 ___초 / 탑승 ___분 ___초</td><td></td><td>—</td><td>—</td><td></td><td></td><td></td></tr>
+<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+</table>
+
+<h2>현장에서 느낀 점 (힘들었던 곳, 어르신·유모차가 지나가는 모습, 쉬는 곳이 있었는지)</h2>
+<div class="box"></div>
+
+<h2>다녀온 뒤 옮기는 곳</h2>
+<table class="small">
+<tr><th style="width:24%">기록</th><th style="width:34%">옮길 파일</th><th>적는 법</th></tr>
+<tr><td>시설 양 끝 좌표</td><td><code>analysis/hbi/external/interventions.csv</code> (v5)</td><td>a_lon, a_lat = 아래 끝 / b_lon, b_lat = 위 끝. <b>경도 먼저</b>. 잰 대기·탑승 시간으로 wait_s·speed 를 적거나 비워 둠(기본값)</td></tr>
+<tr><td>오르막 구간 (오름 방향)</td><td><code>analysis/hbi/external/od_pairs.csv</code></td><td>o = 아래(출발), d = 위(도착). o_lon, o_lat, d_lon, d_lat. measured_min 은 <b>분 단위 소수</b> (예: 3분 36초 → 3.6)</td></tr>
+<tr><td>구간 기록표 전체</td><td><code>docs/field_survey_template.csv</code> 를 복사해 날짜 붙여 저장</td><td>이 표와 같은 열. 좌표는 위도·경도 칸을 따로</td></tr>
+<tr><td>사진</td><td><code>docs/photos/</code> (git 에는 올라가지 않음)</td><td>파일명 앞에 번호: <code>2_a_출발.jpg</code>, <code>2_중간_가파름.jpg</code>. 얼굴 나온 사진은 지우기</td></tr>
+</table>
+</div>
+
+</body>
+</html>
