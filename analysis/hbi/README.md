@@ -1,4 +1,4 @@
-# 언덕 위 우리동네 – 분석 코드 따라하기 안내서
+# 언덕 위 우리동네 – 분석 코드 따라하기 안내서 (v5)
 
 > **이 문서만 보고 따라 하면 됩니다.** 파이썬을 처음 써도 괜찮습니다.
 > 각 코드 파일 맨 위에도 "이 파일이 뭘 하는지, 결과를 어떻게 보는지"가 적혀 있습니다.
@@ -23,6 +23,8 @@
 | 6 | `06_parcel.py` | 국토정보필지에 결과 붙이기 (방문 때 센터가 제공) | 10분 |
 | 7 | `07_join_dong.py` | SKT 유동인구·KCB 소득과 행정동 결합·상관분석 (안심구역에서 받으면) | 2분 |
 | 8 | `08_sensitivity.py` | 민감도 분석: 설정을 바꿔도 결론이 유지되나 (질의응답 대비) | 10~30분 |
+| 9 | `09_intervention.py` | [v5] 이동편의시설(엘리베이터·모노레일) 설치 효과: 몇 집이 몇 분 덜 걷나 (external/interventions.csv) | 시설당 1~5분 |
+| 10 | `10_points_join.py` | [v5] 점 자료(교통사고 위치 등)를 행정동·격자로 세어 HBI 와 비교 (config.POINT_DATA) | 2분 |
 
 **폴더 구조**
 ```
@@ -152,10 +154,13 @@ python 01_inspect.py
 | 3 | `config.py` 에 `DATA_ROOT_PARCEL`(센터가 준 필지 폴더, 서울 파일만 있는 폴더) 입력 → `python 06_parcel.py` | "필지 N개", 지목 '대' 필지 수 |
 | 3 | SKT·KCB 파일을 받았으면 `config.py` 맨 아래 `JOIN_DATA` 채우기 → `python 07_join_dong.py` | "코드 방식 ... 로 N/M개 행정동 결합" 에서 N이 충분한지 |
 | 4 | `python 08_sensitivity.py` (선택) | 순위상관이 0.9 이상이면 "가정을 바꿔도 결론 유지" |
+| 4 | `external/interventions.csv` 에 시설 양 끝 좌표(현장실측 기록지) 입력 → `python 09_intervention.py` | "끝점이 길에서 N m 떨어져 있음" 경고가 없는지 / 시설별 "수혜 건물 N동, 평균 M분 단축" |
+| 4 | 교통사고 등 점 파일을 받았으면 `config.py` 의 `POINT_DATA` 채우기 → `python 10_points_join.py` | "전체 → 조건 통과 → 좌표 있음 → 범위 안" 행 수가 예상과 맞는지 |
 | 5 | `python 05_export.py` 를 한 번 더(최종) → 아래 "반출 전 체크리스트" 확인 → **반출 신청** |  |
 
 한 번에 돌리려면 `python run_all.py` (DEM 1m 포함 `--dem1m`, 민감도 포함 `--sens`)
 `DATA_ROOT_PARCEL` 이나 `JOIN_DATA` 경로를 채워 두면 06·07 도 자동으로 함께 실행됩니다.
+[v5] `interventions.csv` 에 양 끝 좌표 4개가 다 채워진 행이 있으면 09, `POINT_DATA` 에 path 가 있으면 10 도 자동으로 실행됩니다.
 
 ### 반출 전 체크리스트 (output 폴더)
 밖에서는 원자료를 다시 계산할 수 없으니, 반출 신청 전에 아래가 모두 있는지 확인하세요.
@@ -163,6 +168,9 @@ python 01_inspect.py
 - [ ] `grid_hbi.csv`, `grid_hbi_medical.gpkg` 등 — 격자 결과·지도 (16장, 본선 데모)
 - [ ] `dong_hbi.csv` — 행정동 결과 (weight_all·weight_high 열 포함 → 밖에서 고령인구 추정)
 - [ ] `validation_sites.csv`, `validation_routes.csv`, `validation_new_candidates.csv`, `validation_ablation.csv` (17·18장)
+- [ ] `validation_measured.csv` — [v5] 실측 vs 예측 상관계수 (실측 3구간 이상일 때, 17장)
+- [ ] `intervention_summary.csv`, `intervention_grid.csv`, `intervention_dong.csv` — [v5] 시설 설치 효과 (22·23장)
+- [ ] `points_summary.csv`, `points_*_dong.csv`, `points_*_grid.csv` — [v5] 점 자료 결합 (개수만, 좌표 없음)
 - [ ] `parcel_summary.csv`, `parcel_by_legal_dong.csv` (필지 결합)
 - [ ] `join_summary.csv`, `join_*.csv` (SKT·KCB 를 썼다면, 19장)
 - [ ] `sensitivity.csv` (민감도, 질의응답)
@@ -184,6 +192,9 @@ python 01_inspect.py
 | `dong_boundary.geojson` | 서울 행정동 경계 426개 (ADM_CD = 행안부 10자리, ADM_CD_STAT = 통계청 8자리) | 입력됨 |
 | `pharmacy.csv` | 약국 `name, lon, lat` | 비어 있음 (없어도 의료시설 기준으로 분석됨) |
 | `elderly_pop.csv` | 행정동 코드 `adm_cd`, 65세 이상 인구 `pop65` | 비어 있음 → 반출 후 밖에서 `tools/outside_elderly.py` 로 추정 |
+| `pharmacy.csv` 만들기 | 공개 약국 파일 → `python tools/prep_public.py pharmacy 원본.csv [EPSG:5174]` (반입 전, 밖에서) | [v5] 서울·영업 중만 남김 |
+| `subway_elevators.csv` | [v5] 엘리베이터 있는 지하철역 출입구 `name, lon, lat` → 목적지 `station_ev` (휠체어 결과 기준). `python tools/prep_public.py elevator 원본.csv` 로 만듦 | 머리 줄만 (반입 전 채우기) |
+| `interventions.csv` | [v5] 설치 효과를 볼 시설: `name, type(elevator/monorail/vertical/ramp), a_lon, a_lat(아래), b_lon, b_lat(위), wait_s, speed, status(planned/existing), note`. wait_s·speed 를 비우면 `config.FACILITY` 기본값 | 대현산 모노레일 + 2025 선정지 5곳 입력됨. 양 끝 좌표는 현장실측 후 입력 |
 
 CSV는 메모장으로 열어 쉼표로 구분해서 입력하면 됩니다. 좌표는 네이버·카카오 지도에서 위치를 우클릭하면 나오는 **경위도**(예: 127.0215, 37.5569)를 쓰세요. 엑셀로 저장할 때는 "CSV UTF-8" 형식으로 저장하세요.
 
