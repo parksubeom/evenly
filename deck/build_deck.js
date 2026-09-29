@@ -358,18 +358,20 @@ B.CROSS = () => {
   T(s, 'HBI가 높은 행정동일수록, 60세 이상 거주인구 대비 60세 이상 유동인구가 적다', { x:0.7, y:1.8, w:3.95, h:0.8, fontSize:12, bold:true, color:C.white });
   card(s, 0.5, 2.85, 4.3, 1.1);
   T(s, '외출 지수', { x:0.7, y:2.95, w:4, h:0.28, fontSize:11, bold:true, color:C.dark });
-  T(s, '= 60세 이상 유동인구(SKT) ÷ 60세 이상 거주인구(주민등록)\nSKT 연령 구간이 10세 단위라 65세가 아닌 60세 기준', { x:0.7, y:3.25, w:3.95, h:0.65, fontSize:9.8, color:C.muted });
+  T(s, '= 60세 이상 유동인구(SKT, 행정동 합) ÷ 60세 이상 거주인구', { x:0.7, y:3.25, w:3.95, h:0.28, fontSize:9.8, color:C.muted });
+  T(s, '거주인구: 주민등록' + (has('CROSS.pop60_ym') ? ' ' + Q('CROSS.pop60_ym', '') : '') + ' · ' + Q('CROSS.skt_unit', 'SKT: 50m 셀별 월의 일평균 유동인구를 행정동별로 더한 값'), { x:0.7, y:3.53, w:3.95, h:0.38, fontSize:7.5, color:C.muted });
   card(s, 0.5, 4.1, 4.3, 0.9, C.paleO);
-  T(s, `중첩 분석: HBI 상위 25% × KCB 60세 이상 소득 하위 25% 행정동 ${V('CROSS.kcb_overlap', '___곳')} → 이동과 경제 부담이 겹친 최우선 지역`, { x:0.7, y:4.1, w:3.95, h:0.9, fontSize:10, bold:true, color:C.dark, valign:'middle' });
+  T(s, `중첩 분석: HBI 상위 25% × KCB ${Q('CROSS.kcb_rule', '60세 이상 저소득 25%')} 행정동 ${V('CROSS.kcb_overlap', '___곳')} → 이동과 경제 부담이 겹친 최우선 지역`, { x:0.7, y:4.1, w:3.95, h:0.9, fontSize:10, bold:true, color:C.dark, valign:'middle' });
   const skt = IMG('skt');
   if (skt) s.addImage({ path: skt, x:5.1, y:1.4, w:4.4, h:2.75 });
-  else ph(s, 5.1, 1.4, 4.4, 2.75, `산점도 삽입\nx: 행정동 평균 HBI · y: 외출 지수\n상관계수 r = ${V('CROSS.skt_r', '____')} (p = ${V('CROSS.skt_p', '____')})`, 10.5, 'img:skt');
+  else ph(s, 5.1, 1.4, 4.4, 2.75, `산점도 삽입\nx: 행정동 평균 HBI · y: 외출 지수\n순위상관 ρ = ${V('CROSS.skt_rho', '____')} (${V('CROSS.skt_p', 'p = ____')})`, 10.5, 'img:skt');
   T(s, [
     { text:'결과 해석: ', options:{ bold:true, color:C.orange } },
     { text:V('CROSS.interp', '____________________________'), options:{ bold:true, color:C.dark } },
   ], { x:5.1, y:4.25, w:4.4, h:has('CROSS.points') ? 0.55 : 0.75, fontSize:10.5, valign:'top' });
   if (has('CROSS.points')) T(s, '보조 근거 · ' + Q('CROSS.points', ''), { x:5.1, y:4.82, w:4.4, h:0.36, fontSize:7.5, color:C.muted });
   src(s, '※ 연령 기준: SKT·KCB 수치는 60세 이상(데이터정의서상 10세 구간), 다른 장의 고령인구는 65세 이상(주민등록)');
+  s.addNotes(`읽은 파일: SKT ${Q('CROSS.skt_src', '없음')} / KCB ${Q('CROSS.kcb_src', '없음')} / 보조 근거 ${Q('CROSS.points_src', '없음')}. 외출 지수 순위상관 ρ ${Q('CROSS.skt_rho', '-')} (${Q('CROSS.skt_p', '-')}, 행정동 ${Q('CROSS.skt_n', '-')}곳, p 는 t 분포 근사).\n`);
   s.addNotes('상호제공데이터 연계 가점 장표. 가설이 기각되더라도 그 자체가 인사이트이니 결과를 그대로 보고합니다. 이 장의 SKT·KCB 수치는 모두 60세 이상입니다. SKT 연령 구간은 60대 이상이 가장 위 구간이고 KCB 도 60대·70세 이상으로만 나뉘어 65세로 자를 수 없습니다. 다른 장의 고령인구(65세 이상, 주민등록)와 섞어 말하지 않습니다.');
 };
 

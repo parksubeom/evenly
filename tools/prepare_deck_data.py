@@ -9,6 +9,9 @@ tools/prepare_deck_data.py ─ 반출 결과 파일 → 기획서에 넣을 값(
                            값이 없으면 null → build_deck.js 가 빈칸(___)·점선 박스를 그대로 두고 누락 목록에 적습니다.
   deck/data/missing.txt    누락 목록 초안 (build_deck.js 가 슬라이드 번호를 붙여 다시 씁니다)
   deck/img/results/*.png   결과 지도(목적지별), 순위 역전 산점도, 선정지 백분위 막대, SKT 결합 산점도(있을 때)
+[19장]  외출 지수 = SKT 60세 이상 유동인구(행정동 합) ÷ 60세 이상 거주인구. SKT 는 v5 10(points_SKT_*_dong.csv) 우선, 없으면 v4 07(join_SKT_*.csv).
+        분모는 결과 폴더의 pop60.csv(가짜 시험) 또는 data_public/pop60.csv (tools/prep_elderly_pop.py --min-age 60).
+        KCB 중첩 방향은 KCB_HIGH_IS_POOR 한 줄. 보조 근거는 11(legal_summary.csv) 우선, 없으면 10 개수 모드 점 자료
 [원칙]  값을 지어내지 않습니다. 파일이 없거나 값이 비어 있으면 null 로 두고 "필요한 파일"을 적습니다.
         그림은 matplotlib 이 필요합니다 (python3 -m pip install --user matplotlib). 없으면 그림만 누락으로 처리.
 """
@@ -18,6 +21,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from evenly_common import (ROOT, TARGET_GU, TARGET_LABEL, FAKE_MARKER, RAW_EXPORT, is_fake_dir, load_dongs, dong_of, read_csv, num, truthy)
 
 HI, LO = 1.8, 1.3
+# 19장 KCB 중첩 방향. v5 기본 KCB 값 "KCB_60세이상_월200만원이하비율" = C1~C3 인원 ÷ C1~C22 인원
+#   (KCB_데이터정의서.xlsx: C1_CNT~C22_CNT 는 월 소득 구간별 인원, C1~C3 가 월 200만원 이하) → 값이 높을수록 저소득
+KCB_HIGH_IS_POOR = True
+KCB_EXPECT = "월200만원이하비율"   # KCB 값 이름에 이 글자가 없으면 방향을 모르는 값으로 보고 중첩 수를 비움 (v4 "KCB_소득" 은 금액)
 DECK = os.path.join(ROOT, "deck")
 OUT_JSON = os.path.join(DECK, "data", "results.json")
 OUT_MISSING = os.path.join(DECK, "data", "missing.txt")
@@ -98,6 +105,26 @@ def pearson(xs, ys):
     sxx = sum((x - mx) ** 2 for x in xs)
     syy = sum((y - my) ** 2 for y in ys)
     return sxy / math.sqrt(sxx * syy) if sxx > 0 and syy > 0 else None
+
+
+def ranks(xs):
+    """순위 (같은 값은 평균 순위)"""
+    o = sorted(range(len(xs)), key=lambda i: xs[i])
+    rk = [0.0] * len(xs)
+    i = 0
+    while i < len(o):
+        j = i
+        while j + 1 < len(o) and xs[o[j + 1]] == xs[o[i]]:
+            j += 1
+        for t in range(i, j + 1):
+            rk[o[t]] = (i + j) / 2 + 1
+        i = j + 1
+    return rk
+
+
+def spearman(xs, ys):
+    """스피어만 ρ = 순위의 피어슨 r. p 는 corr_p(ρ, n) 로 t 분포 근사"""
+    return pearson(ranks(xs), ranks(ys))
 
 
 # ── 결과 모음 ───────────────────────────────────────────────────
@@ -325,53 +352,107 @@ def main():
             tot = sum(num(r.get(c)) or 0 for r in jrows for c in use)
             parts.append(f"{ko} 약 {f_about(tot)}명")
     optional("IMPACT.joined", "HBI 1.8 이상 거주 추정(장애인·독거노인)", ["results/dong_joined.csv (tools/outside_join_dong.py)"], ", ".join(parts) or None)
+    # ── 보조 근거 1줄: 11 법정동 교통사고(v5) 우선, 없으면 10 점 자료(개수 모드). SKT 처럼 값 합계 모드인 점 자료는 여기서 빼고 19장 본문에서 씀 ──
     pts = {}
     for r in R("points_summary.csv") or []:
         pts.setdefault(r["data"], {})[r["metric"].strip()] = num(r["value"])
-    ptxt = None
+    legal = {}
+    for r in R("legal_summary.csv") or []:
+        legal.setdefault(r["data"], {})[r["metric"].strip()] = num(r["value"])
+    ptxt, psrc = None, None
+    for nm, m in legal.items():
+        lo_, hi_, rho_ = (m.get("HBI 하위 25% 법정동 평균(필지 100개당)"), m.get("HBI 상위 25% 법정동 평균(필지 100개당)"),
+                          m.get("법정동 HBI 평균 vs 필지 100개당 건수: 스피어만"))
+        if lo_ is not None and hi_ is not None:
+            ptxt = (f"{nm.replace('_', ' ')}: HBI 상위 25% 법정동 필지 100개당 {hi_:.2f}건 vs 하위 25% {lo_:.2f}건"
+                    + (f", 순위상관 ρ = {rho_:.2f}" if rho_ is not None else "") + " (상관이며 인과 아님)")
+            psrc = f"legal_summary.csv ({nm}, 11_legal_dong_join.py)"
+            break
     for nm, m in pts.items():
+        if ptxt or any(k.startswith("분석 범위 안 값 합계") for k in m):
+            continue
         lo_, hi_, rho_ = (m.get("HBI 하위 25% 동 평균(건물 100개당)"), m.get("HBI 상위 25% 동 평균(건물 100개당)"),
                           m.get("동별 HBI 평균 vs 건물 100개당 점 수: 스피어만"))
         if lo_ is not None and hi_ is not None:
             ptxt = (f"{nm.replace('_', ' ')}: HBI 상위 25% 동 건물 100개당 {hi_:.2f}건 vs 하위 25% 동 {lo_:.2f}건"
                     + (f", 순위상관 ρ = {rho_:.2f}" if rho_ is not None else "") + " (상관이며 인과 아님)")
-            break
-    optional("CROSS.points", "보조 근거: 점 자료 결합", ["points_summary.csv (10_points_join.py, v5)"], ptxt)
+            psrc = f"points_summary.csv ({nm}, 10_points_join.py)"
+    optional("CROSS.points", "보조 근거: 교통사고 등 결합", ["legal_summary.csv (11, v5) 또는 points_summary.csv (10)"], ptxt)
+    optional("CROSS.points_src", "보조 근거 출처 파일", [], psrc)
 
     # ── 19장 상호제공데이터 ──
     js = {}
     for r in R("join_summary.csv") or []:
         js.setdefault(r["data"], {})[r["metric"].strip()] = num(r["value"])
-    skt_key = next((k for k in js if "SKT" in k.upper()), None)
-    kcb_key = next((k for k in js if "KCB" in k.upper()), None)
-    sk = js.get(skt_key, {})
-    skt_r, skt_n = sk.get("HBI 평균 vs 값: 피어슨 상관"), sk.get("결합 행정동 수")
-    skt_p = corr_p(skt_r, int(skt_n) if skt_n else None)
-    need_j = ["join_summary.csv (07_join_dong.py, SKT)"]
-    B.put("CROSS.skt_r", "SKT 결합 상관계수 r", need_j, f_num(skt_r))
-    B.put("CROSS.skt_p", "SKT 결합 p-value", need_j, (("< 0.001" if skt_p < 0.001 else f"{skt_p:.3f}") if skt_p is not None else None))
-    B.put("CROSS.skt_n", "SKT 결합 행정동 수", need_j, f_int(skt_n))
-    B.put("CROSS.skt_rho", "SKT 결합 스피어만 ρ", need_j, f_num(sk.get("HBI 평균 vs 값: 스피어만 순위상관")))
-    interp = None
-    if skt_r is not None and skt_p is not None:
-        if skt_r < 0 and skt_p < 0.05:
-            interp = f"가설 지지: HBI가 높은 동일수록 60세 이상 유동인구가 적습니다 (r = {skt_r:.2f})"
-        elif skt_r < 0:
-            interp = f"같은 방향이지만 통계적으로 뚜렷하지 않습니다 (r = {skt_r:.2f}, p = {skt_p:.2f})"
+    # (1) SKT 60세 이상 유동인구 행정동 합: v5 는 10_points_join 결과(points_<이름>_dong.csv, 값 합계 모드), v4 는 07(join_<이름>.csv)
+    skt_rows, skt_src, skt_mode = None, None, None
+    p10 = [k for k in pts if "SKT" in k.upper() and any(x.startswith("분석 범위 안 값 합계") for x in pts[k])]
+    p10 = sorted(p10, key=lambda k: ("60" not in k, k))                 # 60세 이상 자료 우선 (낮시간 유동인구는 전 연령)
+    if p10 and R(f"points_{p10[0]}_dong.csv"):
+        k = p10[0]
+        skt_rows = [(r["adm_cd"], num(r.get("hbi_mean")), num(r.get("n_points"))) for r in R(f"points_{k}_dong.csv")]
+        skt_src, skt_mode = f"points_{k}_dong.csv (10_points_join.py, 값 합계)", "sum"
+    else:
+        k7 = next((k for k in js if "SKT" in k.upper()), None)
+        if k7 and R(f"join_{k7}.csv"):
+            skt_rows = [(r["adm_cd"], num(r.get("hbi_mean")), num(r.get(k7))) for r in R(f"join_{k7}.csv")]
+            skt_src, skt_mode = f"join_{k7}.csv (07_join_dong.py)", "join"
+    # (2) 분모: 60세 이상 거주인구 (tools/prep_elderly_pop.py --min-age 60). 결과 폴더에 있으면 그것(가짜 시험), 없으면 data_public
+    pop_path = next((p for p in (S("pop60.csv"), os.path.join(ROOT, "data_public", "pop60.csv")) if os.path.exists(p)), None)
+    pop60 = {r["adm_cd"]: num(r.get("pop60")) for r in (read_csv(pop_path) or [])} if pop_path else {}
+    pop_ym = sorted({r.get("base_ym", "") for r in (read_csv(pop_path) or [])} - {""}) if pop_path else []
+    # (3) 외출 지수 = SKT 60세 이상 유동인구(행정동 합) ÷ 60세 이상 거주인구. 07 경로(v4)는 값의 뜻을 몰라 나누지 않고 그대로 씀
+    idx = []
+    for code, h, v in skt_rows or []:
+        if h is None or v is None:
+            continue
+        if skt_mode == "sum":
+            p = pop60.get(code)
+            if p:
+                idx.append((h, v / p))
         else:
-            interp = f"가설과 다른 결과: 경사 외 요인이 외출을 좌우합니다 (r = {skt_r:.2f})"
+            idx.append((h, v))
+    rho = spearman([x for x, _ in idx], [y for _, y in idx]) if len(idx) >= 5 else None
+    p_rho = corr_p(rho, len(idx)) if rho is not None else None
+    need_j = ["points_SKT_*_dong.csv (10, v5) 또는 join_SKT_*.csv (07)"] + (["data_public/pop60.csv (tools/prep_elderly_pop.py --min-age 60)"] if skt_mode != "join" else [])
+    B.put("CROSS.skt_rho", "외출 지수 vs HBI 순위상관 ρ", need_j, f_num(rho))
+    B.put("CROSS.skt_p", "외출 지수 순위상관 p", need_j, (("p < 0.001" if p_rho < 0.001 else f"p = {p_rho:.3f}") if p_rho is not None else None))
+    B.put("CROSS.skt_n", "외출 지수 행정동 수", need_j, f_int(len(idx)) if rho is not None else None)
+    optional("CROSS.skt_src", "SKT 읽은 파일", [], (skt_src + (f" ÷ {os.path.relpath(pop_path, ROOT)}" if skt_mode == "sum" and pop_path else "")) if skt_src else None)
+    optional("CROSS.skt_unit", "SKT 값 단위", [], {"sum": "SKT: 50m 셀별 '월의 일평균' 60대 이상 유동인구(남녀 합)를 기준월 평균해 행정동별로 더한 값(명/일)",
+                                                  "join": "SKT: 07_join_dong.py 결과 값 그대로 (v4 형식, 거주인구로 나누지 않음)"}.get(skt_mode))
+    optional("CROSS.pop60_ym", "60세 이상 거주인구 기준일", [], ",".join(pop_ym) or None)
+    interp = None
+    if rho is not None and p_rho is not None:
+        if rho < 0 and p_rho < 0.05:
+            interp = f"가설 지지: HBI가 높은 동일수록 60세 이상 외출 지수가 낮습니다 (ρ = {rho:.2f})"
+        elif rho < 0:
+            interp = f"같은 방향이지만 통계적으로 뚜렷하지 않습니다 (ρ = {rho:.2f}, p = {p_rho:.2f})"
+        else:
+            interp = f"가설과 다른 결과: 경사 외 요인이 외출을 좌우합니다 (ρ = {rho:.2f})"
     B.put("CROSS.interp", "결과 해석", need_j, interp)
+    # (4) KCB 중첩: HBI 상위 25% ∩ 저소득 쪽 25%. 방향은 맨 위 KCB_HIGH_IS_POOR 한 줄로 정함
+    kcb_key = next((k for k in js if "KCB" in k.upper()), None)
     kcb_rows = R(f"join_{kcb_key}.csv") if kcb_key else None
     overlap = None
-    if kcb_rows:
+    if kcb_rows and KCB_EXPECT not in kcb_key:
+        print(f"  !! KCB 값 '{kcb_key}' 이름에 '{KCB_EXPECT}' 가 없어 높은 값이 저소득인지 알 수 없습니다 → 중첩 수를 비움 (KCB_HIGH_IS_POOR 확인)")
+    elif kcb_rows:
         vals = [(num(r["hbi_mean"]), num(r.get(kcb_key))) for r in kcb_rows]
         vals = [v for v in vals if v[0] is not None and v[1] is not None]
         if len(vals) >= 8:
             hq = sorted(v[0] for v in vals)[int(len(vals) * 0.75)]
-            iq = sorted(v[1] for v in vals)[int(len(vals) * 0.25)]
-            overlap = sum(1 for h, i in vals if h >= hq and i <= iq)
-    B.put("CROSS.kcb_overlap", "HBI 상위 25% × KCB 60세 이상 소득 하위 25% 행정동 수", ["join_KCB_*.csv (07_join_dong.py)"], f"{overlap}곳" if overlap is not None else None)
-    skt_rows = R(f"join_{skt_key}.csv") if skt_key else None
+            ks = sorted(v[1] for v in vals)
+            if KCB_HIGH_IS_POOR:
+                iq = ks[int(len(vals) * 0.75)]
+                overlap = sum(1 for h, i in vals if h >= hq and i >= iq)
+            else:
+                iq = ks[int(len(vals) * 0.25)]
+                overlap = sum(1 for h, i in vals if h >= hq and i <= iq)
+    B.put("CROSS.kcb_overlap", "HBI 상위 25% × KCB 60세 이상 저소득 25% 행정동 수", ["join_KCB_*.csv (07_join_dong.py)"], f"{overlap}곳" if overlap is not None else None)
+    optional("CROSS.kcb_rule", "KCB 중첩 기준", [], "60세 이상 월 200만원 이하 비율 상위 25%" if KCB_HIGH_IS_POOR else "60세 이상 소득 하위 25%")
+    optional("CROSS.kcb_src", "KCB 읽은 파일", [], f"join_{kcb_key}.csv (07_join_dong.py), KCB_HIGH_IS_POOR = {KCB_HIGH_IS_POOR}" if kcb_rows else None)
+    skt_plot = idx
 
     # ── 22장 한 사람의 변화: 실측 구간 + intervention_summary 의 선정지(planned) 행 (v5) ──
     isum = R("intervention_summary.csv") or []
@@ -436,10 +517,10 @@ def main():
               f_num(num(r["rank_corr_vs_base"])), f_pct(num(r["top10_overlap"]), 0)] for r in sens])
 
     # ── 그림 ──
-    plots = make_plots(B, grid, targets, T0, vs, site_rows, skt_key, skt_rows, skt_r, skt_p)
+    plots = make_plots(B, grid, targets, T0, vs, site_rows, skt_plot, rho, p_rho)
     if not plots:
         for k, lab, need in [("map", "결과 지도", ["grid_hbi.csv", "matplotlib"]), ("ranks", "순위 역전 산점도", ["grid_hbi.csv", "matplotlib"]),
-                             ("sites", "선정지 백분위 막대", ["validation_sites.csv", "matplotlib"]), ("skt", "SKT 결합 산점도", ["join_SKT_*.csv", "matplotlib"])]:
+                             ("sites", "선정지 백분위 막대", ["validation_sites.csv", "matplotlib"]), ("skt", "외출 지수 산점도", ["points_SKT_*_dong.csv", "pop60.csv", "matplotlib"])]:
             B.img(k, lab, need, None)
 
     data = {"source": source, "src": os.path.relpath(src, ROOT), "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
@@ -456,7 +537,7 @@ def main():
           f"그림 {sum(1 for v in B.images.values() if v['path'])}/{len(B.images)}, 누락 {len(miss)})")
 
 
-def make_plots(B, grid, targets, T0, vs, site_rows, skt_key, skt_rows, skt_r, skt_p):
+def make_plots(B, grid, targets, T0, vs, site_rows, skt_plot, skt_rho, skt_p):
     try:
         import matplotlib
         matplotlib.use("Agg")
@@ -578,12 +659,9 @@ def make_plots(B, grid, targets, T0, vs, site_rows, skt_key, skt_rows, skt_r, sk
     else:
         B.img("sites", "선정지 백분위 막대", ["validation_sites.csv"], None)
 
-    # 4) SKT 결합 산점도 (있을 때만)
-    pts = []
-    for r in skt_rows or []:
-        x, y = num(r.get("hbi_mean")), num(r.get(skt_key))
-        if x is not None and y is not None:
-            pts.append((x, y))
+    # 4) 외출 지수 산점도 (있을 때만): x 행정동 평균 HBI, y 60세 이상 유동인구 ÷ 60세 이상 거주인구
+    pts = [p for p in (skt_plot or []) if p[0] is not None and p[1] is not None]
+    need = ["points_SKT_*_dong.csv (10) 또는 join_SKT_*.csv (07)", "pop60.csv"]
     if len(pts) >= 3:
         fig, ax = plt.subplots(figsize=(4.4, 2.75), dpi=220)
         ax.scatter([p[0] for p in pts], [p[1] for p in pts], s=12, color=DARK, alpha=0.7, linewidths=0)
@@ -593,14 +671,14 @@ def make_plots(B, grid, targets, T0, vs, site_rows, skt_key, skt_rows, skt_r, sk
             b = sum((p[0] - mx) * (p[1] - my) for p in pts) / sxx
             xs = [min(p[0] for p in pts), max(p[0] for p in pts)]
             ax.plot(xs, [my + b * (x - mx) for x in xs], color=ORANGE, lw=1.6)
-        if skt_r is not None:
+        if skt_rho is not None:
             ptxt = ("p < 0.001" if skt_p < 0.001 else f"p = {skt_p:.3f}") if skt_p is not None else ""
-            ax.text(0.98, 0.95, f"r = {skt_r:.2f}  {ptxt}  (n = {n})", transform=ax.transAxes, ha="right", va="top", fontsize=8, color=ORANGE, fontweight="bold")
-        ax.set_xlabel("행정동 평균 HBI", fontsize=8.5, color=MUTED); ax.set_ylabel(skt_key.replace("_", " "), fontsize=8.5, color=MUTED)
+            ax.text(0.98, 0.95, f"ρ = {skt_rho:.2f}  {ptxt}  (n = {n})", transform=ax.transAxes, ha="right", va="top", fontsize=8, color=ORANGE, fontweight="bold")
+        ax.set_xlabel("행정동 평균 HBI", fontsize=8.5, color=MUTED); ax.set_ylabel("외출 지수 (60세 이상 유동 ÷ 거주)", fontsize=8.5, color=MUTED)
         style(ax); fig.tight_layout(pad=0.4); fig.savefig(P("skt.png"), transparent=True); plt.close(fig)
-        B.img("skt", "SKT 결합 산점도", ["join_SKT_*.csv (07_join_dong.py)"], P("skt.png"))
+        B.img("skt", "외출 지수 산점도", need, P("skt.png"))
     else:
-        B.img("skt", "SKT 결합 산점도", ["join_SKT_*.csv (07_join_dong.py)"], None)
+        B.img("skt", "외출 지수 산점도", need, None)
     return True
 
 
