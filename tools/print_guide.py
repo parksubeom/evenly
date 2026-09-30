@@ -31,7 +31,7 @@ h1 { font-size: 19pt; margin: 0 0 6pt; }
 h2 { font-size: 16pt; margin: 0 0 5pt; padding: 3pt 8pt; background: #1f3b2d; color: #fff; break-before: page; }
 h2.first { break-before: auto; margin-top: 10pt; }
 h1.part { font-size: 20pt; break-before: page; margin: 0 0 6pt; padding: 6pt 10pt; border: 2.5pt solid #1f3b2d; color: #1f3b2d; }
-h3 { font-size: 13.5pt; margin: 10pt 0 3pt; border-bottom: 1.2pt solid #1f3b2d; break-after: avoid; }
+h3 { font-size: 13.5pt; margin: 6pt 0 2pt; border-bottom: 1.2pt solid #1f3b2d; break-after: avoid; }
 table.wide td code { font-size: 8.2pt; white-space: nowrap; }
 pre.cmdbox.small { font-size: 9pt; font-weight: normal; }
 p { margin: 2pt 0; } ol, ul { margin: 2pt 0 3pt 20pt; padding: 0; } li { margin: 1pt 0; }
@@ -67,7 +67,7 @@ td kbd { font-size: 9.5pt; }
 .win .tb { font: 9.5pt 'Segoe UI', 'Apple SD Gothic Neo', sans-serif; padding: 2pt 6pt; background: #f0f0f0; border-bottom: 1pt solid #ccc; display: flex; justify-content: space-between; }
 .win .tb .ctl { letter-spacing: 9pt; color: #444; }
 .win.cmd .tb { background: #fff; }
-.win.cmd .body { background: #0c0c0c; color: #cccccc; font: 8.8pt/1.32 Menlo, Consolas, monospace; padding: 5pt 7pt; white-space: pre-wrap; overflow-wrap: anywhere; }
+.win.cmd .body { background: #0c0c0c; color: #ececec; font: 8.8pt/1.32 Menlo, Consolas, monospace; padding: 5pt 7pt; white-space: pre-wrap; overflow-wrap: anywhere; }
 .win.note .menu { font: 9pt 'Apple SD Gothic Neo', sans-serif; padding: 1pt 6pt; border-bottom: 1pt solid #ddd; color: #333; word-spacing: 6pt; }
 .win.note .body { background: #fff; color: #000; font: 9.4pt/1.38 Menlo, Consolas, monospace; padding: 5pt 7pt; white-space: pre-wrap; overflow-wrap: anywhere; }
 .win.start { width: 60%; background: #f3f3f3; }
