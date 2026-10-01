@@ -15,11 +15,11 @@ tools/print_guide.py ─ docs/1차방문_안내서.md → 인쇄용 A4 PDF (docs
   | 성공하면 | 이상하면 |  → 초록·빨강 두 칸
 [원칙]  화면 예시의 출력 글자는 맥 리허설(v4) 로그에서 그대로 가져옴. 경로만 D:\작업폴더\hbi 등으로 바꿈. 줄인 곳은 "…"
 """
-import html, os, re, subprocess, tempfile
+import html, os, re, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC = os.path.join(ROOT, "docs", "1차방문_안내서.md")
-OUT = os.path.join(ROOT, "docs", "1차방문_안내서.pdf")
+SRC = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.join(ROOT, "docs", "1차방문_안내서.md")   # 다른 안내서: python tools/print_guide.py <md> [pdf]
+OUT = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else os.path.splitext(SRC)[0] + ".pdf"
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 CIRCLE = "①②③④⑤⑥⑦⑧⑨"
 CAPTION = "화면 예시 — 실제 화면과 글꼴·색·숫자가 다를 수 있음"
@@ -47,6 +47,7 @@ td code { font-size: 10pt; }
 table.bbox td { vertical-align: middle; white-space: nowrap; font-size: 12pt; }
 table.bbox td code { font-size: 15pt; font-weight: bold; background: none; }
 table.memo td { height: 22pt; }
+table.memo2 td { height: 30pt; vertical-align: middle; }
 .run { margin: 3pt 0 3pt; break-inside: avoid; }
 .run .what { font-size: 10.5pt; color: #1f3b2d; margin: 0 0 1.5pt 1pt; }
 .run .what b { background: #e3efe6; padding: 0 4pt; margin-right: 4pt; border-radius: 2pt; }
@@ -134,7 +135,7 @@ def cells(line):
 
 
 WIDTHS = {("물어볼 것", "받아 적을 주소"): (52, 48), ("화면 문구", "뜻 → 할 일"): (40, 60), ("구역", "동네", "메모장에 넣을 줄"): (9, 15, 76),
-          ("화면에 나온 것", "뜻", "할 일"): (36, 19, 45), ("부", "누가 보나", "내용"): (24, 26, 50),
+          ("화면에 나온 것", "뜻", "할 일"): (36, 19, 45), ("자료", "config.py 에서 찾을 이름", "미리 넣은 열 (정의서 기준)"): (18, 34, 48), ("항목", "적을 것"): (34, 66), ("순서", "할 일", "입력"): (12, 50, 38), ("부", "누가 보나", "내용"): (24, 26, 50),
           ("순서", "할 일", "명령 / 바꿀 줄"): (14, 46, 40), ("단계", "화면 문구", "기준"): (8, 40, 52), ("찾을 줄 (처음 모습)", "바꿀 내용"): (50, 50),
           ("볼 줄", "연습 구역 1", "연습 구역 2"): (40, 28, 32), ("항목", "이 맥 (리허설)", "안심구역 (Windows, QGIS 3.32)"): (16, 32, 52),
           ("구역", "대상 구", "config.py 에 넣을 줄", "크기", "들어 있는 선정지 (잘린 선까지 거리)"): (6, 11, 42, 14, 27), ("구역", "① 최대 연결망 노드 비율", "② 데이터 경계 500m 이내 (x%)", "끝났나 ○/×", "×일 때 오류 마지막 줄"): (8, 20, 22, 14, 36)}
@@ -186,7 +187,7 @@ def convert(md):
                 out.append('<div class="okbad"><div class="ok"><b class="h">✔ 성공하면</b>' + inline(rows[0][0]) +
                            '</div><div class="bad"><b class="h">✘ 이상하면</b>' + inline(rows[0][1]) + "</div></div>")
             else:
-                klass = "bbox" if "메모장에 넣을 줄" in head else ("memo" if "끝났나 ○/×" in head else ("wide" if "config.py 에 넣을 줄" in head else ""))
+                klass = "bbox" if "메모장에 넣을 줄" in head else ("memo" if "끝났나 ○/×" in head else ("memo2" if head == ["항목", "적을 것"] else ("wide" if "config.py 에 넣을 줄" in head else "")))
                 cols = "".join(f'<col style="width:{w}%">' for w in WIDTHS[tuple(head)]) if tuple(head) in WIDTHS else ""
                 out.append(f'<table class="{klass}"><colgroup>{cols}</colgroup><tr>' + "".join(f"<th>{inline(h)}</th>" for h in head) + "</tr>"
                            + "".join("<tr>" + "".join(f"<td>{inline(c)}</td>" for c in r) + "</tr>" for r in rows) + "</table>")
