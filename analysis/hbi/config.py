@@ -97,6 +97,7 @@ COL = {
 # ────────────────────────────────────────────────────────────────────
 SEG_LEN = 30.0           # 길을 몇 m 단위로 잘라서 경사를 계산할지 (짧을수록 정밀·느림)
 SNAP_TOL = 1.0           # 이 거리(m) 안의 점들은 같은 교차점으로 합침
+KEEP_NET_SHARE = 0.05    # [v5] 가장 큰 길 덩어리의 5% 이상인 덩어리는 모두 남김 (서로 떨어진 구가 여럿일 때 구마다 하나씩)
 STAIR_CONNECT_TOL = 15.0 # ▲ 계단 끝을 가까운 길과 이어 붙일 최대 거리(m). 계단이 안 쓰이면 25로
 ORIGIN_SNAP_MAX = 60.0   # 건물에서 가장 가까운 길까지 이 거리(m)를 넘으면 분석에서 제외
 BRIDGE_TOL = 10.0        # ▲ 끊긴 길 끝을 다른 길에 이어 붙일 최대 거리(m). 연결망 비율이 낮으면 15로
@@ -144,7 +145,65 @@ SENSITIVITY = {
 #   value_cols: 분석할 숫자 열 이름 목록 (예: 65세 이상 유동인구 열들을 모두 적으면 합계를 사용)
 #   base_col  : (선택) 나눌 기준 열. 예) 전체 유동인구 → 비율로 비교. 없으면 None
 #   filter    : (선택) {"열이름": "값"} 조건에 맞는 행만 사용. 예) {"성별": "전체"}
+#   sep       : (선택) 구분자. 비우면 쉼표·| ·탭 자동 인식 [v5]
+#   base_cols : (선택) 나눌 기준 열 여러 개의 합 [v5]. filter 값은 목록·"__LATEST__"(그 열의 가장 늦은 값) 가능 [v5]
+#  [v5] 아래 기본값은 한국데이터산업진흥원 데이터정의서(KCB_데이터정의서.xlsx) 의 실제 열·코드값입니다.
+#   KCB 행정동 단위 소득관련 통계정보(TB_KCB_INCOME_STAT_DATASET.csv): 분기(BS_YR_QT) × 성 × 연령 × 월소득 구간 대상자 수(C1~C22)
+#   → 60세 이상(AGE_CD 60: 60~69세, 70: 70세 이상. 65세 구분은 없음), 거주지 기준(RES_COM_CD 1), 가장 최근 분기에서
+#     월 200만원 이하(C1~C3) 대상자 비율 = C1~C3 합 ÷ C1~C22 합 (정의서에 총인원 열이 없어 구간 합을 분모로 씀)
+#   SKT 유동인구는 행정동 코드가 없는 50m 셀 자료라 여기가 아니라 아래 POINT_DATA(10_points_join.py) 에서 붙임
 JOIN_DATA = {
-    "SKT_고령유동인구": {"path": None, "code_col": "ADM_CD", "value_cols": ["POP_65_OVER"], "base_col": None, "filter": {}},
-    "KCB_소득": {"path": None, "code_col": "ADM_CD", "value_cols": ["AVG_INCOME"], "base_col": None, "filter": {}},
+    "KCB_60세이상_월200만원이하비율": {"path": None, "code_col": "EMD_CD", "value_cols": ["C1_CNT", "C2_CNT", "C3_CNT"],
+                                "base_cols": [f"C{i}_CNT" for i in range(1, 23)],
+                                "filter": {"RES_COM_CD": "1", "AGE_CD": ["60", "70"], "BS_YR_QT": "__LATEST__"}},
+}
+
+# ────────────────────────────────────────────────────────────────────
+# 8. [v5] 이동편의시설 설치 효과 (09_intervention.py)
+# ────────────────────────────────────────────────────────────────────
+#  external/interventions.csv 의 시설(경사형 엘리베이터·모노레일 등)을 "양 끝을 잇는 지름길"로 그래프에 넣고,
+#  설치 전후 왕복 시간을 비교합니다. 프론트엔드로 치면 라우팅 테이블에 새 경로 하나를 추가해 보는 것과 같습니다.
+#  시설 통과 시간 = 대기 wait_s(초) + 직선거리 ÷ speed(m/초) + 끝점까지 걸어가는 거리 ÷ ELDER_SPEED
+#  (interventions.csv 에 wait_s·speed 를 적으면 그 값이 우선, 비우면 아래 종류별 기본값)
+FACILITY = {
+    "elevator": {"wait_s": 60, "speed": 1.0},   # 경사형 엘리베이터
+    "monorail": {"wait_s": 60, "speed": 0.6},   # 모노레일. 근거: 대현산 110m ≈ 4분 (서울시 발표 3~4분)
+    "vertical": {"wait_s": 45, "speed": 1.0},   # 수직 엘리베이터 (+ 보행데크)
+    "ramp":     {"wait_s": 0,  "speed": 0.8},   # 경사로
+}
+INTERVENTION_TARGETS = ["medical", "station", "bus"]   # 설치 효과를 볼 목적지 (결과에 있는 것만 사용)
+BENEFIT_MIN_S = 60        # 설치 후 왕복이 이 초 이상 줄어든 건물을 "수혜 건물"로 셈 (1분)
+INTERVENTION_SNAP_WARN = 50   # 시설 끝점이 길에서 이 거리(m) 넘게 떨어져 있으면 경고 (좌표 확인)
+
+# ────────────────────────────────────────────────────────────────────
+# 9. [v5] 점 자료 결합 (10_points_join.py) — 안심구역에서 받는 교통사고 위치 등
+# ────────────────────────────────────────────────────────────────────
+#  이름: {설정}. path 가 None 이면 건너뜁니다. 개별 점 좌표는 반출하지 않고 행정동·격자별 개수만 냅니다.
+#   path     : CSV 파일 경로
+#   x_col, y_col : 좌표 열 이름 (경도·위도 또는 X·Y)
+#   crs      : 좌표계 (예: "EPSG:5179", 경위도면 "EPSG:4326")
+#   filter   : {"열": "값"} 정확히 일치 (값을 리스트로 주면 그중 하나). 예) {"피해자연령대": ["65세이상", "70대"]}
+#   contains : {"열": "글자"} 글자가 들어 있으면 통과. 예) {"사고유형": "보행자"}
+#   [v5] 값 합계 모드: value_cols(더할 열), agg="sum", period_col(기간 열, 예: 월) → 점 수 대신 값의 기간 평균 합
+#   sep: (선택) 구분자. 비우면 자동 (SKT 파일은 "|")
+#  아래 SKT 기본값은 SKT_데이터정의서.xlsx 의 실제 열: 50m 셀 중심 X_COORD·Y_COORD (UTM-K = EPSG:5179),
+#   값은 "월의 일평균" 유동인구. 연령은 10세 단위라 65세 구분이 없어 "60대 이상"(…_60GU) 을 씀. 12개월이면 월 평균
+POINT_DATA = {
+    "SKT_60대이상유동인구": {"path": None, "x_col": "X_COORD", "y_col": "Y_COORD", "crs": "EPSG:5179",
+                          "value_cols": ["MAN_FLOW_POP_CNT_60GU", "WMAN_FLOW_POP_CNT_60GU"], "agg": "sum", "period_col": "STD_YM",
+                          "filter": {}, "contains": {}},
+    "SKT_낮시간유동인구": {"path": None, "x_col": "X_COORD", "y_col": "Y_COORD", "crs": "EPSG:5179",   # seoul_flow_time.csv, 전 연령
+                        "value_cols": [f"TMST_{h:02d}" for h in range(9, 18)], "agg": "sum", "period_col": "STD_YM",
+                        "filter": {}, "contains": {}},
+}
+
+# ────────────────────────────────────────────────────────────────────
+# 10. [v5] 법정동 이름 자료 결합 (11_legal_dong_join.py) — 좌표 없이 법정동 이름만 있는 자료
+# ────────────────────────────────────────────────────────────────────
+#  한국도로교통공단 교통사고 데이터(TB_KRD_ACCIDENT_DATA.csv): 시도·시군구·법정동 이름만 있고 좌표 없음.
+#  06_parcel.py 결과의 법정동 이름(필지 SGG_NM·EMD_NM) 과 붙입니다. 아래 코드값은 한국도로교통공단_데이터정의서.xlsx 그대로:
+#   accident_type_lv1 "차대사람" (보행자 사고), victim_age "65세이상", sido_nm 에 "서울" 포함
+LEGAL_DONG_DATA = {
+    "교통사고_고령보행자": {"path": None, "sgg_col": "sigungu_nm", "dong_col": "bjd_nm",
+                          "filter": {"accident_type_lv1": "차대사람", "victim_age": "65세이상"}, "contains": {"sido_nm": "서울"}},
 }

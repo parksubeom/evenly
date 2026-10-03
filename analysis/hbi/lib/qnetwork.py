@@ -183,11 +183,16 @@ def build_edges():
     if extra:
         add(extra)
 
-    # ⑧ 가장 큰 덩어리만 남기기 ─────────────────────────
+    # ⑧ 큰 덩어리만 남기기 ─────────────────────────────
+    #    [v5] 대상 구들이 서로 떨어져 있으면(예: 종로·중 / 관악 / 광진 / 강서) 구마다 큰 덩어리가 하나씩 생김.
+    #    v4 는 "가장 큰 덩어리 하나"만 남겨 나머지 구가 통째로 빠졌음 → 가장 큰 것의 KEEP_NET_SHARE(5%) 이상인 덩어리는 모두 남김.
+    #    그보다 작은 조각(주차장 안 길, 끊긴 골목 등)은 예전처럼 버림
     lab = components(e["u"], e["v"], n)
-    big = np.bincount(lab).argmax()                      # 노드가 가장 많은 덩어리 번호
-    giant = lab == big
-    log(f"  끊긴 끝점 연결 {len(extra):,}개 → 최대 연결망 노드 비율 {giant.mean():.1%}  (90% 이상이면 정상)")
+    cnt = np.bincount(lab)
+    big = np.where(cnt >= C.KEEP_NET_SHARE * cnt.max())[0]   # 남길 덩어리 번호들
+    giant = np.isin(lab, big)                                # (이름은 v4 와 같게 giant: "남기는 노드" 표시)
+    log(f"  끊긴 끝점 연결 {len(extra):,}개 → 남긴 연결망 {len(big)}개 (노드 수 {sorted(cnt[big].tolist(), reverse=True)}), "
+        f"노드 비율 {giant.mean():.1%}  (90% 이상이면 정상. 떨어진 구 수만큼 연결망이 나오는 것이 정상)")
     keep = giant[e["u"]]
     e = {k: v[keep] for k, v in e.items()}
     return nodes_xy, giant, e

@@ -40,12 +40,13 @@ for T in targets(b):                              # 목적지 종류마다 반�
     # ── 요약 통계 ──
     summary += [[T, "분석 건물 수", int(v.sum())],
                 [T, f"경계 {C.EDGE_BUFFER}m 이내라 제외한 건물 수", int((~U).sum())],
-                [T, "HBI 중앙값", round(float(np.nanmedian(H)), 3)],
+                # v5: 아래 세 중앙값도 경계 제외 건물(v)만으로 계산 (v4 는 경계 포함이었음). 이름 끝 "(경계 제외)" 가 v5 표시
+                [T, "HBI 중앙값(경계 제외)", round(float(np.nanmedian(H[v])), 3)],
                 [T, f"HBI {lo}~{hi} 비율", round(float(np.mean((H[v] >= lo) & (H[v] < hi))), 3)],
                 [T, f"HBI {hi} 이상 비율", round(float(np.mean(H[v] >= hi)), 3)],
                 [T, f"HBI {hi} 이상 건물 수", int((H[v] >= hi).sum())],
-                [T, "귀갓길(목적지→집) 편도 배수 중앙값", round(float(np.nanmedian(b[f"{T}_home_ratio"])), 3)],
-                [T, "고령자 왕복 중앙값(분)", round(float(np.nanmedian(b[f"{T}_t_elder"])) / 60, 1)],
+                [T, "귀갓길(목적지→집) 편도 배수 중앙값(경계 제외)", round(float(np.nanmedian(b[f"{T}_home_ratio"][v])), 3)],
+                [T, "고령자 왕복 중앙값(분, 경계 제외)", round(float(np.nanmedian(b[f"{T}_t_elder"][v])) / 60, 1)],
                 [T, "휠체어 도달불가 비율", round(float(np.mean(~np.isfinite(b[f"{T}_t_wheel"][U]))), 3)],
                 [T, f"HBI {hi} 이상 건물의 연면적 합(㎡, 고령인구 배분용)", round(float(b["weight"][v & (H >= hi)].sum()))],
                 [T, "분석 건물 연면적 합(㎡)", round(float(b["weight"][v].sum()))]]

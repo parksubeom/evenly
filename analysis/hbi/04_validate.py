@@ -7,10 +7,12 @@
   1) 선정지 재현  → validation_sites.csv
      서울시가 2025년에 고른 5곳(external/sites.csv) 주변 300m 의 평균 HBI 가
      전체 격자 중 상위 몇 %인지(percentile). 0.9 이상 = 상위 10% 안 = 모델이 전문가 판단을 재현
+     [v5] percentile_circle: 모든 250m 격자 중심에 "같은 반경 원"을 그려 그 평균들과 비교한 백분위 (같은 기준끼리 비교)
      → validation_new_candidates.csv : 선정지보다 HBI 가 높은데 선정 안 된 곳 (= 공모가 놓친 곳)
   2) 구간 재현    → validation_routes.csv
      external/od_pairs.csv 의 출발·도착 사이 경로 길이·시간. 대현산배수지공원 휠체어 우회(서울시 발표 약 770m)
      와 비교하고, 현장실측 시간(measured_min)이 있으면 성인 속도 예측(adult_min)과 상관계수 계산
+     [v5] 실측 3구간 이상이면 상관계수를 validation_measured.csv (n, r_adult_pred_vs_measured) 로도 저장
   3) 기여도       → validation_ablation.csv
      데이터를 하나씩 뺐을 때 결과가 얼마나 달라지는지 (DEM 제외 / 계단 제외 / 큰 격자로 집계 / DEM 1m)
 """
@@ -53,21 +55,41 @@ rows, sx, sy = csv_points(os.path.join(C.EXTERNAL, "sites.csv"))
 if not rows:
     log("sites.csv 좌표 없음 → 선정지 검증 건너뜀")
 else:
-    res = []
+    # [v5] 같은 기준끼리 비교하기: 모든 250m 격자 중심에서 "선정지와 같은 반경" 원 안 건물 평균 HBI 를 구해 분포로 씀
+    #   (v4 의 percentile 은 "선정지 반경 300m 건물 평균" 을 "250m 격자 평균" 분포와 비교 → 기준이 달랐음. 기존 열은 그대로 둠)
+    rad0 = float(rows[0].get("radius_m") or 300)               # sites.csv 첫 행 반경 (기본 300m)
+    vi = np.where(valid)[0]                                     # 유효 건물 번호들
+    bidx = NearestIndex(np.c_[X[vi], Y[vi]])                    # 유효 건물 좌표 색인 (반경 검색용)
+    allkeys = np.unique(np.floor(X[vi] / C.GRID).astype(np.int64) * 10**7 + np.floor(Y[vi] / C.GRID).astype(np.int64))
+    circ = []                                                   # 격자 중심마다 원 평균 HBI
+    for k in allkeys:
+        cx0, cy0 = (k // 10**7 + 0.5) * C.GRID, (k % 10**7 + 0.5) * C.GRID
+        j = bidx.within((cx0, cy0), rad0)                       # 반경 안 유효 건물 (bidx 기준 번호)
+        if len(j) >= C.MIN_COUNT:                               # 건물이 너무 적은 원은 분포에서 뺌
+            circ.append(float(np.mean(H[vi[np.asarray(j, int)]])))
+    circ = np.array(circ)
+    log(f"  같은 반경({rad0:g}m) 원 분포: 격자 중심 {len(allkeys):,}개 중 {len(circ):,}개 사용 (건물 {C.MIN_COUNT}개 미만 제외)")
+    fmt = lambda v, d=3: round(float(v), d) if np.isfinite(v) else ""   # NaN 은 "nan" 글자 대신 빈 칸
+    res, site_h = [], []
     for r, x, y in zip(rows, sx, sy):
         rad = float(r.get("radius_m") or 300)
         m = valid & (np.hypot(X - x, Y - y) <= rad)         # 선정지 반경 안의 건물
         hm = float(np.mean(H[m])) if m.any() else np.nan
-        pct = float(np.mean(cmean < hm)) if np.isfinite(hm) else np.nan   # 이 값보다 낮은 격자의 비율 = 백분위
-        res.append([r["name"], int(m.sum()), round(hm, 3),
+        pct = float(np.mean(cmean < hm)) if np.isfinite(hm) else np.nan   # 이 값보다 낮은 격자의 비율 = 백분위 (v4 방식)
+        pc = float(np.mean(circ < hm)) if np.isfinite(hm) and len(circ) else np.nan   # 같은 반경 원 분포 안 백분위 (v5)
+        site_h.append(hm)
+        res.append([r["name"], int(m.sum()), fmt(hm),
                     round(float(np.mean(H[m] >= C.HBI_BANDS[1])), 3) if m.any() else "",
-                    round(pct, 3), (pct >= 0.9) if np.isfinite(pct) else ""])
-    write_csv(os.path.join(C.OUTPUT, "validation_sites.csv"), ["name", "n_bld", "hbi_mean", "share_high", "percentile", "top10"], res)
+                    fmt(pct), (pct >= 0.9) if np.isfinite(pct) else "",
+                    fmt(pc), (pc >= 0.9) if np.isfinite(pc) else ""])
+    write_csv(os.path.join(C.OUTPUT, "validation_sites.csv"),
+              ["name", "n_bld", "hbi_mean", "share_high", "percentile", "top10", "percentile_circle", "top10_circle"], res)
     log("선정지 재현:")
     for r in res:
         print("   ", r)
     # 선정지 중 가장 낮은 HBI 보다 높고, 모든 선정지에서 500m 넘게 떨어진 격자 = 새 후보
-    thr = np.nanmin([r[2] for r in res]) if any(np.isfinite(r[2]) for r in res) else np.nan
+    fin = [h for h in site_h if np.isfinite(h)]                 # 빈 칸(선정지 주변 건물 없음)은 건너뜀
+    thr = min(fin) if fin else np.nan
     if np.isfinite(thr):
         cx, cy = (cgx + 0.5) * C.GRID, (cgy + 0.5) * C.GRID     # 격자 중심 좌표
         d, _ = NearestIndex(np.c_[sx, sy]).query(np.c_[cx, cy])
@@ -108,7 +130,10 @@ if rows:
     m = [(float(r[4]), float(r[7])) for r in res if r[4] != "" and str(r[7]).strip()]
     if len(m) >= 3:                                        # 실측이 3개 이상이면 상관계수
         a = np.array(m)
-        log(f"실측 vs 예측(성인 기준) 상관 r={np.corrcoef(a[:, 0], a[:, 1])[0, 1]:.3f}, n={len(a)}")
+        rr = float(np.corrcoef(a[:, 0], a[:, 1])[0, 1])
+        log(f"실측 vs 예측(성인 기준) 상관 r={rr:.3f}, n={len(a)}")
+        # [v5] 로그뿐 아니라 파일로도 저장 (반출 대상, 기획서 17장)
+        write_csv(os.path.join(C.OUTPUT, "validation_measured.csv"), ["n", "r_adult_pred_vs_measured"], [[len(a), round(rr, 3)]])
 
 # ── 3) 기여도 분석 ─────────────────────────────────────────
 ab = []
