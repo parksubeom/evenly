@@ -74,7 +74,14 @@ def reach_polygon(t, limit_s):
         ln.AddPoint_2D(float(nodes[a, 0]), float(nodes[a, 1]))
         ln.AddPoint_2D(float(nodes[c, 0]), float(nodes[c, 1]))
         ml.AddGeometry(ln)
-    return ml.Buffer(BUFFER_M).SimplifyPreserveTopology(SIMPLIFY_M), ok
+    # [v6] QGIS 3.32(GDAL 3.7)의 GEOS 가 같은 자료에서도 가끔 "NaN/Inf" 오류로 멈춤 (v5 시험에서 재현, 12번 돌리면 한 번꼴)
+    #      → 같은 계산을 다시 하면 지나가므로 5번까지 다시 함 (결과는 같음). 그래도 안 되면 오류를 그대로 냄
+    for k in range(5):
+        try:
+            return ml.Buffer(BUFFER_M).SimplifyPreserveTopology(SIMPLIFY_M), ok
+        except RuntimeError:
+            if k == 4:
+                raise
 
 
 def count_inside(poly):
