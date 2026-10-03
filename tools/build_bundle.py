@@ -67,7 +67,8 @@ for _name, _text in FILES.items():
 for _d in ("hbi/work", "hbi/output", "hbi_geopandas/work", "hbi_geopandas/output"):
     os.makedirs(os.path.join(_out, *_d.split("/")), exist_ok=True)
 print(f"완료: 파일 {len(FILES)}개 → {_out}")
-print("다음: cd hbi  →  python 01_inspect.py   (README.md 참고)")
+print("다음: cd hbi  →  python 01_inspect.py   (README.md 참고)" if "hbi/setup.py" not in FILES else
+      "다음: cd hbi  →  python setup.py 자료폴더   (README.md 참고)")
 """
 dst = os.path.join(ROOT, "deliverables", name)
 open(dst, "w", encoding="utf-8").write(hdr + body + tail)

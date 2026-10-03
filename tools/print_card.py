@@ -36,6 +36,7 @@ code { font: bold 16pt Menlo, Consolas, monospace; background: #1e1e1e; color: #
 td.blank { height: 21pt; }
 td.bbox code { font-size: 15pt; background: none; color: #000; }
 tr.note td { background: #eef5f0; font-weight: bold; }
+tr.sec td { background: #1f3b2d; color: #fff; font-weight: bold; font-size: 14pt; padding: 1pt 6pt; }
 """
 
 
@@ -66,7 +67,7 @@ def bundle_files(bundle_text):
 
 def check(card, md, bundle_text, bundle_name):
     """카드 명령이 안내서에 그대로 있는지, 부르는 파일이 번들(또는 번들 자신)인지. 불일치 목록을 돌려줌"""
-    gcmds, files = guide_commands(md), bundle_files(bundle_text) | {bundle_name}
+    gcmds, files = guide_commands(md), bundle_files(bundle_text) | {bundle_name} | {"mapping.txt"}   # mapping.txt 는 setup.py 가 만듦
     bad = []
     for c in card["cmds"]:
         if c not in gcmds:
@@ -181,29 +182,31 @@ def v6_card(pg):
     prep = [r"cd /d D:\작업폴더", "python hbi_code_bundle_v6.txt", "cd hbi"]
     prep_see = ["작업폴더 = ② 주소", q("완료: 파일 …개"), f"맨 아래 {Q_HBI}"]
     main = [r"python setup.py E:\제공자료", "python check.py", "python run_all.py"]
-    main_see = [f"E:\\제공자료 = ① 주소 (앞글자+Tab). 질문은 <b>Enter</b>", f"끝에 {q('통과')}. {q('!! 멈춤')} 이면 아래 '멈췄을 때'", f"끝에 {Q_DONE}"]
+    main_see = ["① 주소 (앞글자+Tab). 질문은 <b>Enter</b>", f"끝에 {q('통과')} (멈춤 → 7)", f"끝에 {Q_DONE}"]
     fix = ["notepad mapping.txt", "python run_all.py --from 06"]
-    fix_see = [f"{q('→')} 안내대로 = 오른쪽만, 저장 → check 다시", f"멈춘 번호부터 ({q('!! 고친 뒤:')} 줄 그대로)"]
+    fix_see = [f"{q('→')} 안내대로, = 오른쪽만", "06 자리에 멈춘 번호"]
     more = ["python run_all.py --from 09", "python 12_isochrone.py", "python 13_siting.py", "python 14_dong_context.py"]
-    more_see = ["실측 좌표 넣은 뒤", f"끝에 {Q_DONE}…", "좌표 없는 시설은 건너뜀", f"끝에 {Q_DONE}…"]
-    k, out = 0, ["<h2>준비 (한 번)</h2>", HEAD]
+    sec = lambda t: f'<tr class="sec"><td colspan="5">{t}</td></tr>'
+    head6 = HEAD.replace('<col style="width:60%"><col style="width:21.5%">', '<col style="width:55%"><col style="width:26.5%">')
+    k, out = 0, ["<h2>명령 (위에서부터 한 줄씩, 끝나면 □)</h2>", head6, sec("준비 (한 번)")]
     for c, s_, g in zip(prep, prep_see, [p(pg, "2")] * 3):
         k += 1; out.append(row(k, c, s_, g))
-    out.append("</table><h2>명령 세 줄 (이것이 전부)</h2>" + HEAD)
+    out.append(sec("명령 세 줄 (이것이 전부)"))
     for c, s_, g in zip(main, main_see, [p(pg, "3", "3-2"), p(pg, "4"), p(pg, "5", "5-2")]):
         k += 1; out.append(row(k, c, s_, g))
-    out.append("</table><h2>멈췄을 때</h2>" + HEAD)
+    out.append(sec("멈췄을 때"))
     for c, s_, g in zip(fix, fix_see, [p(pg, "4-2"), p(pg, "6")]):
         k += 1; out.append(row(k, c, s_, g))
-    out.append("</table><h2>실측 좌표 넣고 추가 분석</h2>" + HEAD)
-    for c, s_, g in zip(more, more_see, [p(pg, "7")] * 4):
-        k += 1; out.append(row(k, c, s_, g))
+    out.append(sec("실측 좌표를 넣은 뒤 (안내서대로 interventions.csv)"))
+    k += 1; out.append(row(k, more[0], "09 시설 효과", p(pg, "7")))
+    k += 1
+    out.append(f'<tr><td class="box">□</td><td class="n">{k}</td><td>' + "<br>".join(f"<code>{html.escape(c)}</code>" for c in more[1:])
+               + f'</td><td class="see">한 줄씩. 13 은 좌표 없는 시설 건너뜀</td><td class="pg">{p(pg, "7")}</td></tr>')
     out.append(note_row("<code>output</code> 폴더 반출 신청 (work 는 반출 안 함), 반출 시각 메모", p(pg, "8")) + "</table>")
-    folders6 = ('<h2>담당자에게 물을 것</h2><table><colgroup><col style="width:22%"><col style="width:28%"><col style="width:22%"><col style="width:28%"></colgroup>'
-                '<tr><td>① 자료 <b>맨 위</b> 폴더</td><td class="blank"></td><td>② 작업 폴더 (번들 있는 곳)</td><td class="blank"></td></tr>'
-                '<tr><td>건축물대장 들어왔나</td><td>있음 / 없음</td><td>건물 속성 판 있나</td><td>있음 / 없음</td></tr></table>')
+    folders6 = ('<h2>담당자에게 물을 것</h2><table><colgroup><col style="width:24%"><col style="width:26%"><col style="width:24%"><col style="width:26%"></colgroup>'
+                '<tr><td>① 자료 <b>맨 위</b> 폴더</td><td class="blank"></td><td>② 작업 폴더</td><td class="blank"></td></tr></table>')
     memo = ('<h2>메모 칸 (값은 적지 않음)</h2><table><colgroup><col style="width:17%"><col style="width:33%"><col style="width:17%"><col style="width:33%"></colgroup>'
-            '<tr><td>건물 용도 방식</td><td>layer / register / all</td><td>연결망·노드</td><td class="blank">____ 개, ____ %</td></tr>'
+            '<tr><td>용도 방식</td><td>layer / register / all (대장·속성 판 있음/없음)</td><td>연결망·노드</td><td class="blank">____ 개, ____ %</td></tr>'
             '<tr><td>대장 연결률</td><td class="blank">____ %</td><td>걸린 시간</td><td class="blank">__:__ → __:__</td></tr>'
             '<tr><td>오류 마지막 줄</td><td class="blank"></td><td>반출 시각</td><td class="blank"></td></tr></table>')
     html_body = ("<h1>2차 방문 카드 · v6 (작업 폴더에 hbi_code_bundle_v6.txt 가 있을 때)</h1>" + gold(pg["9"]) + folders6 + "".join(out) + memo)
