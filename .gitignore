@@ -28,3 +28,5 @@ deck/img/results/
 deliverables/_*
 demo/evenly_demo.html
 _render/
+# 건축물대장 가공본 (data_public 원본에서 매번 다시 만듦, 반입은 따로)
+analysis/hbi/external/building_register.*

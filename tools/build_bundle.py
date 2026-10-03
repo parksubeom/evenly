@@ -22,6 +22,8 @@ def collect(src, prefix, skip_external=False):
             rel = os.path.relpath(p, src).replace(os.sep, "/")
             if skip_external and rel.startswith("external/"):
                 continue
+            if rel.startswith("external/building_register"):   # [v6] 건축물대장 가공본은 크기 때문에 번들에 넣지 않고 따로 반입
+                continue
             txt = open(p, encoding="utf-8-sig").read()
             assert Q3 not in txt and not txt.endswith("\\"), f"번들에 넣을 수 없는 문자열 포함: {p}"
             out[f"{prefix}/{rel}"] = txt
