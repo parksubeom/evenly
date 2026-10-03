@@ -17,8 +17,12 @@ tools/prep_building_register.py ─ 서울시 건축물대장 표제부(공개) 
   bldrgst_pk  ← 건축물대장일련번호 (원본에 '관리건축물대장PK' 열이 없어 이 열을 씀. 필지 쪽 BLDRGST_PK 와 같은 체계인지는
                 안심구역 스키마로 확인. 다르면 v6 는 pnu 로 붙임)
   pnu         ← 19자리 = 시군구코드(5) + 법정동코드(5) + 대지구분(1) + 본번(4) + 부번(4)
-                · 원본에 코드 열이 없어 (시군구명, 법정동명) → 10자리 법정동코드를 도보 네트워크 파일의 시군구명·읍면동명·읍면동코드
-                  열에서 가져옴 (같은 이름에 다른 코드 0건 확인). 이 표에 없는 동(도보 링크가 없는 동)은 pnu 를 비움 (추정하지 않음)
+                · 원본에 코드 열이 없어 (시군구명, 법정동명) → 10자리 법정동코드를 **행정안전부 법정동 주민등록 인구 파일**
+                  (법정동코드·시도명·시군구명·읍면동명, 서울 452개 동, 리명 빈 행)에서 가져옴. 이 파일이 없을 때만 도보 네트워크 파일의
+                  시군구명·읍면동명·읍면동코드로 대신함 (2026-10-03 대조: 공식 표에 있는 이름 450개는 코드가 모두 같았고, 도보 표의 나머지
+                  113쌍은 구 경계를 넘는 링크 등이 만든 실제로 없는 이름 쌍. 강서구 오쇠동·오곡동은 도보 표에 없어 공식 표로만 채워짐)
+                · 공식 인구 파일에는 주민이 없는 동(세종로·훈정동·양평동 등 15곳)이 빠져 있어, 그 동만 도보 표로 보충함. 단 그 구의
+                  공식 시군구 코드(앞 5자리)와 같고 다른 공식 동이 쓰지 않는 코드일 때만 (가짜 쌍 제외)
                 · 대지구분: 원본 '대지구분코드명' 대지 → 1, 산 → 2 (PNU 11번째 자리: 1 일반, 2 산).
                   대장 코드로는 대지 0, 산 1 이라 '대지 0→1, 산 1→2' 변환과 같음. '블록'(지번 대신 블록번호) 은 pnu 를 비움
                 · 본번·부번: '주지번'·'부지번' (원본이 이미 네 자리, 앞을 0 으로 채움)
@@ -37,6 +41,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, "data_public", "raw")
 SRC = os.path.join(RAW, "서울시 건축물대장 표제부.csv")
 WALK = os.path.join(RAW, "서울시 자치구별 도보 네트워크 공간정보.csv")
+LEGAL_PREFIX = "행정안전부_지역별(법정동)"     # 공식 법정동 코드 표 (파일 이름 앞부분, 날짜는 달라도 됨)
 OUT = os.path.join(ROOT, "analysis", "hbi", "external", "building_register.csv")
 
 # 주용도 → 분류. 원본 파일의 '주용도코드명' 39종 (2026-10-03 확인) 을 아래처럼 나눔. 명칭으로 매칭 (코드 열이 없음).
@@ -79,12 +84,28 @@ def main():
     ap.add_argument("--out", default=OUT)
     a = ap.parse_args()
 
+    import unicodedata
+    legal = [os.path.join(RAW, f) for f in sorted(os.listdir(RAW)) if unicodedata.normalize("NFC", f).startswith(LEGAL_PREFIX)]
+    code, src = {}, collections.Counter()
+    if legal:
+        lt, lenc = decode(legal[-1])
+        for r in csv.DictReader(io.StringIO(lt, newline="")):
+            if r["시도명"] == "서울특별시" and r["읍면동명"] and not r.get("리명"):
+                code[(r["시군구명"], r["읍면동명"])] = r["법정동코드"]
+        src["공식"] = len(code)
+    sgg = {gu: c[:5] for (gu, _), c in code.items()}
+    used = set(code.values())
     wt, wenc = decode(WALK)
-    code = {}
     for r in csv.DictReader(io.StringIO(wt, newline="")):
-        if r["읍면동코드"]:
-            code[(r["시군구명"], r["읍면동명"])] = r["읍면동코드"]
-    print(f"법정동 코드 표: {len(code)}개 동 (도보 네트워크, 인코딩 {wenc})")
+        k, c = (r["시군구명"], r["읍면동명"]), r["읍면동코드"]
+        if not c or k in code:
+            continue
+        # 공식 표가 있으면: 그 구의 공식 시군구 코드(앞 5자리)와 같고, 다른 공식 동이 쓰는 코드가 아닐 때만 (구 경계를 넘는 링크가 만든 가짜 쌍 제외)
+        if legal and (sgg.get(k[0]) != c[:5] or c in used):
+            continue
+        code[k] = c; used.add(c); src["도보 보충"] += 1
+    print(f"법정동 코드 표: {len(code)}개 동 = " + ", ".join(f"{k} {v}" for k, v in src.items())
+          + (f" (공식: {unicodedata.normalize('NFC', os.path.basename(legal[-1]))}. 도보 보충 = 주민등록 인구가 없어 공식 인구 파일에 빠진 동)" if legal else " (공식 파일 없음)"))
 
     t, enc = decode(SRC)
     rd = csv.DictReader(io.StringIO(t, newline=""))
