@@ -40,6 +40,7 @@ REG_TO_USE = [
 REG_OTHER = "기타"        # 위에 없는 용도 (집도 목적지도 아님)
 MAIN_WORDS = ("주", "주건축물", "1", "MAIN")
 STATS_FILE = os.path.join(C.WORK, "battr_stats.json")
+LAST_STATS = {}
 
 
 def mode():
@@ -126,11 +127,12 @@ def pick(idx, R):
     return R[best][0], (max(fl) if fl else None)
 
 
-def _register(blds):
+def _register(blds, quiet=False):
     """blds = [(g, x, y, 원래 칸)] → 같은 순서로 (용도, 층수) 목록 + 통계"""
     if not C.DATA_ROOT_PARCEL:
         raise SystemExit("building_attr_mode = register 에는 필지(config.DATA_ROOT_PARCEL)가 필요합니다 → python setup.py 로 필지 폴더를 지정")
-    by_pk, by_pnu, R, info = load_register()
+    by_pk, by_pnu, R, info = _REG_CACHE.get("reg") or load_register()
+    _REG_CACHE["reg"] = (by_pk, by_pnu, R, info)
     F = C.FIELD
     X = np.array([b[1] for b in blds]); Y = np.array([b[2] for b in blds])
     bbox = [float(X.min()) - 50, float(Y.min()) - 50, float(X.max()) + 50, float(Y.max()) + 50]
@@ -171,13 +173,20 @@ def _register(blds):
     stats = dict(mode="register", n_bld=n, n_parcel_read=npar, linked=linked, link_rate=round(linked / n, 4) if n else 0.0,
                  by_pk=st["대장번호로 연결"], by_pnu=st["필지번호로 연결"], no_parcel=st["필지 없음"], no_register=st["필지는 있으나 대장 없음"],
                  register=info)
-    log(f"  건물 → 필지 → 건축물대장 연결 {linked:,}/{n:,} ({stats['link_rate']:.1%}): 대장번호 {stats['by_pk']:,}, 필지번호 {stats['by_pnu']:,}, "
-        f"필지 없음 {stats['no_parcel']:,}, 대장 없음 {stats['no_register']:,}  ← 연결 안 된 건물은 용도 미상(집·목적지 아님)")
+    if not quiet:
+        log(f"  건물 → 필지 → 건축물대장 연결 {linked:,}/{n:,} ({stats['link_rate']:.1%}): 대장번호 {stats['by_pk']:,}, 필지번호 {stats['by_pnu']:,}, "
+            f"필지 없음 {stats['no_parcel']:,}, 대장 없음 {stats['no_register']:,}  ← 연결 안 된 건물은 용도 미상(집·목적지 아님)")
     return out, stats
 
 
-def iter_buildings():
-    """건물 레이어를 읽어 (도형, {"use","kind","floor"}) 를 차례로 돌려줌. 방식은 mapping 의 building_attr_mode"""
+_REG_CACHE = {}       # check.py 가 표본 창마다 부를 때 대장 파일을 한 번만 읽게
+
+
+def iter_buildings(save=True, quiet=False):
+    """건물 레이어를 읽어 (도형, {"use","kind","floor"}) 를 차례로 돌려줌. 방식은 mapping 의 building_attr_mode
+    save=False: work/battr_stats.json 을 쓰지 않음 (check.py 표본용). 통계는 LAST_STATS 에"""
+    global LAST_STATS
+    _save = save_stats if save else (lambda st: None)
     m = mode()
     if m == "stop":
         raise SystemExit("mapping.txt 의 building_attr_mode = stop → 멈춤 (건물 용도를 구할 방법을 정한 뒤 다시)")
@@ -189,15 +198,16 @@ def iter_buildings():
             n += 1
             yield g, {"use": str(a.get(cu) or "").upper() if cu else "", "kind": str(a.get(ck) or "").upper() if ck else "",
                       "floor": a.get(cf) if cf else None}
-        save_stats(dict(mode="layer", n_bld=n))
+        LAST_STATS = dict(mode="layer", n_bld=n); _save(LAST_STATS)
         return
     if m == "all":
         n = 0
         for g, a in iter_layer("building", fields=[cf] if cf else []):
             n += 1
             yield g, {"use": C.RESIDENTIAL_USE[0], "kind": "", "floor": a.get(cf) if cf else None}
-        save_stats(dict(mode="all", n_bld=n))
-        log(f"  건물 용도 방식 all: 건물 {n:,}개를 모두 집으로 봄 (용도 미구분, 의료·노유자 건물 목적지 없음)")
+        LAST_STATS = dict(mode="all", n_bld=n); _save(LAST_STATS)
+        if not quiet:
+            log(f"  건물 용도 방식 all: 건물 {n:,}개를 모두 집으로 봄 (용도 미구분, 의료·노유자 건물 목적지 없음)")
         return
     # register: 건물을 먼저 다 읽고(대표점 필요), 필지·대장을 붙인 뒤 돌려줌
     blds = []
@@ -207,9 +217,9 @@ def iter_buildings():
             continue
         blds.append((g, p.GetX(), p.GetY(), a))
     if not blds:
-        save_stats(dict(mode="register", n_bld=0, linked=0, link_rate=0.0))
+        LAST_STATS = dict(mode="register", n_bld=0, linked=0, link_rate=0.0); _save(LAST_STATS)
         return
-    res, stats = _register(blds)
-    save_stats(stats)
+    res, stats = _register(blds, quiet)
+    LAST_STATS = stats; _save(stats)
     for (g, _, _, a), (use, fl) in zip(blds, res):
         yield g, {"use": use, "kind": "", "floor": fl if fl is not None else (a.get(cf) if cf else None)}

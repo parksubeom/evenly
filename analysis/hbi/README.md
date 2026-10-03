@@ -1,9 +1,33 @@
-# 언덕 위 우리동네 – 분석 코드 따라하기 안내서 (v5)
+# 언덕 위 우리동네 – 분석 코드 따라하기 안내서 (v6)
 
 > **이 문서만 보고 따라 하면 됩니다.** 파이썬을 처음 써도 괜찮습니다.
 > 각 코드 파일 맨 위에도 "이 파일이 뭘 하는지, 결과를 어떻게 보는지"가 적혀 있습니다.
 
 ---
+
+## v6 먼저 읽기: 명령 세 줄
+
+v6 는 **자료가 어떻게 생겼든 코드를 고치지 않고** 맞추도록 만든 판입니다 (계산 방법은 v5 와 같음).
+
+```
+python setup.py E:\제공자료      ← 자료 최상위 폴더 (앞글자 + Tab). 질문에는 Enter 만 눌러도 추천값
+python check.py                  ← 출발 전 점검. "통과" 가 나오면 다음 줄, "!! 멈춤" 이면 → 안내대로 mapping.txt 고치기
+python run_all.py                ← 분석. 멈추면 고친 뒤 python run_all.py --from 03 처럼 멈춘 번호부터
+```
+
+| 새 파일 | 하는 일 |
+|---|---|
+| `setup.py` | 하위 폴더를 훑어 수치지형도·DEM·필지·상호제공 CSV 를 찾음, zip 풀기 제안, 대상 구와 겹치는 폴더만 고름(map_folders), AREA_BBOX 자동 결정, 칸 이름 맞추기 → `mapping.txt` 저장, `config.py` 경로 줄 채움(원본 `config.py.bak`) |
+| `check.py` | 경로·레이어·칸·인코딩·좌표계·대상 구 범위·DEM 범위·주거 비율·길 연결·목적지 수 점검 → `output/check_report.txt` |
+| `mapping.txt` | `키 = 값  # 설명`. 칸 이름(대소문자 무시)·레이어 파일 이름 글자·읽을 폴더·대상 구·건물 용도 방식. `?` 는 못 찾음 |
+| `lib/mapping.py` `lib/area.py` `lib/battr.py` `lib/conout.py` `lib/schema.py` | mapping 읽기 / 구 경계·범위 / 건물 용도·층수 / 한글 출력·화면+파일 기록 / 자료 구조 기록 |
+
+- **건물 용도 방식** (`building_attr_mode`): `layer` 건물 레이어 칸(v5 와 같음) / `register` 건물 → 필지 → 건축물대장(`external/building_register.csv`, 번들과 따로 반입) / `all` 모든 건물을 집(용도 미구분) / `stop`
+- **대상 구** (`target_gu`): 출발점(집)은 대상 구 안 건물만. 옆 구(`neighbor_gu`)는 길·목적지로만 씀. 비우면 v5 와 같이 자료 전체
+- `run_all.py` 는 화면 글자를 `output/runlog/` 에, 자료 구조를 `output/schema/schema.txt` 에 함께 저장하고, 멈추면 원인·할 일을 보여 줌 (`output/diagnose.txt`)
+- `output/run_meta.csv`: 대상 구, 건물 용도 방식, 건축물대장 연결률, AREA_BBOX 와 이유
+
+아래 v5 설명(단계별 파일)은 그대로 유효합니다.
 
 ## 0. 전체 그림 (5분 읽기)
 

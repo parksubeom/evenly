@@ -69,7 +69,9 @@ for T in targets(b):                              # 목적지 종류마다 반�
                     {"n_bld": cnt[keep], "hbi_mean": mean[keep], "hbi_median": med[keep],
                      "share_high": high[keep], "elder_min": el[keep], "flat_min": fl[keep]})
     # ── 지도 이미지 (matplotlib 이 있을 때만) ──
-    if HAS_MPL:
+    if HAS_MPL and not cells:                      # [v6] 비식별 기준을 넘는 격자가 하나도 없으면 그림만 건너뜀 (v5 는 min() 오류로 멈췄음)
+        log(f"  {T}: 건물 {C.MIN_COUNT}개 이상인 격자가 없어 map_{T}.png 는 건너뜀")
+    if HAS_MPL and cells:
         import matplotlib
         matplotlib.use("Agg")                      # 화면 없이 파일로만 그리기
         import matplotlib.pyplot as plt

@@ -136,7 +136,8 @@ if cands:
     px, py, val = px[inb], py[inb], val[inb]
     _, pwhich = points_in_polygons(px, py, polys)
     res_i, com_i = np.where(BC == "주거")[0], np.where(BC == "근린상업")[0]
-    near = lambda ids: (NearestIndex(np.c_[BX[ids], BY[ids]]).query(np.c_[px, py])[0] if len(ids) else np.full(len(px), np.inf))
+    # [v6] 찾는 거리를 RES_CELL_M 의 2배로 묶음 (판정에는 25m 안만 씀 → 결과 같음. scipy 없을 때 먼 셀에서 수 km 를 뒤지던 것을 막음)
+    near = lambda ids: (NearestIndex(np.c_[BX[ids], BY[ids]]).query(np.c_[px, py], RES_CELL_M * 2)[0] if len(ids) else np.full(len(px), np.inf))
     is_res = (near(res_i) <= RES_CELL_M) & ~(near(com_i) <= RES_CELL_M)
     skt = (name, pwhich, val, is_res)
     log(f"SKT {name}: 범위 안 셀 {len(px):,}개 중 주거 칸 {int(is_res.sum()):,}개 (셀 중심 {RES_CELL_M}m 안 주거 있음·근린상업 없음)")
