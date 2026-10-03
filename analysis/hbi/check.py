@@ -144,7 +144,8 @@ def main():
                 miss.append(g)
         if miss:
             stop(f"대상 구가 자료 범위 밖: {', '.join(miss)}",
-                 "그 구의 수치지형도 폴더가 map_folders 에 있는지 (python setup.py 다시), AREA_BBOX 가 그 구를 덮는지 확인")
+                 "그 구의 수치지형도 폴더가 map_folders 에 있는지 (python setup.py 다시), AREA_BBOX 가 그 구를 덮는지 확인."
+                 " 받은 자료에 그 구가 없으면 담당자에게 요청")
         for g in C.NEIGHBOR_GU:
             if g in gp and area.cover_share(gp[g], envs) < GU_COVER_MIN:
                 warn(f"옆 구 {g} 자료가 거의 없음 → 대상 구 경계 근처 집의 목적지가 빠질 수 있음")
@@ -188,15 +189,15 @@ def main():
     print(f"  건물 칸: {bnames}")
     use_ok = has_field(bnames, C.COL.get("bld_use"))
     for k in ("bld_use", "bld_kind", "bld_floor"):
-        print(f"  {k} = {C.COL.get(k)} → {'있음' if has_field(bnames, C.COL.get(k)) else '없음'}")
+        print(f"  {k} = {C.COL.get(k) or '?'} → {'있음' if has_field(bnames, C.COL.get(k)) else '없음'}")
     mode = C.BUILDING_ATTR_MODE
-    reg_ok = bool(C.REGISTER_FILE) and (os.path.exists(C.REGISTER_FILE) or os.path.exists(os.path.splitext(C.REGISTER_FILE)[0] + ".txt"))
+    reg_ok = battr.register_path() is not None
     if mode == "layer" and not use_ok:
         rec = "register" if (reg_ok and C.DATA_ROOT_PARCEL) else "all"
         stop("건물 레이어에 용도 칸이 없음 (layer 방식으로는 집을 고를 수 없음)",
              f"mapping.txt 의 building_attr_mode = {rec} (" + ("건축물대장·필지로 용도를 붙임" if rec == "register" else "모든 건물을 집으로 봄, 용도 미구분") + ")")
     if mode == "register":
-        print(f"  건축물대장: {'있음' if reg_ok else '없음'} ({C.REGISTER_FILE})")
+        print(f"  건축물대장: {'있음 (' + os.path.relpath(battr.register_path(), os.path.dirname(C.BASE)) + ')' if reg_ok else '없음'}")
         if not reg_ok:
             stop("register 방식인데 건축물대장 파일이 없음", "external 에 building_register.csv 를 넣거나 building_attr_mode = all")
         if not C.DATA_ROOT_PARCEL:
@@ -206,7 +207,7 @@ def main():
         pn = fields_of(pfiles[0], C.PARCEL_ENCODING)
         print(f"  필지 칸: {[n for n in pn if not any(x in n.upper() for x in ('OWN', 'JIGA'))]} (소유·공시지가 칸은 표시·사용 안 함)")
         for k in ("parcel_id", "parcel_bldrgst", "parcel_emd_cd", "jimok", "sgg_nm", "emd_nm"):
-            print(f"  {k} = {C.FIELD.get(k)} → {'있음' if has_field(pn, C.FIELD.get(k)) else '없음'}")
+            print(f"  {k} = {C.FIELD.get(k) or '?'} → {'있음' if has_field(pn, C.FIELD.get(k)) else '없음'}")
         if not has_field(pn, C.FIELD.get("parcel_id")):
             (stop if mode == "register" else warn)("필지 고유번호 칸을 찾지 못함", "mapping.txt 의 parcel_id 를 필지 칸 중 19자리 번호 칸으로")
     if STOP:

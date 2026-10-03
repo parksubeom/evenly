@@ -434,8 +434,11 @@ def main():
             notes[f"layer_{lk}"] = f"파일을 못 찾음 ({GRADE[lk]}). 실제 파일 이름의 글자를 쉼표로 추가"
 
     hr("6. 건물 용도 방식")
-    reg = os.path.join(C.BASE, M.read().get("register_file") or "external/building_register.csv")
-    reg_ok = os.path.exists(reg) or os.path.exists(os.path.splitext(reg)[0] + ".txt")
+    from lib.battr import register_path
+    reg = register_path()
+    reg_ok = reg is not None
+    none_txt = "없음 (external\\building_register.csv 또는 작업 폴더에 같은 이름)"
+    print(f"  건축물대장: {os.path.relpath(reg, os.path.dirname(C.BASE)) if reg_ok else none_txt}")
     has_use = vals.get("bld_use") not in (None, "?")
     rec = "layer" if has_use else ("register" if (reg_ok and seoul) else "all")
     why = {"layer": "건물 레이어에 용도 칸이 있음", "register": "건물에 용도 칸이 없고, 건축물대장과 필지가 있음 (건물 → 필지 → 대장)",

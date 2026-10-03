@@ -177,6 +177,39 @@ def v4_card(pg):
     return {"cmds": prep + zone + end + ["ren output output_B"], "html": html_body}
 
 
+def v6_card(pg):
+    prep = [r"cd /d D:\작업폴더", "python hbi_code_bundle_v6.txt", "cd hbi"]
+    prep_see = ["작업폴더 = ② 주소", q("완료: 파일 …개"), f"맨 아래 {Q_HBI}"]
+    main = [r"python setup.py E:\제공자료", "python check.py", "python run_all.py"]
+    main_see = [f"E:\\제공자료 = ① 주소 (앞글자+Tab). 질문은 <b>Enter</b>", f"끝에 {q('통과')}. {q('!! 멈춤')} 이면 아래 '멈췄을 때'", f"끝에 {Q_DONE}"]
+    fix = ["notepad mapping.txt", "python run_all.py --from 06"]
+    fix_see = [f"{q('→')} 안내대로 = 오른쪽만, 저장 → check 다시", f"멈춘 번호부터 ({q('!! 고친 뒤:')} 줄 그대로)"]
+    more = ["python run_all.py --from 09", "python 12_isochrone.py", "python 13_siting.py", "python 14_dong_context.py"]
+    more_see = ["실측 좌표 넣은 뒤", f"끝에 {Q_DONE}…", "좌표 없는 시설은 건너뜀", f"끝에 {Q_DONE}…"]
+    k, out = 0, ["<h2>준비 (한 번)</h2>", HEAD]
+    for c, s_, g in zip(prep, prep_see, [p(pg, "2")] * 3):
+        k += 1; out.append(row(k, c, s_, g))
+    out.append("</table><h2>명령 세 줄 (이것이 전부)</h2>" + HEAD)
+    for c, s_, g in zip(main, main_see, [p(pg, "3", "3-2"), p(pg, "4"), p(pg, "5", "5-2")]):
+        k += 1; out.append(row(k, c, s_, g))
+    out.append("</table><h2>멈췄을 때</h2>" + HEAD)
+    for c, s_, g in zip(fix, fix_see, [p(pg, "4-2"), p(pg, "6")]):
+        k += 1; out.append(row(k, c, s_, g))
+    out.append("</table><h2>실측 좌표 넣고 추가 분석</h2>" + HEAD)
+    for c, s_, g in zip(more, more_see, [p(pg, "7")] * 4):
+        k += 1; out.append(row(k, c, s_, g))
+    out.append(note_row("<code>output</code> 폴더 반출 신청 (work 는 반출 안 함), 반출 시각 메모", p(pg, "8")) + "</table>")
+    folders6 = ('<h2>담당자에게 물을 것</h2><table><colgroup><col style="width:22%"><col style="width:28%"><col style="width:22%"><col style="width:28%"></colgroup>'
+                '<tr><td>① 자료 <b>맨 위</b> 폴더</td><td class="blank"></td><td>② 작업 폴더 (번들 있는 곳)</td><td class="blank"></td></tr>'
+                '<tr><td>건축물대장 들어왔나</td><td>있음 / 없음</td><td>건물 속성 판 있나</td><td>있음 / 없음</td></tr></table>')
+    memo = ('<h2>메모 칸 (값은 적지 않음)</h2><table><colgroup><col style="width:17%"><col style="width:33%"><col style="width:17%"><col style="width:33%"></colgroup>'
+            '<tr><td>건물 용도 방식</td><td>layer / register / all</td><td>연결망·노드</td><td class="blank">____ 개, ____ %</td></tr>'
+            '<tr><td>대장 연결률</td><td class="blank">____ %</td><td>걸린 시간</td><td class="blank">__:__ → __:__</td></tr>'
+            '<tr><td>오류 마지막 줄</td><td class="blank"></td><td>반출 시각</td><td class="blank"></td></tr></table>')
+    html_body = ("<h1>2차 방문 카드 · v6 (작업 폴더에 hbi_code_bundle_v6.txt 가 있을 때)</h1>" + gold(pg["9"]) + folders6 + "".join(out) + memo)
+    return {"cmds": prep + main + fix + more, "html": html_body}
+
+
 def render(body, out):
     doc = f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>1차 방문 카드</title><style>{CSS}</style></head><body>{body}</body></html>'
     with tempfile.TemporaryDirectory() as td:
@@ -193,6 +226,13 @@ def main():
                                capture_output=True, text=True, check=True).stdout
     jobs = [("v5", v5_card, "1차방문_v5_따라하기", v5_bundle, "hbi_code_bundle_v5.txt"),
             ("v4", v4_card, "1차방문_안내서", v4_bundle, "hbi_code_bundle_v4.txt")]
+    # [v6] 2차 방문 카드: 번들이 아직 없으면 analysis/hbi 파일 목록으로 대조 (번들에 들어갈 파일과 같음)
+    v6b = os.path.join(ROOT, "deliverables", "hbi_code_bundle_v6.txt")
+    v6_bundle = open(v6b, encoding="utf-8").read() if os.path.exists(v6b) else "".join(
+        f"FILES['hbi/{os.path.relpath(os.path.join(d, f), os.path.join(ROOT, 'analysis', 'hbi'))}']"
+        for d, _, fs in os.walk(os.path.join(ROOT, "analysis", "hbi")) for f in fs if f.endswith((".py", ".txt", ".md", ".csv")))
+    if os.path.exists(os.path.join(DOCS, "2차방문_v6_안내서.pdf")):
+        jobs.append(("v6", v6_card, "2차방문_v6_안내서", v6_bundle, "hbi_code_bundle_v6.txt"))
     fail = False
     for tag, make, guide, bundle, bname in jobs:
         card = make(guide_pages(os.path.join(DOCS, guide + ".pdf")))
@@ -202,7 +242,7 @@ def main():
             print("  ", b)
         if bad:
             fail = True; continue
-        out = os.path.join(DOCS, f"1차방문_{tag}_카드.pdf")
+        out = os.path.join(DOCS, f"{'2차방문' if tag == 'v6' else '1차방문'}_{tag}_카드.pdf")
         print(f"→ {os.path.relpath(out, ROOT)} ({render(card['html'], out)}쪽)")
     if fail:
         sys.exit(1)

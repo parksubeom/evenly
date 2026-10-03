@@ -88,11 +88,21 @@ def load_stats():
         return {}
 
 
+def register_path():
+    """건축물대장 파일 찾기: mapping 의 register_file → 같은 이름 .txt → hbi 바깥(작업 폴더)의 같은 이름. 없으면 None
+    (메일로 반입한 파일이 작업 폴더에 그대로 있어도 옮기지 않고 찾게)"""
+    p = C.REGISTER_FILE
+    if not p:
+        return None
+    base = os.path.basename(p)
+    cand = [p, os.path.splitext(p)[0] + ".txt",
+            os.path.join(os.path.dirname(C.BASE), base), os.path.join(os.path.dirname(C.BASE), os.path.splitext(base)[0] + ".txt")]
+    return next((x for x in cand if os.path.exists(x)), None)
+
+
 def load_register():
     """건축물대장 → (by_pk {번호: 행번호}, by_pnu {pnu: [행번호]}, rows [(용도코드, 층수, 연면적, 주건축물?)], 정보)"""
-    p = C.REGISTER_FILE
-    cand = [p, os.path.splitext(p)[0] + ".txt"] if p else []
-    p = next((x for x in cand if x and os.path.exists(x)), None)
+    p = register_path()
     if not p:
         raise SystemExit(f"건축물대장 파일이 없습니다: {C.REGISTER_FILE}\n"
                          "  → external 폴더에 building_register.csv 를 넣거나 mapping.txt 의 register_file 을 고치세요"
