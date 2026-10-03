@@ -20,7 +20,7 @@
 import os, re, collections, sys
 import config as C
 from lib.deps import HAS_SCIPY, HAS_MPL
-from lib.qio import find_files, open_vector, layer_srs, log
+from lib.qio import find_files, open_vector, layer_srs, log, layer_files, in_map_folders
 from osgeo import gdal, osr
 gdal.UseExceptions(); osr.UseExceptions()
 
@@ -35,7 +35,7 @@ out(f"=== 0. 실행 환경 ===\nPython {sys.version.split()[0]} / GDAL {gdal.__v
 
 # 1. 레이어 코드 목록 ─────────────────────────────────────
 out("\n=== 1. 수치지형도 폴더 내 레이어 코드 ===")
-allshp = find_files(C.DATA_ROOT_MAP, [""], ".shp")
+allshp = [f for f in find_files(C.DATA_ROOT_MAP, [""], ".shp") if in_map_folders(f)]   # [v6] mapping 의 map_folders 안만
 out(f"shp 파일 총 {len(allshp)}개 (루트: {C.DATA_ROOT_MAP})")
 codes = collections.Counter()    # Counter: 개수 세기용 딕셔너리 {"N3L_A0020000": 12, ...}
 for p in allshp:
@@ -48,7 +48,7 @@ for k, v in sorted(codes.items()):
 # 2. 분석용 레이어 점검 ───────────────────────────────────
 out("\n=== 2. 분석에 쓰는 레이어 점검 ===")
 for key, keys in C.LAYERS.items():
-    files = find_files(C.DATA_ROOT_MAP, keys)
+    files = layer_files(key)
     if not files:
         out(f"[없음] {key} {keys}  ← 파일명이 다르면 config.LAYERS 수정")
         continue
@@ -62,8 +62,10 @@ for key, keys in C.LAYERS.items():
     out(f"[있음] {key}: 파일 {len(files)}개 / 첫 파일 객체 {lyr.GetFeatureCount()}개 / 좌표계 {crs_txt}")
     out(f"       범위 x {ext[0]:.0f}~{ext[1]:.0f}, y {ext[2]:.0f}~{ext[3]:.0f}")
     out(f"       필드 {names}")
+    upn = {n.upper(): n for n in names}
     for col in C.COL.values():                # 건물 용도 등 주요 코드 칸의 값 분포 (상위 8개)
-        if col in names:
+        col = upn.get((col or "").upper())    # [v6] 대소문자 무시
+        if col:
             cnt = collections.Counter(str(f.GetField(col)) for f in lyr)
             out(f"       {col} 분포: {dict(cnt.most_common(8))}")
             lyr.ResetReading()                 # 다시 처음부터 읽을 수 있게 되감기
@@ -91,9 +93,11 @@ if C.DATA_ROOT_PARCEL:
     out(f"shp 파일 {len(ps)}개: {[os.path.basename(p) for p in ps[:5]]}{' ...' if len(ps) > 5 else ''}")
     if ps:
         ds = open_vector(ps[0], C.PARCEL_ENCODING); lyr = ds.GetLayer(0); defn = lyr.GetLayerDefn()
-        out(f"  필드 {[defn.GetFieldDefn(i).GetName() for i in range(defn.GetFieldCount())]}  ← PNU, EMD_CD, JIMOK 이 있어야 함")
-        if defn.GetFieldIndex("JIMOK") >= 0:
-            vals = collections.Counter(str(f.GetField("JIMOK")) for _, f in zip(range(2000), lyr))
+        pn = [defn.GetFieldDefn(i).GetName() for i in range(defn.GetFieldCount())]
+        out(f"  필드 {pn}  ← PNU, EMD_CD, JIMOK 이 있어야 함")
+        ji = {n.upper(): n for n in pn}.get((C.FIELD["jimok"] or "").upper())     # [v6] mapping 의 jimok, 대소문자 무시
+        if ji:
+            vals = collections.Counter(str(f.GetField(ji)) for _, f in zip(range(2000), lyr))
             out(f"  JIMOK(지목) 예시: {dict(vals.most_common(6))}  ← 한글이 깨지면 config.PARCEL_ENCODING 변경")
         ds = None
 

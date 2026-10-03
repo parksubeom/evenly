@@ -31,6 +31,7 @@ from lib.qgraph import NearestIndex
 from lib.qnetwork import points_in_polygons
 from lib.netload import load
 from lib.bload import load_buildings, usable
+from lib.battr import iter_buildings
 
 # ── 이 스크립트만의 설정 (config.py 는 바꾸지 않음) ─────────────
 # 건물 용도 코드 → 분류 (수치지형도 데이터정의서 별표, BPRP_SE "용도 구분코드")
@@ -57,20 +58,19 @@ def fnum(v):
 
 
 # ── 1. 건물 (전체 용도) ────────────────────────────────────
-cu, ck, cf = C.COL["bld_use"], C.COL["bld_kind"], C.COL["bld_floor"]
 BX, BY, BC, BF, BW = [], [], [], [], []
-for g, a in iter_layer("building", fields=[cu, ck, cf]):
+for g, a in iter_buildings():                    # [v6] 용도·층수는 mapping 의 building_attr_mode 대로 (03 과 같은 lib/battr.py)
     p = g.PointOnSurface()
     if p is None:
         continue
-    use = str(a.get(cu) or "").upper()
-    kind = str(a.get(ck) or "").upper()
+    use = a["use"]
+    kind = a["kind"]
     cls = LOOKUP.get(use, "기타")
     if cls == "기타" and not use.startswith("BDU") and kind in C.RESIDENTIAL_KIND:   # 03_hbi.py 와 같은 규칙: 용도가 비고 종류가 주택이면 주거
         cls = "주거"
     try:
-        fl = min(max(float(a.get(cf) or 1), 1), 60)
-    except ValueError:
+        fl = min(max(float(a["floor"] or 1), 1), 60)
+    except (TypeError, ValueError):
         fl = 1.0
     BX.append(p.GetX()); BY.append(p.GetY()); BC.append(cls); BF.append(fl); BW.append(fl * g.GetArea())
 BX, BY, BF, BW = map(lambda x: np.array(x, float), (BX, BY, BF, BW))
@@ -88,6 +88,11 @@ polys = [(g, a) for g, a in iter_layer(files=bd[:1], bbox=None)]
 ck_ = next(k for k in polys[0][1] if k.upper() in ("ADM_CD", "ADM_DR_CD", "ADSTRD_CD", "CODE"))
 polys = [p for p in polys if not (p[0].GetEnvelope()[1] < bx0 or p[0].GetEnvelope()[0] > bx1 or
                                   p[0].GetEnvelope()[3] < by0 or p[0].GetEnvelope()[2] > by1)]
+if C.TARGET_GU:                                  # [v6] 결과는 대상 구의 행정동만 (옆 구는 길·목적지로만 씀)
+    gk_ = next((k for k in polys[0][1] if k.upper() in ("SGGNM", "SGG_NM")), None) if polys else None
+    an_ = next((k for k in polys[0][1] if k.upper() == "ADM_NM"), None) if polys else None
+    gu_ = lambda a: str(a.get(gk_) or "") if gk_ else (str(a.get(an_) or "").split()[1:2] or [""])[0]
+    polys = [p for p in polys if gu_(p[1]) in C.TARGET_GU]
 dcode = [str(a[ck_]) for _, a in polys]
 _, bwhich = points_in_polygons(BX, BY, polys)
 

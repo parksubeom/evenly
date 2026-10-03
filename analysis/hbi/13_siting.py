@@ -66,8 +66,11 @@ if not fac:
 env = [f[2].GetEnvelope() for f in fac]                           # (x0, x1, y0, y1)
 bbox = [min(e[0] for e in env), min(e[2] for e in env), max(e[1] for e in env), max(e[3] for e in env)]
 files = find_files(C.DATA_ROOT_PARCEL, [""], ".shp")
-parcels = [(g.Clone(), str(a.get("JIMOK") or "").strip())
-           for g, a in iter_layer(files=files, fields=["JIMOK"], bbox=bbox, encoding=C.PARCEL_ENCODING)]
+F_JI = C.FIELD["jimok"]                       # [v6] 지목 칸 이름 (mapping.txt 의 jimok, 대소문자 무시)
+if not F_JI:
+    raise SystemExit("mapping.txt 의 jimok(지목 칸) 이 ? 입니다 → 13 건너뜀")
+parcels = [(g.Clone(), str(a.get(F_JI) or "").strip())
+           for g, a in iter_layer(files=files, fields=[F_JI], bbox=bbox, encoding=C.PARCEL_ENCODING)]
 log(f"시설 {len(fac)}곳 둘레 {BUFFER_M}m, 범위 안 필지 {len(parcels):,}개")
 
 rows, unknown = [], {}

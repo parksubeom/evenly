@@ -26,7 +26,13 @@ H[~usable(b)] = np.nan                     # 데이터 경계 근처 건물 제�
 bbox = [np.nanmin(X) - 50, np.nanmin(Y) - 50, np.nanmax(X) + 50, np.nanmax(Y) + 50]   # 건물이 있는 범위의 필지만 읽음
 files = find_files(C.DATA_ROOT_PARCEL, [""], ".shp")
 # [v5] SGG_NM(시군구명)·EMD_NM(법정 읍면동명) 도 읽음 → 11_legal_dong_join.py 가 교통사고(법정동 이름) 와 붙일 때 씀
-parcels = [(g, a) for g, a in iter_layer(files=files, fields=["PNU", "EMD_CD", "JIMOK", "SGG_NM", "EMD_NM"], bbox=bbox, encoding=C.PARCEL_ENCODING)]
+# [v6] 칸 이름은 mapping.txt (parcel_id·parcel_emd_cd·jimok·sgg_nm·emd_nm, 대소문자 무시). 아래 F_* 는 그 이름
+F_ID, F_EMD, F_JI, F_SGG, F_EMDNM = (C.FIELD[k] for k in ("parcel_id", "parcel_emd_cd", "jimok", "sgg_nm", "emd_nm"))
+if not F_ID:
+    raise SystemExit("mapping.txt 의 parcel_id(필지 고유번호 칸) 가 ? 입니다 → python setup.py 또는 mapping.txt 고치기")
+parcels = [(g, a) for g, a in iter_layer(files=files, fields=[F_ID, F_EMD, F_JI, F_SGG, F_EMDNM], bbox=bbox, encoding=C.PARCEL_ENCODING)]
+if parcels and F_ID not in parcels[0][1]:
+    raise SystemExit(f"필지에 고유번호 칸 {F_ID} 가 없습니다 → mapping.txt 의 parcel_id 를 실제 칸 이름으로 (python setup.py 가 찾아 줌)")
 log(f"필지 {len(parcels):,}개")
 
 # 건물 점들을 100m 칸에 나눠 담아 두고(버킷), 필지마다 겹치는 칸의 건물만 검사 → 빠름
@@ -49,11 +55,13 @@ for g, a in parcels:
         if np.isfinite(H[i]) and g.Contains(pt):     # 건물 점이 이 필지 안에 있으면
             vals.append(H[i])
     if vals:
-        pmax[a["PNU"]] = max(vals)
-        pemd[a["PNU"]] = a.get("EMD_CD")
-        pji[a["PNU"]] = str(a.get("JIMOK") or "")
-        if a.get("EMD_NM"):
-            emd_name.setdefault(a.get("EMD_CD"), (str(a.get("SGG_NM") or ""), str(a.get("EMD_NM") or "")))
+        pid = a[F_ID]
+        ecd = a.get(F_EMD) if F_EMD in a else str(pid or "")[:10]      # [v6] 읍면동 코드 칸이 없으면 고유번호 앞 10자리(법정동 코드)
+        pmax[pid] = max(vals)
+        pemd[pid] = ecd
+        pji[pid] = str(a.get(F_JI) or "")
+        if a.get(F_EMDNM):
+            emd_name.setdefault(ecd, (str(a.get(F_SGG) or ""), str(a.get(F_EMDNM) or "")))
 
 dae = [k for k in pmax if "대" in pji[k]]            # 지목에 "대" 가 들어간 필지
 if pmax and not dae:
@@ -69,5 +77,5 @@ write_csv(os.path.join(C.OUTPUT, "parcel_by_legal_dong.csv"), ["emd_cd", "n", "h
           [[k, len(v), round(float(np.mean(v)), 3), round(float(np.mean(np.array(v) >= C.HBI_BANDS[1])), 3)] + list(emd_name.get(k, ("", "")))
            for k, v in emd.items() if len(v) >= C.MIN_COUNT])
 if not emd_name:
-    log("  필지에 SGG_NM·EMD_NM 필드가 없어 법정동 이름 칸은 비움 (11_legal_dong_join.py 는 이름이 있어야 결합 가능)")
+    log(f"  필지에 {F_SGG}·{F_EMDNM} 필드가 없어 법정동 이름 칸은 비움 (11_legal_dong_join.py 는 이름이 있어야 결합 가능, mapping.txt 의 sgg_nm·emd_nm)")
 log(rows)

@@ -207,3 +207,11 @@ LEGAL_DONG_DATA = {
     "교통사고_고령보행자": {"path": None, "sgg_col": "sigungu_nm", "dong_col": "bjd_nm",
                           "filter": {"accident_type_lv1": "차대사람", "victim_age": "65세이상"}, "contains": {"sido_nm": "서울"}},
 }
+
+# ────────────────────────────────────────────────────────────────────
+# 11. [v6] mapping.txt (python setup.py 가 만듦) — 칸 이름·레이어 이름·읽을 폴더·대상 구·건물 용도 방식
+# ────────────────────────────────────────────────────────────────────
+#  코드는 고치지 않고 mapping.txt 몇 줄로 자료 차이에 맞춥니다. 파일이 없으면 위의 값(v5 와 같음)을 그대로 씁니다.
+#  아래 두 줄은 지우지 마세요.
+from lib.mapping import apply as _apply_mapping
+_apply_mapping(globals())

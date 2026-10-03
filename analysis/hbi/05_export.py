@@ -102,6 +102,19 @@ for T in targets(b):                              # 목적지 종류마다 반�
 
 write_csv(os.path.join(C.OUTPUT, "grid_hbi.csv"),
           ["target", "cell_x", "cell_y", "n_bld", "weight", "hbi_mean", "hbi_median", "share_high", "elder_min", "flat_min"], grid_rows)
+# [v6] 실행 정보: output/run_meta.csv (대상 구, 건물 용도 방식, 연결률, 범위). summary.csv 에는 뜻이 바뀌는 경우에만 meta 행
+from lib.battr import load_stats
+st = load_stats()
+if st.get("mode") == "all":
+    summary.append(["meta", "건물 용도", "용도 미구분 (모든 건물을 집으로 봄, 의료·노유자 건물 목적지 없음)"])
+if C.TARGET_GU and st.get("n_res_all", 0) > st.get("n_res_target", 0):
+    summary.append(["meta", "대상 구 (출발점은 이 구의 집만, 옆 구는 길·목적지로만)", ",".join(C.TARGET_GU)])
+write_csv(os.path.join(C.OUTPUT, "run_meta.csv"), ["key", "value"], [
+    ["target_gu", ",".join(C.TARGET_GU) or "(전체)"], ["neighbor_gu", ",".join(C.NEIGHBOR_GU)],
+    ["building_attr_mode", st.get("mode", C.BUILDING_ATTR_MODE)],
+    ["register_link_rate", st.get("link_rate", "")], ["register_link_by_pk", st.get("by_pk", "")], ["register_link_by_pnu", st.get("by_pnu", "")],
+    ["n_residential_read", st.get("n_res_all", "")], ["n_residential_target", st.get("n_res_target", "")],
+    ["area_bbox", C.AREA_BBOX if C.AREA_BBOX else "None"], ["area_reason", C.AREA_REASON], ["map_folders", len(C.MAP_FOLDERS)]])
 write_csv(os.path.join(C.OUTPUT, "summary.csv"), ["target", "metric", "value"], summary)
 log("summary:")
 for r in summary:

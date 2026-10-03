@@ -8,6 +8,8 @@
   1.0 = 평지와 같음,  1.5 = 체감상 1.5배 멂,  1.8 이상 = 고립 위험
 [하는 일]
   1. 건물 레이어에서 주거용 건물(집) = 출발점, 의료시설·노유자시설 = 목적지를 골라냄
+     [v6] 용도·층수는 mapping.txt 의 building_attr_mode 대로 (layer 건물 칸 / register 건축물대장 / all 모두 집, lib/battr.py)
+     [v6] 출발점은 대상 구(mapping 의 target_gu) 안의 집만. 옆 구 건물은 목적지로만 씀 (lib/area.py)
   2. 정류장·정거장(지하철역) 레이어 = 목적지, external/pharmacy.csv 의 약국 = 목적지
      [v5] external/subway_elevators.csv (name, lon, lat) = "엘리베이터가 있는 역 출입구" 목적지 station_ev
           휠체어 결과는 이 목적지 기준으로 봅니다 (계단만 있는 출입구는 휠체어로 쓸 수 없으니까)
@@ -29,6 +31,8 @@ from lib.qedge import edge_flags
 from lib.qgraph import NearestIndex
 from lib.netload import load
 from lib.model import run_scenario
+from lib.battr import iter_buildings, load_stats, save_stats
+from lib.area import in_target
 
 net = load()
 nodes, e = net["nodes"], net["e"]
@@ -42,14 +46,13 @@ def snap(xs, ys, maxd):
 
 # 1. 건물 읽기 ─────────────────────────────────────────────
 log("건물 레이어 읽기")
-cu, ck, cf = C.COL["bld_use"], C.COL["bld_kind"], C.COL["bld_floor"]
 H = {"x": [], "y": [], "floors": [], "area": []}    # 집(출발점) 정보
 MED, ELD = [], []                                   # 의료시설, 노유자시설 좌표
 nb = 0
-for g, a in iter_layer("building", fields=[cu, ck, cf]):
+for g, a in iter_buildings():                       # [v6] 용도·종류·층수를 정해 주는 곳 (lib/battr.py)
     nb += 1
-    use = str(a.get(cu) or "").upper()              # 용도 코드 (없으면 빈 문자열)
-    kind = str(a.get(ck) or "").upper()             # 종류 코드
+    use = a["use"]                                  # 용도 코드 (없으면 빈 문자열)
+    kind = a["kind"]                                # 종류 코드
     p = g.PointOnSurface()                          # 건물 안쪽에 있는 대표점 (중심이 건물 밖에 찍히는 ㄷ자 건물 대비)
     if p is None:
         continue
@@ -61,13 +64,23 @@ for g, a in iter_layer("building", fields=[cu, ck, cf]):
     # 주거용이거나, 용도 칸이 비어 있는데 종류가 주택이면 → 집
     if use in C.RESIDENTIAL_USE or (not use.startswith("BDU") and kind in C.RESIDENTIAL_KIND):
         try:
-            fl = float(a.get(cf) or 1)              # 층수 (비어 있으면 1층)
-        except ValueError:
+            fl = float(a["floor"] or 1)             # 층수 (비어 있으면 1층)
+        except (TypeError, ValueError):
             fl = 1
         H["x"].append(x); H["y"].append(y)
         H["floors"].append(min(max(fl, 1), 60))     # 1~60층 범위로 제한
         H["area"].append(g.GetArea())               # 바닥 면적 (m²)
 H = {k: np.array(v, float) for k, v in H.items()}   # 리스트 → numpy 배열
+# [v6] 대상 구 밖(옆 구 등)의 집은 출발점에서 뺌 → 결과(04·05·06)에는 대상 구만. 대상 구가 비어 있으면 그대로 (v5 와 같음)
+n_res_all = len(H["x"])
+keep_t = in_target(H["x"], H["y"])
+H = {k: v[keep_t] for k, v in H.items()}
+st = load_stats()
+st.update(n_res_all=n_res_all, n_res_target=int(keep_t.sum()), target_gu=list(C.TARGET_GU), neighbor_gu=list(C.NEIGHBOR_GU),
+          n_med=len(MED), n_eld=len(ELD), n_bld_read=nb)
+save_stats(st)
+if C.TARGET_GU:
+    log(f"  대상 구({','.join(C.TARGET_GU)}) 안 주거 {int(keep_t.sum()):,}개 / 읽은 주거 {n_res_all:,}개 (나머지는 출발점에서 뺌, 목적지·길로는 씀)")
 H["weight"] = H["floors"] * H["area"]               # 연면적 ≈ 거주 규모 (고령인구 배분에 사용)
 H["node"], H["snap_d"] = snap(H["x"], H["y"], C.ORIGIN_SNAP_MAX)
 log(f"  건물 {nb:,}개 중 주거 {len(H['x']):,}개 (네트워크 연결 {(H['node'] >= 0).mean():.1%})  ← 95% 이상이면 정상")

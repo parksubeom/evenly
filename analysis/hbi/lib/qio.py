@@ -89,6 +89,20 @@ def find_files(root, keys, ext=".shp"):
     return sorted(set(out))                          # 중복 제거 + 정렬
 
 
+def in_map_folders(path):
+    """[v6] config.MAP_FOLDERS(mapping.txt 의 map_folders) 가 있으면 그 하위 폴더 안의 파일만 True. 비어 있으면 모두 True"""
+    sel = getattr(C, "MAP_FOLDERS", None)
+    if not sel or not C.DATA_ROOT_MAP:
+        return True
+    rel = os.path.relpath(os.path.abspath(path), os.path.abspath(C.DATA_ROOT_MAP)).replace("\\", "/")
+    return any(rel == f.replace("\\", "/").strip("/") or rel.startswith(f.replace("\\", "/").strip("/") + "/") for f in sel)
+
+
+def layer_files(key):
+    """[v6] 수치지형도 레이어 key 의 파일 목록 (config.LAYERS 의 글자가 파일명에 있고, map_folders 안에 있는 것)"""
+    return [f for f in find_files(C.DATA_ROOT_MAP, C.LAYERS.get(key) or []) if in_map_folders(f)] if C.LAYERS.get(key) else []
+
+
 # ───────────────────────── 벡터(shp) 읽기 ─────────────────────────
 def open_vector(path, encoding=None):
     """shp 등 벡터 파일 열기. .cpg(인코딩 정보) 파일이 없으면 한글 인코딩을 지정해서 엶
@@ -123,12 +137,13 @@ def iter_layer(key=None, files=None, fields=None, bbox=None, encoding=None):
 
     key    : config.LAYERS 의 키 (예: "building"). 그 레이어 파일을 전부 찾아 이어서 읽음
     files  : key 대신 파일 목록을 직접 줄 수도 있음
-    fields : 읽을 속성 이름 목록 (None 이면 전부)
-    bbox   : 이 범위 안의 도형만 (None 이면 config.AREA_BBOX, 그것도 None 이면 전체)
+    fields : 읽을 속성 이름 목록 (None 이면 전부). [v6] 대소문자 무시 (파일이 "pnu" 여도 "PNU" 로 요청 가능),
+             돌려주는 키는 요청한 이름 그대로. None·"?" 처럼 비어 있는 이름은 건너뜀
+    bbox   : 이 범위 안의 도형만 (None 이면 config.AREA_BBOX, 그것도 None 이면 전체. [v6] False 면 무조건 전체)
     encoding: 한글 인코딩 직접 지정 (필지는 config.PARCEL_ENCODING)
     """
-    files = files if files is not None else find_files(C.DATA_ROOT_MAP, C.LAYERS[key])
-    bbox = bbox or C.AREA_BBOX
+    files = files if files is not None else layer_files(key)
+    bbox = C.AREA_BBOX if bbox is None else (bbox or None)    # [v6] bbox=False 면 AREA_BBOX 도 무시하고 전부
     for f in files:
         ds = open_vector(f, encoding)
         if ds is None:
@@ -145,7 +160,13 @@ def iter_layer(key=None, files=None, fields=None, bbox=None, encoding=None):
                 lyr.SetSpatialFilterRect(min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
         defn = lyr.GetLayerDefn()
         names = [defn.GetFieldDefn(i).GetName() for i in range(defn.GetFieldCount())]   # 속성 이름 목록
-        want = [n for n in names if fields is None or n in fields]
+        if fields is None:
+            want = [(n, n) for n in names]
+        else:                                                 # [v6] (돌려줄 이름, 파일의 실제 이름) 쌍, 대소문자 무시
+            up = {}
+            for n in names:
+                up.setdefault(n.upper(), n)
+            want = [(q, up[q.upper()]) for q in dict.fromkeys(fields) if q and q.upper() in up]
         for feat in lyr:                                      # 도형(feature) 하나씩
             g = feat.GetGeometryRef()
             if g is None or g.IsEmpty():
@@ -154,7 +175,7 @@ def iter_layer(key=None, files=None, fields=None, bbox=None, encoding=None):
             if ct is not None:
                 g.Transform(ct)
             g.FlattenTo2D()                                   # 높이(z) 좌표는 버리고 평면 좌표만
-            yield g, {n: feat.GetField(n) for n in want}
+            yield g, {q: feat.GetField(n) for q, n in want}
         ds = None                                             # 파일 닫기
 
 
@@ -163,7 +184,7 @@ def coverage_envelopes(keys=("sidewalk_cl", "road_cl")):
     경계 효과 처리(03_hbi.py)에 사용: 이 범위들의 합집합 가장자리에 가까운 건물을 표시"""
     out = []
     for key in keys:
-        for f in find_files(C.DATA_ROOT_MAP, C.LAYERS[key]):
+        for f in layer_files(key):
             ds = open_vector(f)
             if ds is None:
                 continue
@@ -258,6 +279,32 @@ def read_csv(path):
         return list(csv.DictReader(f))
 
 
+def _ci_row_class(header):
+    """[v6] 열 이름을 대소문자·앞뒤 공백 무시로 찾는 행(dict). 정확히 같은 이름이 있으면 그대로 (v5 와 같음)
+    예) 파일 열이 "x_coord" 여도 r.get("X_COORD") 로 읽힘. JS로 치면 Proxy 로 키를 대문자로 바꿔 찾는 것"""
+    up = {}
+    for h in header or []:
+        if h is not None:
+            up.setdefault(str(h).strip().upper(), h)
+
+    class Row(dict):
+        def __missing__(self, k):
+            a = up.get(str(k).strip().upper())
+            if a is None or a == k:
+                raise KeyError(k)
+            return dict.__getitem__(self, a)
+
+        def get(self, k, d=None):
+            try:
+                return self[k]
+            except KeyError:
+                return d
+
+        def __contains__(self, k):
+            return dict.__contains__(self, k) or str(k).strip().upper() in up
+    return Row
+
+
 def read_any(path, sep=None):
     """[v5] 안심구역에서 받는 CSV 를 읽기: 인코딩(utf-8-sig → cp949 → euc-kr)과 구분자(쉼표·파이프 | ·탭)를 자동으로 맞춤.
     sep 를 주면 그 구분자를 씀 (config 에서 직접 지정). 반환: (행 목록 [{열: 값}], 인코딩, 구분자)
@@ -268,7 +315,9 @@ def read_any(path, sep=None):
                 head = f.readline()
                 f.seek(0)
                 d = sep or max([",", "|", "\t"], key=head.count)     # 첫 줄에 가장 많이 나오는 구분자
-                return list(csv.DictReader(f, delimiter=d)), enc, d
+                rd = csv.DictReader(f, delimiter=d)
+                Row = _ci_row_class(rd.fieldnames)                   # [v6] 열 이름 대소문자 무시
+                return [Row(r) for r in rd], enc, d
         except UnicodeDecodeError:
             continue
     raise RuntimeError(f"인코딩을 알 수 없음: {path}")

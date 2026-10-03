@@ -39,10 +39,10 @@ def _line_arrays(g):
     return []                                            # 점·면 등 선이 아닌 도형은 무시
 
 
-def polygons(key):
-    """config.LAYERS[key] 레이어에서 면(폴리곤) 도형만 골라 [(도형, 속성), ...] 로 반환"""
+def polygons(key, fields=None):
+    """config.LAYERS[key] 레이어에서 면(폴리곤) 도형만 골라 [(도형, 속성), ...] 로 반환. [v6] fields = 읽을 칸 (대소문자 무시)"""
     out = []
-    for g, a in iter_layer(key):
+    for g, a in iter_layer(key, fields=fields):
         if ogr.GT_Flatten(g.GetGeometryType()) in (ogr.wkbPolygon, ogr.wkbMultiPolygon):
             out.append((g, a))
     return out
@@ -114,8 +114,8 @@ def build_edges():
     flat = np.zeros(m, bool)
 
     # ④ 계단·교량·터널 표시 ─────────────────────────────
-    stairs = polygons("stairs")
     sk = C.COL["stair_kind"]
+    stairs = polygons("stairs", [sk] if sk else [])            # [v6] 구조 칸 이름은 mapping 의 stair_kind (대소문자 무시)
     # 구조 코드가 "계단"(PGS001)이거나 비어 있는 것만 사용 (스탠드 등 제외)
     stairs = [(g, a) for g, a in stairs if str(a.get(sk, C.STAIR_CODE) or C.STAIR_CODE).upper() in (C.STAIR_CODE, "NONE", "")]
     crossed = set()                                   # 길이 지나가는 계단 번호 모음
@@ -125,7 +125,7 @@ def build_edges():
         crossed = set(which[ins].tolist())
         log(f"  계단 {len(stairs):,}개 중 네트워크가 지나는 계단 {len(crossed):,}개, 계단 링크 {ins.sum():,}개")
     for key in ("bridge", "tunnel"):
-        ps = polygons(key)
+        ps = polygons(key, [])
         if ps:
             flat |= points_in_polygons(XM, YM, ps)[0]      # 다리 위·터널 안은 DEM 이 땅 높이를 재서 틀리므로 경사 0
     log(f"  교량·터널 구간(경사 0 처리) {flat.sum():,}개")
