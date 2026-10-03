@@ -114,7 +114,9 @@ if C.TARGET_GU and st.get("n_res_all", 0) > st.get("n_res_target", 0):
 write_csv(os.path.join(C.OUTPUT, "run_meta.csv"), ["key", "value"], [
     ["target_gu", ",".join(C.TARGET_GU) or "(전체)"], ["neighbor_gu", ",".join(C.NEIGHBOR_GU)],
     ["building_attr_mode", st.get("mode", C.BUILDING_ATTR_MODE)],
-    ["register_link_rate", st.get("link_rate", "")], ["register_link_by_pk", st.get("by_pk", "")], ["register_link_by_pnu", st.get("by_pnu", "")],
+    ["register_link_rate", st.get("link_rate", "")], ["register_join", st.get("register_join", "")], ["register_join_used", st.get("join_used", "")],
+    ["register_rate_pnu", st.get("rate_pnu", "")], ["register_rate_pk", st.get("rate_pk", "")],
+    ["ufid_match_rate", "" if st.get("rate_ufid") is None else st.get("rate_ufid")],
     ["n_residential_read", st.get("n_res_all", "")], ["n_residential_target", st.get("n_res_target", "")],
     ["area_bbox", C.AREA_BBOX if C.AREA_BBOX else "None"], ["area_reason", C.AREA_REASON], ["map_folders", len(C.MAP_FOLDERS)]])
 write_csv(os.path.join(C.OUTPUT, "summary.csv"), ["target", "metric", "value"], summary)

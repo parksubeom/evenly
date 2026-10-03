@@ -9,6 +9,8 @@ lib/battr.py ─ [v6] 건물마다 "용도·종류·층수" 를 어디서 가져
   register : 건물 → (건물 안쪽 대표점이 들어가는) 필지 → 건축물대장
                ① 필지에 건축물대장 번호 칸(parcel_bldrgst)이 있고 대장에 그 번호가 있으면 그 행
                ② 없으면 필지 고유번호(pnu) 로 대장 행들
+             (①·② 중 무엇을 쓸지는 mapping 의 register_join = auto | pnu | pk. auto 는 두 연결률을 재서 높은 쪽, 같으면 pnu.
+              두 번호 체계는 섞지 않음. 참고로 건물 UFID 와 필지 ufid 의 일치율도 잼)
              한 필지에 대장 행이 여럿이면: 주건축물 행 우선, 그중 연면적이 가장 큰 행의 용도. 층수는 행들 중 최대
              연결률(용도가 붙은 건물 비율)을 화면에 찍고 work/battr_stats.json 에 저장
   all      : 모든 건물을 집으로 봄 (용도 미구분). 의료·노유자 "건물" 목적지는 없음 (약국 등 다른 목적지만)
@@ -147,15 +149,18 @@ def _register(blds, quiet=False):
     X = np.array([b[1] for b in blds]); Y = np.array([b[2] for b in blds])
     bbox = [float(X.min()) - 50, float(Y.min()) - 50, float(X.max()) + 50, float(Y.max()) + 50]
     files = find_files(C.DATA_ROOT_PARCEL, [""], ".shp")
-    want = [F["parcel_id"], F["parcel_bldrgst"]]
+    want = [F["parcel_id"], F["parcel_bldrgst"], F.get("parcel_ufid")]
     cell = 50.0
     bucket = collections.defaultdict(list)
     for i, (x, y) in enumerate(zip(X, Y)):
         bucket[(int(x // cell), int(y // cell))].append(i)
     parcel_of = [None] * len(blds)          # 건물 i → (pnu, 대장번호)
+    pufid = set()                           # 필지 ufid (참고: 건물 UFID 와 같은 체계인지)
     npar = 0
-    for g, a in iter_layer(files=files, fields=want, bbox=bbox, encoding=C.PARCEL_ENCODING):
+    for g, a in iter_layer(files=files, fields=[w for w in want if w], bbox=bbox, encoding=C.PARCEL_ENCODING):
         npar += 1
+        if F.get("parcel_ufid") and a.get(F["parcel_ufid"]):
+            pufid.add(str(a[F["parcel_ufid"]]).strip())
         x0, x1, y0, y1 = g.GetEnvelope()
         for cx in range(int(x0 // cell), int(x1 // cell) + 1):
             for cy in range(int(y0 // cell), int(y1 // cell) + 1):
@@ -166,26 +171,40 @@ def _register(blds, quiet=False):
                     pt.AddPoint_2D(float(X[i]), float(Y[i]))
                     if g.Contains(pt):
                         parcel_of[i] = (str(a.get(F["parcel_id"]) or "").strip(), str(a.get(F["parcel_bldrgst"]) or "").strip())
+    # 세 연결률을 모두 잼: (a) pnu, (b) 대장번호(bldrgst_pk), (c) 참고: 건물 UFID 가 필지 ufid 에 있는 비율
+    n = len(blds)
+    hit_pnu = [p is not None and p[0] in by_pnu for p in parcel_of]
+    hit_pk = [p is not None and bool(p[1]) and p[1] in by_pk for p in parcel_of]
+    bu = [str((b[3] or {}).get(C.COL.get("bld_ufid")) or "").strip() for b in blds] if C.COL.get("bld_ufid") else []
+    rate = lambda h: round(sum(h) / n, 4) if n else 0.0
+    r_pnu, r_pk = rate(hit_pnu), rate(hit_pk)
+    r_ufid = round(sum(1 for u in bu if u and u in pufid) / n, 4) if (n and bu and pufid) else None
+    # 방식 고르기: mapping 의 register_join = auto | pnu | pk. auto 는 연결률이 높은 쪽 (같으면 pnu).
+    #   두 번호 체계를 섞지 않음 (필지의 BLDRGST_PK 는 정의서상 총괄표제부 번호라, 표제부 일련번호와 우연히 같은 값이 다른 건물일 수 있음)
+    join = (getattr(C, "REGISTER_JOIN", "auto") or "auto").lower()
+    if join not in ("auto", "pnu", "pk"):
+        raise SystemExit(f"mapping.txt 의 register_join = {join} 는 쓸 수 없습니다 (auto / pnu / pk)")
+    use = join if join != "auto" else ("pk" if r_pk > r_pnu else "pnu")
     out, st = [], collections.Counter()
-    for i in range(len(blds)):
+    for i in range(n):
         p = parcel_of[i]
         if p is None:
-            out.append(("", None)); st["필지 없음"] += 1; continue
-        pnu, pk = p
-        if pk and pk in by_pk:
-            out.append(pick([by_pk[pk]], R)); st["대장번호로 연결"] += 1
-        elif pnu in by_pnu:
-            out.append(pick(by_pnu[pnu], R)); st["필지번호로 연결"] += 1
+            out.append(("", None)); st["필지 없음"] += 1
+        elif use == "pk" and hit_pk[i]:
+            out.append(pick([by_pk[p[1]]], R)); st["연결"] += 1
+        elif use == "pnu" and hit_pnu[i]:
+            out.append(pick(by_pnu[p[0]], R)); st["연결"] += 1
         else:
             out.append(("", None)); st["필지는 있으나 대장 없음"] += 1
-    n = len(blds)
-    linked = st["대장번호로 연결"] + st["필지번호로 연결"]
-    stats = dict(mode="register", n_bld=n, n_parcel_read=npar, linked=linked, link_rate=round(linked / n, 4) if n else 0.0,
-                 by_pk=st["대장번호로 연결"], by_pnu=st["필지번호로 연결"], no_parcel=st["필지 없음"], no_register=st["필지는 있으나 대장 없음"],
-                 register=info)
+    linked = st["연결"]
+    stats = dict(mode="register", register_join=join, join_used=use, n_bld=n, n_parcel_read=npar, linked=linked,
+                 link_rate=round(linked / n, 4) if n else 0.0, rate_pnu=r_pnu, rate_pk=r_pk, rate_ufid=r_ufid,
+                 no_parcel=st["필지 없음"], no_register=st["필지는 있으나 대장 없음"], register=info)
     if not quiet:
-        log(f"  건물 → 필지 → 건축물대장 연결 {linked:,}/{n:,} ({stats['link_rate']:.1%}): 대장번호 {stats['by_pk']:,}, 필지번호 {stats['by_pnu']:,}, "
-            f"필지 없음 {stats['no_parcel']:,}, 대장 없음 {stats['no_register']:,}  ← 연결 안 된 건물은 용도 미상(집·목적지 아님)")
+        log(f"  연결률 (a) 필지번호 pnu {r_pnu:.1%}, (b) 대장번호 {r_pk:.1%}, (c) 참고: 건물 UFID = 필지 ufid "
+            f"{'칸 없음' if r_ufid is None else f'{r_ufid:.1%}'} → {'자동으로 ' if join == 'auto' else ''}{'필지번호' if use == 'pnu' else '대장번호'}로 연결")
+        log(f"  건물 → 필지 → 건축물대장 연결 {linked:,}/{n:,} ({stats['link_rate']:.1%}), 필지 없음 {stats['no_parcel']:,}, "
+            f"대장 없음 {stats['no_register']:,}  ← 연결 안 된 건물은 용도 미상(집·목적지 아님)")
     return out, stats
 
 
@@ -221,7 +240,7 @@ def iter_buildings(save=True, quiet=False):
         return
     # register: 건물을 먼저 다 읽고(대표점 필요), 필지·대장을 붙인 뒤 돌려줌
     blds = []
-    for g, a in iter_layer("building", fields=[cf] if cf else []):
+    for g, a in iter_layer("building", fields=[c for c in (cf, C.COL.get("bld_ufid")) if c]):
         p = g.PointOnSurface()
         if p is None:
             continue

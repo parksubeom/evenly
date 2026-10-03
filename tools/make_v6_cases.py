@@ -124,7 +124,8 @@ def main():
             geom = box(x - 15, y - 15, x + 15, y + 15)
             jm = "대" if i % 9 else "도"
             low.append((geom, {"pnu": pnu, "sido_cd": "11", "sgg_cd": CODE[gu], "emd_cd": CODE[gu] + "10100", "jimok": jm,
-                               "sgg_nm": gu, "emd_nm": f"가상{gi}동", "bldrgst_pk": pk, "owner_nm": "OWNER-SHOULD-NOT-BE-READ", "jiga": "999999"}))
+                               "sgg_nm": gu, "emd_nm": f"가상{gi}동", "bldrgst_pk": pk, "owner_nm": "OWNER-SHOULD-NOT-BE-READ", "jiga": "999999",
+                               "ufid": f"B{gi:02d}{i:05d}" if i % 4 == 0 else f"P{gi:02d}{i:05d}"}))   # 4곳 중 1곳만 건물 UFID 와 같음 (참고 일치율 시험)
             kor.append((geom, {"고유번호": pnu, "지목": jm, "시군구명": gu, "읍면동명": f"가상{gi}동"}))
             nm = {"BDU001": "단독주택", "BDU002": "공동주택", "BDU003": "제1종근린생활시설", "BDU009": "의료시설", "BDU011": "노유자시설"}[u]
             reg.append([pk or f"N{gi:02d}{i:06d}", pnu, "", nm, "", int(f), 100.0 + 10 * f, "주"])
@@ -132,7 +133,7 @@ def main():
                 reg.append([f"A{gi:02d}{i:06d}", pnu, "", "창고시설", "", 1, 9999.0, "부속"])
         pdir = "경기" if gu == "경기남부" else "서울"
         shp(f"{OUT}/parcel_lower/{pdir}/{gu}.shp", ogr.wkbPolygon,
-            ["pnu", "sido_cd", "sgg_cd", "emd_cd", "jimok", "sgg_nm", "emd_nm", "bldrgst_pk", "owner_nm", "jiga"], low, "UTF-8", False)
+            ["pnu", "sido_cd", "sgg_cd", "emd_cd", "jimok", "sgg_nm", "emd_nm", "bldrgst_pk", "owner_nm", "jiga", "ufid"], low, "UTF-8", False)
         shp(f"{OUT}/parcel_korean/{pdir}/{gu}.shp", ogr.wkbPolygon, ["고유번호", "지목", "시군구명", "읍면동명"], kor, "CP949", False)
         meta[gu] = dict(folder=folder, n_bld=len(pts), n_res=int(np.isin(use, ["BDU001", "BDU002"]).sum()))
     shp(f"{OUT}/parcel_gyeonggi/경기/수원시.shp", ogr.wkbPolygon, ["pnu", "jimok"],

@@ -386,9 +386,10 @@ def main():
     impact = {"bld_use": "용도 칸 없음 → 건물 용도 방식 register·all", "bld_kind": "용도가 빈 건물의 주택 판정에만 씀 (영향 작음)",
               "bld_floor": "층수 없으면 1층으로 봄 (고령인구 배분 가중치만 영향)", "stair_kind": "계단·스탠드 구분 안 함 (모두 계단)",
               "bus_kind": "안 씀", "parcel_id": "06·register 멈춤", "parcel_bldrgst": "대장 연결은 필지번호로만",
+              "bld_ufid": "참고용 UFID 일치율만 못 잼", "parcel_ufid": "참고용 UFID 일치율만 못 잼",
               "parcel_emd_cd": "고유번호 앞 10자리로 대신", "jimok": "06 '대' 필지·13 설치 부지 계산 안 됨",
               "sgg_nm": "11 교통사고 결합 안 됨", "emd_nm": "11 교통사고 결합 안 됨"}
-    lay_keys = [("building", ["bld_use", "bld_kind", "bld_floor"]), ("stairs", ["stair_kind"]), ("bus_stop", ["bus_kind"])]
+    lay_keys = [("building", ["bld_use", "bld_kind", "bld_floor", "bld_ufid"]), ("stairs", ["stair_kind"]), ("bus_stop", ["bus_kind"])]
     enc_map = C.SHP_ENCODING
     for lk, keys in lay_keys:
         if not maps.get(lk):
@@ -409,7 +410,7 @@ def main():
         cfg["PARCEL_ENCODING"] = enc
         names, vv, _, _ = sample(p, enc, 300)
         print(f"  필지 칸: {[n for n in names if not any(x in n.upper() for x in M.FORBIDDEN_FIELD_PARTS)]} (소유·공시지가 칸은 읽지 않음), 인코딩 {enc}")
-        for k in ("parcel_id", "parcel_bldrgst", "parcel_emd_cd", "jimok", "sgg_nm", "emd_nm"):
+        for k in ("parcel_id", "parcel_bldrgst", "parcel_ufid", "parcel_emd_cd", "jimok", "sgg_nm", "emd_nm"):
             n, sh = find_field(k, names, vv, old.get(k))
             vals[k] = n or "?"
             if not n:

@@ -188,7 +188,7 @@ def main():
     bnames = fields_of(have["building"][0])
     print(f"  건물 칸: {bnames}")
     use_ok = has_field(bnames, C.COL.get("bld_use"))
-    for k in ("bld_use", "bld_kind", "bld_floor"):
+    for k in ("bld_use", "bld_kind", "bld_floor", "bld_ufid"):
         print(f"  {k} = {C.COL.get(k) or '?'} → {'있음' if has_field(bnames, C.COL.get(k)) else '없음'}")
     mode = C.BUILDING_ATTR_MODE
     reg_ok = battr.register_path() is not None
@@ -206,7 +206,7 @@ def main():
     if pfiles:
         pn = fields_of(pfiles[0], C.PARCEL_ENCODING)
         print(f"  필지 칸: {[n for n in pn if not any(x in n.upper() for x in ('OWN', 'JIGA'))]} (소유·공시지가 칸은 표시·사용 안 함)")
-        for k in ("parcel_id", "parcel_bldrgst", "parcel_emd_cd", "jimok", "sgg_nm", "emd_nm"):
+        for k in ("parcel_id", "parcel_bldrgst", "parcel_ufid", "parcel_emd_cd", "jimok", "sgg_nm", "emd_nm"):
             print(f"  {k} = {C.FIELD.get(k) or '?'} → {'있음' if has_field(pn, C.FIELD.get(k)) else '없음'}")
         if not has_field(pn, C.FIELD.get("parcel_id")):
             (stop if mode == "register" else warn)("필지 고유번호 칸을 찾지 못함", "mapping.txt 의 parcel_id 를 필지 칸 중 19자리 번호 칸으로")
@@ -275,7 +275,7 @@ def main():
             cx, cy = (e[0] + e[2]) / 2, (e[1] + e[3]) / 2
             wins.append(("자료 가운데", [cx - WIN / 2, cy - WIN / 2, cx + WIN / 2, cy + WIN / 2]))
     old = C.AREA_BBOX
-    tot = collections.Counter(); links = []
+    tot = collections.Counter(); links = []; jr = collections.Counter()
     for g, w in wins:
         C.AREA_BBOX = w
         n = res = med = eld = 0
@@ -313,13 +313,25 @@ def main():
         else:
             lk = None
         tot.update(n=n, res=res, med=med, eld=eld)
-        extra = f", 대장 연결 {st.get('link_rate', 0):.0%}" if st.get("mode") == "register" else ""
+        extra = ""
+        if st.get("mode") == "register" and n:
+            extra = f", 대장 연결 {st.get('link_rate', 0):.0%} (pnu {st.get('rate_pnu', 0):.0%} / 대장번호 {st.get('rate_pk', 0):.0%})"
+            jr.update(n=n, pnu=st.get("rate_pnu", 0) * n, pk=st.get("rate_pk", 0) * n)
+            if st.get("rate_ufid") is not None:
+                jr.update(nu=n, ufid=st["rate_ufid"] * n)
         print(f"  {g}: 건물 {n:,}, 주거 {res:,} ({res / n if n else 0:.0%}){extra}, 의료 {med}, 노유자 {eld}, "
               f"주거→길 연결 {'-' if lk is None else f'{lk:.0%}'}")
         if st.get("mode") == "register" and n and st.get("link_rate", 0) < 0.5:
             warn(f"{g}: 건축물대장 연결률 {st.get('link_rate', 0):.0%} (50% 미만)",
                  "mapping.txt 의 parcel_id·parcel_bldrgst·reg_pnu·reg_pk 확인 (필지 번호와 대장 번호가 같은 체계인지)")
     C.AREA_BBOX = old
+    if jr["n"]:
+        rp, rk = jr["pnu"] / jr["n"], jr["pk"] / jr["n"]
+        ru = f"{jr['ufid'] / jr['nu']:.0%}" if jr["nu"] else "칸 없음"
+        use = C.REGISTER_JOIN if C.REGISTER_JOIN != "auto" else ("pk" if rk > rp else "pnu")
+        print(f"  건축물대장 연결률 (표본 합): (a) 필지번호 pnu {rp:.0%}, (b) 대장번호 {rk:.0%}, (c) 참고: 건물 UFID = 필지 ufid {ru}")
+        print(f"  → register_join = {C.REGISTER_JOIN}: {'필지번호' if use == 'pnu' else '대장번호'}로 연결"
+              + (" (연결률이 높은 쪽, 같으면 필지번호)" if C.REGISTER_JOIN == "auto" else " (mapping.txt 에서 정함)"))
     if not STOP and tot["n"]:
         rs = tot["res"] / tot["n"]
         print(f"  합계: 건물 {tot['n']:,}, 주거 비율 {rs:.0%}")

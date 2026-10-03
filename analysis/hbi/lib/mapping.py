@@ -31,16 +31,19 @@ DEFAULTS = {
     "bld_use": ("BPRP_SE", "건물 레이어의 용도 칸", "건물"),
     "bld_kind": ("BULD_SE", "건물 레이어의 종류 칸", "건물"),
     "bld_floor": ("BFLR_CO", "건물 레이어의 층수 칸", "건물"),
+    "bld_ufid": ("UFID", "건물 레이어의 고유번호(UFID) 칸 (참고용: 필지 ufid 와 같은 체계인지)", "건물"),
     "stair_kind": ("ARSFCKD_SE", "계단 레이어의 구조 칸 (계단·스탠드 구분)", "레이어 칸"),
     "bus_kind": ("PTRFCKD_SE", "정류장 레이어의 종류 칸", "레이어 칸"),
     # ── 필지 ──
     "parcel_id": ("PNU", "필지 고유번호(19자리) 칸", "필지"),
     "parcel_bldrgst": ("BLDRGST_PK", "필지의 건축물대장 번호 칸 (없으면 ?)", "필지"),
     "parcel_emd_cd": ("EMD_CD", "필지의 법정 읍면동 코드 칸 (없으면 고유번호 앞 10자리로 대신)", "필지"),
+    "parcel_ufid": ("UFID", "필지의 공간객체등록번호(UFID) 칸 (참고용)", "필지"),
     "jimok": ("JIMOK", "필지의 지목 칸", "필지"),
     "sgg_nm": ("SGG_NM", "필지의 시군구 이름 칸", "필지"),
     "emd_nm": ("EMD_NM", "필지의 법정동 이름 칸", "필지"),
     # ── 건축물대장 (building_attr_mode = register 일 때) ──
+    "register_join": ("auto", "필지 ↔ 대장 연결: auto(연결률 높은 쪽, 같으면 pnu) / pnu(필지번호) / pk(대장번호)", "건축물대장"),
     "register_file": ("external/building_register.csv", "건축물대장 가공 파일 (hbi 폴더 기준 또는 전체 주소)", "건축물대장"),
     "reg_pk": ("bldrgst_pk", "대장의 건축물대장 번호 칸", "건축물대장"),
     "reg_pnu": ("pnu", "대장의 필지 고유번호 칸", "건축물대장"),
@@ -66,6 +69,8 @@ LAYER_KEYS = ["sidewalk_cl", "road_cl", "stairs", "building", "bus_stop", "bridg
 ALIASES = {
     "bld_use": ["BPRP_SE", "BLDG_USE", "BULD_USE", "USE_SE", "용도", "건물용도", "주용도"],
     "bld_kind": ["BULD_SE", "BLDG_SE", "BLDG_KND", "종류", "건물종류"],
+    "bld_ufid": ["UFID", "UFID_CD", "고유식별자"],
+    "parcel_ufid": ["UFID", "UFID_CD", "공간객체등록번호"],
     "bld_floor": ["BFLR_CO", "GRO_FLO_CO", "FLR_CO", "FLOORS", "층수", "지상층수"],
     "stair_kind": ["ARSFCKD_SE", "STR_SE", "구조"],
     "bus_kind": ["PTRFCKD_SE", "BUS_SE", "종류"],
@@ -130,11 +135,12 @@ def apply(g):
     for k in LAYER_KEYS:
         if f"layer_{k}" in raw or k not in lay:
             lay[k] = split_list(m.get(f"layer_{k}"))
-    for k in ("bld_use", "bld_kind", "bld_floor", "stair_kind", "bus_kind"):
+    for k in ("bld_use", "bld_kind", "bld_floor", "bld_ufid", "stair_kind", "bus_kind"):
         if k in raw or k not in col:
             col[k] = m.get(k)
     g["LAYERS"], g["COL"] = lay, col
-    g["FIELD"] = {k: m.get(k) for k in ("parcel_id", "parcel_bldrgst", "parcel_emd_cd", "jimok", "sgg_nm", "emd_nm",
+    g["REGISTER_JOIN"] = (m.get("register_join") or "auto").strip().lower()
+    g["FIELD"] = {k: m.get(k) for k in ("parcel_id", "parcel_bldrgst", "parcel_ufid", "parcel_emd_cd", "jimok", "sgg_nm", "emd_nm",
                                         "reg_pk", "reg_pnu", "reg_use_cd", "reg_use_nm", "reg_floor", "reg_area", "reg_main")}
     g["TARGET_GU"] = split_list(m.get("target_gu"))
     g["NEIGHBOR_GU"] = split_list(m.get("neighbor_gu"))
