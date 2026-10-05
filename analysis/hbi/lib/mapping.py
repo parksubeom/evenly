@@ -97,14 +97,17 @@ def read_raw(path=MAPPING_FILE):
     """mapping.txt 에 실제로 적힌 줄만 {키: 값}. 파일이 없으면 {}"""
     vals = {}
     if os.path.exists(path):
-        for enc in ("utf-8-sig", "cp949"):
+        # 메모장 저장 형식 네 가지를 모두 읽음: UTF-8, UTF-8(BOM), ANSI(=CP949), 유니코드(=UTF-16, 앞에 FF FE 표시)
+        raw = open(path, "rb").read()
+        encs = ("utf-16",) if raw[:2] in (b"\xff\xfe", b"\xfe\xff") else ("utf-8-sig", "cp949")
+        for enc in encs:
             try:
-                lines = open(path, encoding=enc).read().splitlines()
+                lines = raw.decode(enc).splitlines()
                 break
             except UnicodeDecodeError:
                 continue
-        else:
-            lines = []
+        else:                                   # 조용히 기본값으로 넘어가지 않고 멈춤 (고친 줄이 무시되면 안 되므로)
+            raise SystemExit("mapping.txt 의 글자 형식을 읽지 못했습니다 → 메모장에서 파일 → 다른 이름으로 저장 → 인코딩 UTF-8 → 같은 이름으로 저장")
         for ln in lines:
             s = ln.split("#", 1)[0].strip()
             if "=" not in s:
@@ -170,5 +173,5 @@ def write(vals, path=MAPPING_FILE, notes=None, header=""):
     extra = [k for k in vals if k not in DEFAULTS]
     if extra:
         out += ["", "# ── 그 밖 ──"] + [f"{k} = {vals[k]}" for k in extra]
-    with open(path, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8-sig") as f:      # BOM 붙은 UTF-8: 옛 메모장에서도 한글이 바로 보임
         f.write("\n".join(out) + "\n")

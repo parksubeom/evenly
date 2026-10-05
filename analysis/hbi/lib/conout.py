@@ -31,7 +31,7 @@ class Tee:
 
     def __enter__(self):
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
-        self.f = open(self.path, "w", encoding="utf-8")
+        self.f = open(self.path, "w", encoding="utf-8-sig")   # BOM 붙은 UTF-8 (메모장에서 바로 읽힘)
         self.old = sys.stdout
         sys.stdout = self
         return self

@@ -87,7 +87,7 @@ if os.path.exists(os.path.join(C.OUTPUT, "diagnose.txt")):      # 지난번 실�
     os.remove(os.path.join(C.OUTPUT, "diagnose.txt"))
 logdir = os.path.join(C.OUTPUT, "runlog")
 os.makedirs(logdir, exist_ok=True)
-logf = open(os.path.join(logdir, time.strftime("runlog_%Y%m%d_%H%M%S.txt")), "w", encoding="utf-8")
+logf = open(os.path.join(logdir, time.strftime("runlog_%Y%m%d_%H%M%S.txt")), "w", encoding="utf-8-sig")   # BOM: 메모장에서 바로 읽힘
 
 
 def out(s):
@@ -120,7 +120,7 @@ for s in steps:
             out(f"!! 원인: {d[0]}\n!! 할 일: {d[1]}\n!! 고친 뒤: python run_all.py --from {s[:2]}")
         else:
             out(f"!! 알려진 오류가 아닙니다 → 화면의 마지막 줄을 적어 오세요 (output/diagnose.txt 에도 저장). 고친 뒤: python run_all.py --from {s[:2]}")
-        with open(os.path.join(C.OUTPUT, "diagnose.txt"), "w", encoding="utf-8") as f:
+        with open(os.path.join(C.OUTPUT, "diagnose.txt"), "w", encoding="utf-8-sig") as f:
             f.write(f"단계 {s}\n원인: {d[0] if d else '알 수 없음'}\n할 일: {d[1] if d else '-'}\n\n마지막 화면 (값이 될 수 있는 긴 따옴표 글자는 … 로 가림)\n")
             f.write("\n".join(scrub(x) for x in tail[-40:]) + "\n")
         logf.close()

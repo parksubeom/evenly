@@ -93,5 +93,5 @@ def dump(path=None):
             except Exception as e:
                 L.append(f"  {k}: {os.path.basename(p) if p else ''} 읽기 실패 {type(e).__name__}")
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    open(path, "w", encoding="utf-8").write("\n".join(L) + "\n")
+    open(path, "w", encoding="utf-8-sig").write("\n".join(L) + "\n")
     return path

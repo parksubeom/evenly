@@ -183,8 +183,8 @@ def v6_card(pg):
     prep_see = ["작업폴더 = ② 주소", q("완료: 파일 …개"), f"맨 아래 {Q_HBI}"]
     main = [r"python setup.py E:\제공자료", "python check.py", "python run_all.py"]
     main_see = ["① 주소 (앞글자+Tab). 질문은 <b>Enter</b>", f"끝에 {q('통과')} (멈춤 → 7)", f"끝에 {Q_DONE}"]
-    fix = ["notepad mapping.txt", "python run_all.py --from 06"]
-    fix_see = [f"{q('→')} 안내대로, = 오른쪽만", "06 자리에 멈춘 번호"]
+    fix = ["notepad mapping.txt", "python run_all.py --from 06", "chcp 65001"]
+    fix_see = [f"{q('→')} 안내대로, = 오른쪽만", "06 자리에 멈춘 번호", "화면 한글이 깨지면 치고 같은 명령 다시"]
     more = ["python run_all.py --from 09", "python 12_isochrone.py", "python 13_siting.py", "python 14_dong_context.py"]
     sec = lambda t: f'<tr class="sec"><td colspan="5">{t}</td></tr>'
     head6 = HEAD.replace('<col style="width:60%"><col style="width:21.5%">', '<col style="width:55%"><col style="width:26.5%">')
@@ -195,7 +195,7 @@ def v6_card(pg):
     for c, s_, g in zip(main, main_see, [p(pg, "3", "3-2"), p(pg, "4"), p(pg, "5", "5-2")]):
         k += 1; out.append(row(k, c, s_, g))
     out.append(sec("멈췄을 때"))
-    for c, s_, g in zip(fix, fix_see, [p(pg, "4-2"), p(pg, "6")]):
+    for c, s_, g in zip(fix, fix_see, [p(pg, "4-2"), p(pg, "6"), p(pg, "9")]):
         k += 1; out.append(row(k, c, s_, g))
     out.append(sec("실측 좌표를 넣은 뒤 (안내서대로 interventions.csv)"))
     k += 1; out.append(row(k, more[0], "09 시설 효과", p(pg, "7")))
