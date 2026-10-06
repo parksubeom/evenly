@@ -85,7 +85,7 @@ def rows(out=None, work=None, net_work=None):
         R_.append(("용도 연결률", v, f"{v:.1%} ({'건물 겹침' if mode == 'gisbld' else st.get('join_used', '')})" if v is not None else "-"))
     try:
         z = np.load(os.path.join(net_work, "network.npz"))
-        v = float(z["giant"].mean())
+        v = float(z["giant"][z["node_use"]].mean() if "node_use" in z.files else z["giant"].mean())   # [v6.1] 뺀 길의 노드 제외
         R_.append(("노드 비율", v, f"{v:.1%}"))
     except (OSError, KeyError, ValueError):
         R_.append(("노드 비율", None, "network.npz 없음"))
@@ -132,6 +132,15 @@ def report(out=None, work=None, net_work=None):
             L.append(f"  {gr} 목적지 {t}: 결과 없음" + (" (핵심 목적지)" if t == "medical" else " (레이어·파일이 없으면 정상)"))
             if gr == R:
                 reds.append("목적지")
+    # [v6.1] 분위수 (판정 없음, 구간 1.3·1.8 을 다시 볼 때 참고. summary.csv 의 "… % 분위수" 줄)
+    for t in [t for t in ("medical", "station", "bus") if t in have]:
+        m = tg[t]
+        qs = getattr(C, "QUANTILES", [])
+        hq = [m.get(f"HBI {q}% 분위수(경계 제외)", "") for q in qs]
+        aq = [m.get(f"왕복 추가 시간(분) {q}% 분위수(경계 제외)", "") for q in qs]
+        if any(hq):
+            L.append(f"  · 분위수 {t} ({'·'.join(str(q) for q in qs)}%): HBI {' / '.join(x or '-' for x in hq)}, "
+                     f"왕복 추가 {' / '.join(x or '-' for x in aq)}분 (참고, 판정 없음)")
     sites = _csv(os.path.join(out, "validation_sites.csv"))
     pct = [(_num(r.get("percentile_circle")) or _num(r.get("percentile")), r.get("name", "")) for r in sites]
     got = [(p, n) for p, n in pct if p is not None]

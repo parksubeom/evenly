@@ -35,6 +35,11 @@ DEFAULTS = {
     "bld_ufid": ("UFID", "건물 레이어의 고유번호(UFID) 칸 (참고용: 필지 ufid 와 같은 체계인지)", "건물"),
     "stair_kind": ("ARSFCKD_SE", "계단 레이어의 구조 칸 (계단·스탠드 구분)", "레이어 칸"),
     "bus_kind": ("PTRFCKD_SE", "정류장 레이어의 종류 칸", "레이어 칸"),
+    "road_kind": ("ROAD_SE", "도로중심선의 도로구분 칸 (고속국도 등) [v6.1]", "레이어 칸"),
+    "road_mtrwy": ("MTRWY_SE", "도로중심선의 자동차전용 칸 [v6.1]", "레이어 칸"),
+    # ── 걸을 수 없는 길 [v6.1] ──
+    "walk_exclude_kind": ("RDC001", "네트워크에서 뺄 도로구분 값 (쉼표로 여럿. 정의서 코드나 코드명. 비우면 안 뺌). RDC001 = 고속국도", "걸을 수 없는 길"),
+    "walk_exclude_mtrwy": ("MWI002", "네트워크에서 뺄 자동차전용 값 (MWI002 = 자동차전용. 자료 값이 Y·N 같은 다른 형식이면 그 값을 적음)", "걸을 수 없는 길"),
     # ── 필지 ──
     "parcel_id": ("PNU", "필지 고유번호(19자리) 칸", "필지"),
     "parcel_bldrgst": ("BLDRGST_PK", "필지의 건축물대장 번호 칸 (없으면 ?)", "필지"),
@@ -79,6 +84,8 @@ ALIASES = {
     "bld_floor": ["BFLR_CO", "GRO_FLO_CO", "FLR_CO", "FLOORS", "층수", "지상층수"],
     "stair_kind": ["ARSFCKD_SE", "STR_SE", "구조"],
     "bus_kind": ["PTRFCKD_SE", "BUS_SE", "종류"],
+    "road_kind": ["ROAD_SE", "도로구분"],
+    "road_mtrwy": ["MTRWY_SE", "자동차전용"],
     "parcel_id": ["PNU", "PARCEL_ID", "고유번호", "필지고유번호"],
     "parcel_bldrgst": ["BLDRGST_PK", "MGM_BLDRGST_PK", "BLD_RGST_PK", "건축물대장PK", "관리건축물대장PK"],
     "parcel_emd_cd": ["EMD_CD", "LDONG_CD", "BJD_CD", "LEGAL_DONG_CD", "읍면동코드", "법정동코드"],
@@ -143,10 +150,11 @@ def apply(g):
     for k in LAYER_KEYS:
         if f"layer_{k}" in raw or k not in lay:
             lay[k] = split_list(m.get(f"layer_{k}"))
-    for k in ("bld_use", "bld_kind", "bld_floor", "bld_ufid", "stair_kind", "bus_kind"):
+    for k in ("bld_use", "bld_kind", "bld_floor", "bld_ufid", "stair_kind", "bus_kind", "road_kind", "road_mtrwy"):
         if k in raw or k not in col:
             col[k] = m.get(k)
     g["LAYERS"], g["COL"] = lay, col
+    g["WALK_EXCLUDE"] = {"road_kind": split_list(m.get("walk_exclude_kind")), "road_mtrwy": split_list(m.get("walk_exclude_mtrwy"))}
     g["REGISTER_JOIN"] = (m.get("register_join") or "auto").strip().lower()
     gf = m.get("gis_file") or ""
     g["GIS_FILE"] = gf if (not gf or os.path.isabs(gf)) else os.path.join(HERE, gf)

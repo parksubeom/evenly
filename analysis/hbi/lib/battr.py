@@ -25,6 +25,19 @@ import numpy as np
 from osgeo import ogr
 import config as C
 from lib.qio import log, iter_layer, find_files, read_any
+from lib import codebook as K
+
+BLD = "N3A_B0010000"                                    # 정의서의 건물 레이어 코드
+
+
+def norm_use(v):
+    """[v6.1] 건물 용도 값 → 정의서 코드 (BDU001 이든 bdu001 이든 "주거용단독주택" 이든 BDU001). 표에 없으면 대문자 그대로"""
+    return K.to_code(BLD, "BPRP_SE", v)
+
+
+def norm_kind(v):
+    """[v6.1] 건물 종류 값 → 정의서 코드 (예: "아파트" → BDC003)"""
+    return K.to_code(BLD, "BULD_SE", v)
 
 # 건축물대장 주용도 → 수치지형도 건물 용도 코드 (BPRP_SE, 데이터정의서 별표: BDU001 주거용단독주택, BDU002 주거용공동주택,
 #   BDU003 제1종근린생활시설, BDU004 제2종근린생활시설, BDU007 판매시설, BDU009 의료시설, BDU011 노유자시설)
@@ -298,8 +311,8 @@ def iter_buildings(save=True, quiet=False):
         n = 0
         for g, a in iter_layer("building", fields=fields):
             n += 1
-            yield g, {"use": str(a.get(cu) or "").upper() if cu else "", "kind": str(a.get(ck) or "").upper() if ck else "",
-                      "floor": a.get(cf) if cf else None}
+            yield g, {"use": norm_use(a.get(cu)) if cu else "", "kind": norm_kind(a.get(ck)) if ck else "",
+                      "floor": a.get(cf) if cf else None}         # [v6.1] 값이 코드든 한글 코드명이든 코드로
         LAST_STATS = dict(mode="layer", n_bld=n); _save(LAST_STATS)
         return
     if m == "all":

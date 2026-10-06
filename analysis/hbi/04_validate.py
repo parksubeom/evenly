@@ -15,6 +15,7 @@
      [v5] 실측 3구간 이상이면 상관계수를 validation_measured.csv (n, r_adult_pred_vs_measured) 로도 저장
   3) 기여도       → validation_ablation.csv
      데이터를 하나씩 뺐을 때 결과가 얼마나 달라지는지 (DEM 제외 / 계단 제외 / 큰 격자로 집계 / DEM 1m)
+     [v6.1] 걸을 수 없는 길을 뺀 효과 (빼지 않은 v5 방식 네트워크와 HBI 비교), DEM 5m vs 1m 중앙값·고위험 비율
 """
 import os, numpy as np
 import config as C
@@ -164,8 +165,31 @@ ab.append([f"{C.GRID_COARSE}m 격자 평균으로 집계", "HBI 1.8 이상 건�
 if f"{T}_hbi_dem1" in b:
     h1 = b[f"{T}_hbi_dem1"]
     mm = v & np.isfinite(h1)
-    ab.append(["DEM 5m vs 1m", "HBI 순위상관(Spearman)", round(spearman(H[mm], h1[mm]), 3)])
-    ab.append(["DEM 5m vs 1m", "HBI 평균 절대차", round(float(np.mean(np.abs(H[mm] - h1[mm]))), 3)])
+    ab.append(["DEM 5m vs 1m", "비교한 집 수 (DEM 1m 범위 안)", int(mm.sum())])   # [v6.1]
+    if mm.sum() >= C.MIN_COUNT:                      # [v6.1] 비교할 집이 너무 적으면 수만 (개별 값에 가까워지지 않게)
+        ab.append(["DEM 5m vs 1m", "HBI 순위상관(Spearman)", round(spearman(H[mm], h1[mm]), 3)])
+        ab.append(["DEM 5m vs 1m", "HBI 평균 절대차", round(float(np.mean(np.abs(H[mm] - h1[mm]))), 3)])
+        ab.append(["DEM 5m vs 1m", "HBI 중앙값 (5m)", round(float(np.median(H[mm])), 3)])
+        ab.append(["DEM 5m vs 1m", "HBI 중앙값 (1m)", round(float(np.median(h1[mm])), 3)])
+        ab.append(["DEM 5m vs 1m", f"HBI {C.HBI_BANDS[1]} 이상 비율 (5m)", round(float(np.mean(H[mm] >= C.HBI_BANDS[1])), 3)])
+        ab.append(["DEM 5m vs 1m", f"HBI {C.HBI_BANDS[1]} 이상 비율 (1m)", round(float(np.mean(h1[mm] >= C.HBI_BANDS[1])), 3)])
+# [v6.1] 걸을 수 없는 길(고속국도·자동차전용) 빼기: 빼지 않은 네트워크(v5 방식)와 비교
+nl, nk = net["walk_excl"]
+sc = "걸을 수 없는 길 빼기 (v5 방식과 비교)"
+if nl:
+    ab += [[sc, "뺀 도로중심선 선 수", int(nl)], [sc, "뺀 링크 수", int(nk)]]
+if f"{T}_hbi_walkall" in b:
+    hw = b[f"{T}_hbi_walkall"]
+    mm = v & np.isfinite(hw)
+    ab.append([sc, "비교한 집 수", int(mm.sum())])
+    if mm.sum() >= C.MIN_COUNT:                      # 비교할 집이 너무 적으면 수만
+        ab += [[sc, "HBI 순위상관(Spearman)", round(spearman(H[mm], hw[mm]), 3)],
+               [sc, "HBI 평균 절대차", round(float(np.mean(np.abs(H[mm] - hw[mm]))), 3)],
+               [sc, "HBI 중앙값 (뺀 뒤)", round(float(np.median(H[mm])), 3)],
+               [sc, "HBI 중앙값 (빼기 전)", round(float(np.median(hw[mm])), 3)],
+               [sc, f"HBI {C.HBI_BANDS[1]} 이상 비율 (뺀 뒤)", round(float(np.mean(H[mm] >= C.HBI_BANDS[1])), 3)],
+               [sc, f"HBI {C.HBI_BANDS[1]} 이상 비율 (빼기 전)", round(float(np.mean(hw[mm] >= C.HBI_BANDS[1])), 3)],
+               [sc, "HBI 가 0.1 넘게 달라진 집 비율", round(float(np.mean(np.abs(H[mm] - hw[mm]) > 0.1)), 3)]]
 write_csv(os.path.join(C.OUTPUT, "validation_ablation.csv"), ["scenario", "metric", "value"], ab)
 log("기여도 분석:")
 for r in ab:

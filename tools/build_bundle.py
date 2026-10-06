@@ -30,8 +30,9 @@ def collect(src, prefix, skip_external=False):
     return dict(sorted(out.items()))
 
 # [v6] v6 부터는 hbi6/ 로 풀림 (안심구역에 남아 있는 v5 의 hbi/ 를 덮어쓰지 않게). hbi_geopandas(대체 구현)는 v6 에서 고치지 않아 넣지 않음
-_n = ver.lower().lstrip("v").split("-")[0]
-V6 = _n.isdigit() and int(_n) >= 6
+import re
+_m = re.match(r"v?(\d+)", ver.lower())                 # [v6.1] "v6.1"·"v6-test" 도 6 으로 (v6 까지는 "6.1" 을 숫자로 못 읽었음)
+V6 = bool(_m) and int(_m.group(1)) >= 6
 A = collect(os.path.join(ROOT, "analysis", "hbi"), "hbi6" if V6 else "hbi")
 B = {}
 if not V6:

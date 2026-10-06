@@ -8,6 +8,7 @@ tools/make_test_data.py ─ 가짜(가상) 테스트 데이터 만들기  ※ �
          - testdata/map/37612006/N3L_A0020000.shp ... (도로중심선·보도중심선·건물·계단·정류장·교량)
          - testdata/dem/tile0.img, tile1.img (가운데가 볼록한 언덕 모양 DEM)
          - testdata/parcel/LX_서울_필지.shp (가상 필지, 06_parcel.py 연습용 → DATA_ROOT_PARCEL = r"testdata/parcel")
+         - [v6.1] testdata/parcel_1st/*.zip (1차 방문 모양: 소문자 칸, .cpg 없음, 서울·경기 zip — setup.py 연습용)
 [다음]  config.py 에서
            DATA_ROOT_MAP = r"testdata/map"
            DATA_ROOT_DEM = r"testdata/dem"
@@ -66,7 +67,26 @@ pf = []
 for i in range(0, W, 50):
     for j in range(0, W, 50):
         pf.append((box(X0 + i, Y0 + j, X0 + i + 50, Y0 + j + 50),
-                   {"PNU": f"11110{i:05d}{j:05d}"[:19], "EMD_CD": "11110101" if i < 1000 else "11110102", "JIMOK": "대" if (i // 50 + j // 50) % 7 else "도",
+                   # [v6.1] 고유번호 19자리 = 시군구 5 + 법정동 5 + 대지구분 1 + 본번 4 + 부번 4 (v6 까지는 15자리라 setup 이 필지로 못 알아봄)
+                   {"PNU": f"11110{'10100' if i < 1000 else '10200'}1{i // 50 + 1:04d}{j // 50:04d}",
+                    "EMD_CD": "11110101" if i < 1000 else "11110102", "JIMOK": "대" if (i // 50 + j // 50) % 7 else "도",
                     "SGG_NM": "가상구", "EMD_NM": "가상1동" if i < 1000 else "가상2동"}))   # [v5] 법정동 이름 (11_legal_dong_join 연습용)
 shp(f"{BASE}/parcel/LX_서울_필지.shp", ogr.wkbPolygon, ["PNU", "EMD_CD", "JIMOK", "SGG_NM", "EMD_NM"], pf, enc="UTF-8", cpg=False)
+# [v6.1] 1차 방문 모양 필지 (testdata/parcel_1st): 칸 이름 소문자, UTF-8 인데 .cpg 없음, 시도별 zip (서울 + 다른 시도)
+#   setup.py 연습용: python setup.py 로 testdata 폴더를 고르면 zip 을 풀고 서울 zip 만 필지로 씀
+import zipfile, glob
+tmp = f"{BASE}/parcel_1st_tmp"
+low = [(g, {k.lower(): v for k, v in a.items()}) for g, a in pf]
+for sido in ("서울", "경기"):
+    os.makedirs(f"{tmp}/{sido}", exist_ok=True)
+shp(f"{tmp}/서울/AL_11_D194_LAND_INFO_BASE_MAP_202606.shp", ogr.wkbPolygon, ["pnu", "emd_cd", "jimok", "sgg_nm", "emd_nm"], low, enc="UTF-8", cpg=False)
+gg = [(box(X0 + 5000 + i * 40, Y0, X0 + 5030 + i * 40, Y0 + 30), {"pnu": f"4111110100{1}{i + 1:04d}0000", "jimok": "대"}) for i in range(20)]
+shp(f"{tmp}/경기/AL_41_D194_LAND_INFO_BASE_MAP_202606.shp", ogr.wkbPolygon, ["pnu", "jimok"], gg, enc="UTF-8", cpg=False)
+os.makedirs(f"{BASE}/parcel_1st", exist_ok=True)
+for sido, zname in (("서울", "AL_11_D194_LAND_INFO_BASE_MAP_202606.zip"), ("경기", "AL_41_D194_LAND_INFO_BASE_MAP_202606.zip")):
+    with zipfile.ZipFile(f"{BASE}/parcel_1st/{zname}", "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in sorted(glob.glob(f"{tmp}/{sido}/*")):
+            zf.write(f, os.path.basename(f))
+import shutil
+shutil.rmtree(tmp)
 print("완료:", os.path.abspath(BASE))

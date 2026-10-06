@@ -268,6 +268,18 @@ class DEM:
         near = self.arr[np.clip(np.rint(r).astype(int), 0, H - 1), np.clip(np.rint(c).astype(int), 0, W - 1)]
         return np.where(np.isnan(z), near, z)   # np.where(조건, 참일때, 거짓일때) : 원소별 삼항연산자
 
+    def covers(self, xs, ys):
+        """[v6.1] 좌표가 DEM 범위 안이고 값이 있는지 (True/False 배열). sample 은 범위 밖을 가장자리 값으로 채우므로,
+        DEM 1m 처럼 일부만 덮는 자료를 비교할 때 이것으로 범위 안만 고름"""
+        xs, ys = transform_xy(self.ct, xs, ys)
+        c = np.floor((xs - self.gt[0]) / self.gt[1]).astype(int)
+        r = np.floor((ys - self.gt[3]) / self.gt[5]).astype(int)
+        H, W = self.arr.shape
+        ok = (r >= 0) & (r < H) & (c >= 0) & (c < W)
+        out = np.zeros(len(ok), bool)
+        out[ok] = np.isfinite(self.arr[r[ok], c[ok]])
+        return out
+
 
 # ───────────────────────── CSV / 결과 저장 ─────────────────────────
 def read_csv(path):
@@ -321,6 +333,22 @@ def read_any(path, sep=None):
         except UnicodeDecodeError:
             continue
     raise RuntimeError(f"인코딩을 알 수 없음: {path}")
+
+
+def value_shape(v):
+    """[v6.1] 값을 보이지 않고 "글자 모양"만: 한글 → 가, 영문 → A, 숫자 → 9 (예: "Y" → "A", "BDU001" → "AAA999", "단독주택" → "가가가가").
+    화면·runlog 에 값을 적지 않으면서 값 형식(코드인지, 한글 이름인지, Y·N 인지)을 알게 하려고 씀"""
+    out = []
+    for ch in str(v):
+        if "가" <= ch <= "힣":
+            out.append("가")
+        elif ch.isascii() and ch.isalpha():
+            out.append("A")
+        elif ch.isdigit():
+            out.append("9")
+        else:
+            out.append(ch)
+    return "".join(out)
 
 
 def csv_points(path, lon="lon", lat="lat"):

@@ -32,7 +32,8 @@ safe_console()
 UNZIP = os.path.join(C.WORK, "unzipped")
 # [v6] 안심구역 PC 의 자료 위치는 매번 같음 → 기본값. 하위 폴더는 화요일(10/6) 반출 runlog·schema 에 찍힌 실제 이름으로 채움 (None = 아직 모름 → 자동 탐색)
 DEFAULT_ROOT = r"C:\Users\user\Desktop\박수범"
-DEFAULT_SUBDIRS = {"수치지형도": "수치지형도2", "필지": None, "DEM 5m": None, "DEM 1m": None, "상호제공": None}
+DEFAULT_SUBDIRS = {"수치지형도": "수치지형도2", "필지": "국토정보필지_서울특별시", "DEM 5m": None, "DEM 1m": None, "상호제공": None}
+#   [v6.1] 필지 폴더 이름은 1차 반출 runlog 로 확인 (안에 AL_…_LAND_INFO_BASE_MAP_202606). DEM·상호제공 폴더 이름은 담당자 메모가 오면 채움
 SKIP_DIRS = {"hbi", "hbi6", "hbi_geopandas"}      # 우리 코드 폴더(결과·풀린 zip 포함)는 자료로 훑지 않음
 QUIET = False                                      # 기본 경로에 자료가 다 있으면 질문 없이 진행
 VEC, RAS, TAB = (".shp",), (".img", ".tif", ".tiff", ".asc"), (".csv",)
@@ -177,7 +178,8 @@ def common_dir(paths):
 
 
 # ───────────────────────── 3. 칸 찾기 ─────────────────────────
-SHAPES = {"parcel_id": r"\d{19}", "parcel_emd_cd": r"\d{8}|\d{10}", "bld_floor": r"-?\d+(\.0+)?", "stair_kind": r"PGS\d{3}",
+SHAPES = {"parcel_id": r"\d{19}", "parcel_emd_cd": r"\d{8}|\d{10}", "bld_floor": r"-?\d+(\.0+)?", "stair_kind": r"PGS\d{3}|[가-힣 ]{2,10}",
+          "road_kind": r"RDC\d{3}|[가-힣 ]{2,12}",          # [v6.1] 코드든 한글 코드명이든 (자동차전용 칸은 형식을 몰라 검사 안 함)
           "bld_use": r"BDU\d{3}|[가-힣 ]{2,20}", "bld_kind": r"BDC\d{3}|[가-힣 ]{2,20}", "jimok": r"[가-힣]{1,4}",
           "sgg_nm": r"[가-힣 ]{2,12}", "emd_nm": r"[가-힣0-9 ]{2,12}", "parcel_bldrgst": r"[0-9A-Za-z\-]{6,40}"}
 
@@ -297,7 +299,7 @@ def main():
                 with zipfile.ZipFile(z) as zf:
                     nm = zip_names(zf)
                     kinds = collections.Counter(os.path.splitext(n)[1].lower() for _, n in nm)
-                print(f"  {i}. {os.path.relpath(z, root)} ({os.path.getsize(z) / 1e6:,.1f}MB, 안에 {', '.join(f'{k} {v}' for k, v in kinds.most_common(4))})")
+                print(f"  {i}. {os.path.relpath(z, root)} ({os.path.getsize(z) / 1e6:,.1f}MB, 안에 {', '.join(f'{k} {v}' for k, v in kinds.most_common())})")   # [v6.1] 확장자 모두 (4개만 보이던 것)
             except zipfile.BadZipFile:
                 print(f"  {i}. {os.path.relpath(z, root)}: 열 수 없는 zip (건너뜀)")
         a = q(f"  풀까요? 받은 폴더는 그대로 두고 {os.path.basename(C.BASE)}\\work\\unzipped 에 풉니다 (y/n, Enter = y): ", "y").lower()
@@ -422,10 +424,12 @@ def main():
     impact = {"bld_use": "용도 칸 없음 → 건물 용도 방식 register·all", "bld_kind": "용도가 빈 건물의 주택 판정에만 씀 (영향 작음)",
               "bld_floor": "층수 없으면 1층으로 봄 (고령인구 배분 가중치만 영향)", "stair_kind": "계단·스탠드 구분 안 함 (모두 계단)",
               "bus_kind": "안 씀", "parcel_id": "06·register 멈춤", "parcel_bldrgst": "대장 연결은 필지번호로만",
+              "road_kind": "고속국도를 네트워크에서 빼지 않음 (v5 와 같음)", "road_mtrwy": "자동차전용 도로를 네트워크에서 빼지 않음 (v5 와 같음)",
               "bld_ufid": "참고용 UFID 일치율만 못 잼", "parcel_ufid": "참고용 UFID 일치율만 못 잼",
               "parcel_emd_cd": "고유번호 앞 10자리로 대신", "jimok": "06 '대' 필지·13 설치 부지 계산 안 됨",
               "sgg_nm": "11 교통사고 결합 안 됨", "emd_nm": "11 교통사고 결합 안 됨"}
-    lay_keys = [("building", ["bld_use", "bld_kind", "bld_floor", "bld_ufid"]), ("stairs", ["stair_kind"]), ("bus_stop", ["bus_kind"])]
+    lay_keys = [("building", ["bld_use", "bld_kind", "bld_floor", "bld_ufid"]), ("stairs", ["stair_kind"]), ("bus_stop", ["bus_kind"]),
+                ("road_cl", ["road_kind", "road_mtrwy"])]
     enc_map = C.SHP_ENCODING
     for lk, keys in lay_keys:
         if not maps.get(lk):

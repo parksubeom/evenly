@@ -11,6 +11,8 @@
      [v6] 용도·층수는 mapping.txt 의 building_attr_mode 대로 (layer 건물 칸 / register 건축물대장 / all 모두 집, lib/battr.py)
      [v6] 출발점은 대상 구(mapping 의 target_gu) 안의 집만. 옆 구 건물은 목적지로만 씀 (lib/area.py)
   2. 정류장·정거장(지하철역) 레이어 = 목적지, external/pharmacy.csv 의 약국 = 목적지
+     [v6.1] 정류장 레이어가 없으면 external/bus_stops.csv (서울시 버스정류소 위치, name·lon·lat) 를 정류장 목적지로
+     [v6.1] 정거장은 종류 칸(PTWFCKD_SE)이 없어도 모두 씀 (1:5,000 정거장 칸은 명칭·UFID 뿐)
      [v5] external/subway_elevators.csv (name, lon, lat) = "엘리베이터가 있는 역 출입구" 목적지 station_ev
           휠체어 결과는 이 목적지 기준으로 봅니다 (계단만 있는 출입구는 휠체어로 쓸 수 없으니까)
   2-1. 데이터 경계 근처 건물 표시 (edge 열 = 1). 04·05·06 은 이 건물들을 통계에서 뺍니다
@@ -90,6 +92,11 @@ log(f"  데이터 경계 {C.EDGE_BUFFER}m 이내 건물 {int(H['edge'].sum()):,}
 
 # 2. 목적지 모으기 ─────────────────────────────────────────
 bus = [(g.GetX(), g.GetY()) for g, _ in iter_layer("bus_stop") if g.GetGeometryName() == "POINT"]
+if not bus:                                         # [v6.1] 1:5,000 수치지형도에는 정류장 레이어가 없음 → 공개 버스정류소 파일 (name, lon, lat)
+    _, bx, by = csv_points(os.path.join(C.EXTERNAL, "bus_stops.csv"))
+    bus = list(zip(bx, by))
+    if bus:
+        log(f"  정류장 레이어 없음 → external/bus_stops.csv 의 버스정류소 {len(bus):,}곳을 씀")
 # 지하철·철도 정거장 (점이면 그대로, 면이면 대표점)
 STA = []
 for g, _ in iter_layer("station"):
@@ -101,7 +108,7 @@ PH = list(zip(px, py))
 # [v5] 엘리베이터 있는 지하철역 출입구 (external/subway_elevators.csv, 비어 있으면 건너뜀)
 _, ex, ey = csv_points(os.path.join(C.EXTERNAL, "subway_elevators.csv"))
 EV = list(zip(ex, ey))
-dest = {}                                           # {"medical": 노드번호배열, ...}
+dest, dest_pts = {}, {}                             # {"medical": 노드번호배열, ...}, {"medical": 좌표배열} [v6.1]
 for name, pts in [("medical", MED + PH), ("pharmacy", PH), ("bus", bus), ("elderly", ELD), ("station", STA), ("station_ev", EV)]:
     if not pts:
         log(f"  목적지 없음: {name} (건너뜀)")
@@ -111,6 +118,7 @@ for name, pts in [("medical", MED + PH), ("pharmacy", PH), ("bus", bus), ("elder
     n = n[n >= 0]
     if len(n):
         dest[name] = n
+        dest_pts[name] = a
     log(f"  목적지 {name}: {len(n):,}곳")
 if not dest:
     raise RuntimeError("목적지가 없습니다. 건물 용도코드나 external/pharmacy.csv 확인")
@@ -146,7 +154,34 @@ for name, dn in dest.items():
     out[f"{name}_t_wheel_stairok"] = put(run_scenario(N, e, net["s5"], dn, stairs_passable_wheel=True)["t_wheel"])
     # 기여도 분석용 ②: DEM 1m 로 계산한 HBI (02_network.py --dem1m 을 했을 때만)
     if net["s1"] is not None:
-        out[f"{name}_hbi_dem1"] = ratio(put(run_scenario(N, e, net["s1"], dn)["t_elder"]), out[f"{name}_t_flat"])
+        h1 = ratio(put(run_scenario(N, e, net["s1"], dn)["t_elder"]), out[f"{name}_t_flat"])
+        if net["c1"] is not None:                    # [v6.1] 집이 DEM 1m 범위 밖이면 비교하지 않음 (빈 칸)
+            h1[~(ok & net["c1"][np.maximum(H["node"], 0)])] = np.nan
+        out[f"{name}_hbi_dem1"] = h1
+
+# 기여도 분석용 ③ [v6.1]: 걸을 수 없는 길(고속국도·자동차전용)을 빼지 않았다면 (v5 방식 네트워크, 기준 목적지만)
+wa = net["walkall"]
+if wa is not None:
+    T = "medical" if "medical" in dest else next(iter(dest))
+    gx = np.where(wa["giant"])[0]
+    ix = NearestIndex(nodes[gx])
+
+    def snapx(xs, ys, maxd):
+        d, i = ix.query(np.c_[xs, ys], maxd)
+        return np.where(i >= 0, gx[np.maximum(i, 0)], -1)
+    hn = snapx(H["x"], H["y"], C.ORIGIN_SNAP_MAX)
+    dn = snapx(dest_pts[T][:, 0], dest_pts[T][:, 1], 100)
+    r = run_scenario(N, wa["e"], wa["s5"], dn[dn >= 0])
+
+    def putx(arr):
+        col = np.full(len(hn), np.nan)
+        col[hn >= 0] = arr[hn[hn >= 0]]
+        col[~np.isfinite(col)] = np.nan
+        return col
+    out[f"{T}_hbi_walkall"] = ratio(putx(r["t_elder"]), putx(r["t_flat"]))
+    h0, h1 = out[f"{T}_hbi"], out[f"{T}_hbi_walkall"]
+    log(f"걸을 수 없는 길을 뺀 효과 ({T}): HBI 중앙값 뺀 뒤 {np.nanmedian(h0):.3f} / 빼기 전(v5 방식) {np.nanmedian(h1):.3f}, "
+        f"1.8 이상 {np.nanmean(h0 >= C.HBI_BANDS[1]):.1%} / {np.nanmean(h1 >= C.HBI_BANDS[1]):.1%} (04 의 validation_ablation.csv 에 적음)")
 
 # 4. 저장 ─────────────────────────────────────────────────
 keys = list(out.keys())

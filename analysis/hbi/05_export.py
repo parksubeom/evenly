@@ -7,6 +7,7 @@
           250m 격자·행정동으로 묶고, 건물이 5개 미만인 격자는 빼서 비식별화합니다.
 [결과 파일] (output/ → 이 폴더 전체를 반출 신청)
   summary.csv              : 목적지 종류별 요약 (HBI 중앙값, 1.8 이상 비율 등) → 기획서 16장 숫자
+                             [v6.1] + HBI·왕복 추가 시간(분)의 50·75·90·95·99% 분위수 (구간 1.3·1.8 을 다시 볼 때)
   grid_hbi.csv             : 250m 격자별 표 (격자 중심 좌표, 건물 수, 평균 HBI ...)
   grid_hbi_<종류>.gpkg     : 같은 내용을 지도 파일로 → QGIS에서 색칠해서 결과 지도 제작
   map_<종류>.png           : matplotlib 이 있으면 자동으로 그린 지도 이미지
@@ -50,6 +51,13 @@ for T in targets(b):                              # 목적지 종류마다 반�
                 [T, "휠체어 도달불가 비율", round(float(np.mean(~np.isfinite(b[f"{T}_t_wheel"][U]))), 3)],
                 [T, f"HBI {hi} 이상 건물의 연면적 합(㎡, 고령인구 배분용)", round(float(b["weight"][v & (H >= hi)].sum()))],
                 [T, "분석 건물 연면적 합(㎡)", round(float(b["weight"][v].sum()))]]
+    # [v6.1] 구간(1.3·1.8)을 다시 볼 때 쓰는 분위수: HBI, 왕복 추가 시간(분) = 경사 반영 왕복 - 평지 가정 왕복 (경계 제외).
+    #        건물이 QUANT_MIN 개 미만이면 빈 칸 (몇 채로 분위수를 내면 개별 값에 가까워짐)
+    add_min = (b[f"{T}_t_elder"] - b[f"{T}_t_flat"]) / 60
+    for q in C.QUANTILES:
+        hq = round(float(np.quantile(H[v], q / 100)), 3) if v.sum() >= C.QUANT_MIN else ""
+        aq = round(float(np.nanquantile(add_min[v], q / 100)), 1) if v.sum() >= C.QUANT_MIN else ""
+        summary += [[T, f"HBI {q}% 분위수(경계 제외)", hq], [T, f"왕복 추가 시간(분) {q}% 분위수(경계 제외)", aq]]
     # ── 격자별 집계 ──
     key = gx[v] * 10**7 + gy[v]
     u, inv = np.unique(key, return_inverse=True)   # u = 격자 목록, inv = 각 건물이 몇 번째 격자인지

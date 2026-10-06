@@ -20,19 +20,33 @@ import os, re, sys, collections
 import numpy as np
 import config as C
 from lib.conout import Tee, safe_console
-from lib.qio import find_files, open_vector, layer_srs, layer_files, iter_layer, read_csv, transformer, transform_xy, TARGET
+from lib.qio import find_files, open_vector, layer_srs, layer_files, iter_layer, read_csv, transformer, transform_xy, TARGET, value_shape
 from lib import area, battr
 from lib.qgraph import NearestIndex
 from osgeo import gdal, ogr
 gdal.UseExceptions(); ogr.UseExceptions()
 safe_console()
 
-SEC_PER_KLINE = (1.0, 6.0)   # 길 선 1,000개당 02~05 걸린 초 (이 맥 v6 시험에서 잰 값의 범위, tools 시험 결과로 갱신)
+# [v6.1] 1차 방문(10/2) 안심구역 PC 실측: 관악 11도엽(1:5,000, 약 68㎢)에서 01~05 약 1분, 06 약 30초 (runlog 시각)
+MEASURED_KM2, MEASURED_MIN_0105, MEASURED_MIN_06 = 68.0, 1.0, 0.5
 
 
-def estimate_minutes(n_lines):
-    lo, hi = (n_lines / 1000 * s * 3 / 60 for s in SEC_PER_KLINE)
-    return max(1, int(round(lo))), max(2, int(round(hi)) + 1)
+def union_km2(envs, cell=200.0):
+    """자료 범위(파일 네모들의 합집합) 넓이 ㎢. 200m 칸으로 세어 겹친 곳은 한 번만"""
+    keys = []
+    for x0, y0, x1, y1 in envs:
+        a = np.arange(np.floor(x0 / cell), np.ceil(x1 / cell)).astype(np.int64)
+        b = np.arange(np.floor(y0 / cell), np.ceil(y1 / cell)).astype(np.int64)
+        if len(a) and len(b):
+            keys.append((a[:, None] * 10**7 + b[None, :]).ravel())
+    return len(np.unique(np.concatenate(keys))) * cell * cell / 1e6 if keys else 0.0
+
+
+def estimate_minutes(km2, modes=1):
+    """넓이 비례로 어림 (실측 1번이라 범위는 ×1~×2). modes = 03~05 를 되풀이하는 방식 수"""
+    base = km2 / MEASURED_KM2
+    t = base * MEASURED_MIN_0105 * (1 + 0.6 * (modes - 1)) + base * MEASURED_MIN_06 * modes   # 01·02 는 한 번, 03~06 은 방식마다
+    return max(1, int(round(t))), max(2, int(round(t * 2)) + 1)
 
 
 GU_COVER_MIN = 0.5      # 대상 구 면적의 이 비율 넘게 자료 범위 안이어야 "있음"
@@ -123,6 +137,8 @@ def choose_mode(wins, have, reg_ok):
              "gisbld": battr.gis_path() is not None, "all": True}
     keep, old = C.BUILDING_ATTR_MODE, C.AREA_BBOX
     chosen, why = None, ""
+    known = set(battr.K.codes(battr.BLD, "BPRP_SE"))   # [v6.1] 정의서 용도 코드 (BDU…)
+    odd = collections.Counter()                        # 코드로 읽히지 않은 용도 값의 글자 모양 (값은 보이지 않음)
     for m in AUTO_ORDER:
         if not avail[m]:
             print(f"    {m:<9} 건너뜀 (" + {"layer": "건물 레이어에 용도 칸 없음", "register": "건축물대장 또는 필지 없음",
@@ -138,8 +154,9 @@ def choose_mode(wins, have, reg_ok):
             for w_ in wins:
                 C.AREA_BBOX = w_[1]
                 uses = [a["use"] for _, a in battr.iter_buildings(save=False, quiet=True)]
-                if m == "layer":       # 건물 칸 방식: 용도 칸 값이 들어 있는 건물 비율
-                    n += len(uses); k += sum(1 for u in uses if u)
+                if m == "layer":       # 건물 칸 방식: 용도 값이 정의서 코드(BDU…)로 읽히는 건물 비율 [v6.1: 값만 있으면 세던 것에서 바꿈]
+                    n += len(uses); k += sum(1 for u in uses if u in known)
+                    odd.update(value_shape(u) for u in uses if u and u not in known)   # 값 대신 글자 모양 (예: 가가가가)
                 else:                  # register·gisbld: 대장·GIS 건물이 붙은 건물 비율
                     n += battr.LAST_STATS.get("n_bld", 0); k += battr.LAST_STATS.get("linked", 0)
         except SystemExit as e:
@@ -149,6 +166,9 @@ def choose_mode(wins, have, reg_ok):
         rate = k / n if n else 0.0
         ok = rate >= AUTO_MIN_RATE
         print(f"    {m:<9} 연결률 {rate:.0%} (표본 건물 {n:,}) → {'고름' if ok else '기준 미만, 다음 방식'}")
+        if m == "layer" and odd:
+            print(f"              정의서 코드·코드명으로 읽히지 않은 용도 값 {sum(odd.values()):,}채 (글자 모양: "
+                  + ", ".join(f"'{v}' {c:,}" for v, c in odd.most_common(4)) + ") → 담당자 메모로 값 형식 확인")
         if ok:
             chosen, why = m, f"표본 연결률 {rate:.0%} ≥ {AUTO_MIN_RATE:.0%}"
             break
@@ -411,6 +431,7 @@ def main():
     # 목적지
     dest = {"정류장(bus_stop)": count_in(have.get("bus_stop", []), C.AREA_BBOX),
             "정거장(station)": count_in(have.get("station", []), C.AREA_BBOX),
+            "버스정류소(external, 정류장 레이어가 없을 때)": len(read_csv(os.path.join(C.EXTERNAL, "bus_stops.csv"))),
             "약국(external)": len(read_csv(os.path.join(C.EXTERNAL, "pharmacy.csv"))),
             "엘리베이터 역 출입구(external)": len(read_csv(os.path.join(C.EXTERNAL, "subway_elevators.csv"))),
             "의료·노유자 건물(표본 창)": tot["med"] + tot["eld"]}
@@ -421,8 +442,11 @@ def main():
     print("\n=== 9. 예상 소요 시간 (대략) ===")
     nb = count_in(have["building"], C.AREA_BBOX)
     nl = count_in(have.get("road_cl", []) + have.get("sidewalk_cl", []), C.AREA_BBOX)
-    lo, hi = estimate_minutes(nl)
-    print(f"  읽을 건물 {nb:,}개, 길 선 {nl:,}개 → 02~05 약 {lo}~{hi}분 (이 맥 시험 기준 × 안심구역 PC 여유 3배, 대략)."
+    km2 = union_km2(envs)
+    nm = 1 if (C.MAPPING.get("building_attr_chosen") or C.BUILDING_ATTR_MODE) == "all" else 2   # auto = all 이면 한 번만
+    lo, hi = estimate_minutes(km2, nm)
+    print(f"  읽을 건물 {nb:,}개, 길 선 {nl:,}개, 자료 범위 약 {km2:,.0f}㎢ → --modes auto,all 로 01~06 약 {lo}~{hi}분"
+          f" (1차 방문 실측: 관악 11도엽 약 {MEASURED_KM2:.0f}㎢ 에서 01~05 약 1분·06 약 30초, 넓이 비례 어림)."
           f" 멈추면 python run_all.py --from <멈춘 번호>")
 
 
