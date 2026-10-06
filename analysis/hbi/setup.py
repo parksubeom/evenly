@@ -300,7 +300,7 @@ def main():
                 print(f"  {i}. {os.path.relpath(z, root)} ({os.path.getsize(z) / 1e6:,.1f}MB, 안에 {', '.join(f'{k} {v}' for k, v in kinds.most_common(4))})")
             except zipfile.BadZipFile:
                 print(f"  {i}. {os.path.relpath(z, root)}: 열 수 없는 zip (건너뜀)")
-        a = q(f"  풀까요? 받은 폴더는 그대로 두고 hbi\\work\\unzipped 에 풉니다 (y/n, Enter = y): ", "y").lower()
+        a = q(f"  풀까요? 받은 폴더는 그대로 두고 {os.path.basename(C.BASE)}\\work\\unzipped 에 풉니다 (y/n, Enter = y): ", "y").lower()
         if a.startswith("y"):
             for z in zips:
                 try:

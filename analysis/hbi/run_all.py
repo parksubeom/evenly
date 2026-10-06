@@ -30,11 +30,16 @@ if _has_facility(): steps.append("09_intervention.py")
 if any(v.get("path") for v in C.POINT_DATA.values()): steps.append("10_points_join.py")   # [v5] 점 자료 경로가 있으면
 if any(v.get("path") for v in C.LEGAL_DONG_DATA.values()): steps.append("11_legal_dong_join.py")   # [v5] 법정동 이름 자료가 있으면
 
-# [v6] --modes register,all : 건물 용도 방식 여러 개를 한 번에. 01·02 는 한 번, 03 부터는 방식마다 output/<방식>/·work/<방식>/
+# [v6] --modes register,all : 건물 용도 방식 여러 개를 한 번에 (auto = check 가 고른 방식, 예: --modes auto,all). 01·02 는 한 번, 03 부터는 방식마다 output/<방식>/·work/<방식>/
 MODES = None
 if "--modes" in sys.argv:
     i = sys.argv.index("--modes")
     MODES = [m.strip().lower() for m in (sys.argv[i + 1] if i + 1 < len(sys.argv) else "").split(",") if m.strip()]
+    if "auto" in MODES:                    # auto = check.py 가 고른 방식 (mapping 의 building_attr_chosen)
+        ch = (C.MAPPING.get("building_attr_chosen") or "").strip().lower()
+        if not ch:
+            raise SystemExit("--modes 에 auto 가 있는데 check.py 가 고른 방식이 없습니다 → python check.py 먼저")
+        MODES = list(dict.fromkeys(ch if m == "auto" else m for m in MODES))
     bad = [m for m in MODES if m not in ("layer", "register", "gisbld", "all")]
     if not MODES or bad:
         raise SystemExit(f"--modes 뒤에는 layer·register·gisbld·all 을 쉼표로 (예: --modes register,all). 틀린 값: {bad}")
