@@ -107,6 +107,8 @@ write_csv(os.path.join(C.OUTPUT, "grid_hbi.csv"),
 # [v6] 실행 정보: output/run_meta.csv (대상 구, 건물 용도 방식, 연결률, 범위). summary.csv 에는 뜻이 바뀌는 경우에만 meta 행
 from lib.battr import load_stats
 st = load_stats()
+if os.environ.get("HBI_SUBRUN"):                  # [v6] --modes 로 돌린 결과: 어느 방식인지 summary 에 남김 (기획서 파이프라인이 고를 때 씀)
+    summary.append(["meta", "건물 용도 방식", C.BUILDING_ATTR_MODE])
 if st.get("mode") == "all":
     summary.append(["meta", "건물 용도", "용도 미구분 (모든 건물을 집으로 봄, 의료·노유자 건물 목적지 없음)"])
 if C.TARGET_GU and st.get("n_res_all", 0) > st.get("n_res_target", 0):

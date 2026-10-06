@@ -215,3 +215,11 @@ LEGAL_DONG_DATA = {
 #  아래 두 줄은 지우지 마세요.
 from lib.mapping import apply as _apply_mapping
 _apply_mapping(globals())
+
+# [v6] python run_all.py --modes register,all 처럼 여러 건물 용도 방식을 한 번에 돌릴 때 (run_all 이 HBI_SUBRUN 을 정함):
+#   방식마다 결과는 output/<방식>/, 중간 결과는 work/<방식>/ 에. 길 네트워크(work/network.npz)는 한 번 만들어 같이 씀
+WORK_NET = WORK
+if os.environ.get("HBI_SUBRUN"):
+    BUILDING_ATTR_MODE = os.environ["HBI_SUBRUN"]
+    OUTPUT = os.path.join(OUTPUT, BUILDING_ATTR_MODE)
+    WORK = os.path.join(WORK, BUILDING_ATTR_MODE)

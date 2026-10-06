@@ -5,7 +5,7 @@ import os, numpy as np
 import config as C
 
 def load():
-    z = np.load(os.path.join(C.WORK, "network.npz"))
+    z = np.load(os.path.join(getattr(C, "WORK_NET", C.WORK), "network.npz"))   # [v6] 여러 방식이 같이 씀
     e = {k[2:]: z[k] for k in z.files if k.startswith("e_")}   # 저장할 때 붙인 "e_" 접두사를 떼서 링크 정보 복원
     return dict(nodes=z["nodes"], giant=z["giant"], e=e, s5=z["s5"], z5=z["z5"],
                 s1=z["s1"] if "s1" in z.files else None)        # s5 = DEM 5m 경사, s1 = DEM 1m 경사(있을 때만)

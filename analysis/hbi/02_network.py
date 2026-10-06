@@ -18,7 +18,7 @@ import config as C
 from lib.qio import log, DEM
 from lib.qnetwork import build_edges, edge_slope
 
-os.makedirs(C.WORK, exist_ok=True)
+os.makedirs(C.WORK_NET, exist_ok=True)
 nodes, giant, e = build_edges()
 
 log("DEM 5m 고도 추출")
@@ -35,5 +35,5 @@ if "--dem1m" in sys.argv and C.DATA_ROOT_DEM1M:     # sys.argv = 실행할 때 �
     z1 = DEM(C.DATA_ROOT_DEM1M).sample(nodes[:, 0], nodes[:, 1])
     save["z1"] = z1
     save["s1"] = edge_slope(z1, e)[0]
-np.savez_compressed(os.path.join(C.WORK, "network.npz"), **save)
+np.savez_compressed(os.path.join(C.WORK_NET, "network.npz"), **save)   # [v6] 방식이 여럿이어도 한 번만
 log(f"완료 → work/network.npz (노드 {len(nodes):,}, 링크 {len(e['u']):,})")

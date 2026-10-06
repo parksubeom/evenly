@@ -158,14 +158,28 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--src", default=os.path.join(ROOT, "results", "raw_export"))
     ap.add_argument("--expect", choices=["real", "fake"], help="build:real 은 real: 가짜 표지가 있으면 멈춤")
+    ap.add_argument("--mode", help="v6 run_all --modes 로 나뉜 결과에서 쓸 방식 폴더 (layer / register / gisbld / all)")
     a = ap.parse_args()
     src = os.path.abspath(a.src)
     if not os.path.isdir(src):
         raise SystemExit(f"결과 폴더가 없습니다: {src}")
+    # [v6] 방식 폴더 고르기: --mode 가 있으면 그 하위 폴더. 없고 맨 위에 summary.csv 가 없으면 우선순위(layer → register → gisbld → all) 로
+    base = src
+    subs = [m for m in ("layer", "register", "gisbld", "all") if os.path.exists(os.path.join(src, m, "summary.csv"))]
+    if a.mode:
+        if a.mode not in subs:
+            raise SystemExit(f"!! {os.path.relpath(src, ROOT)}/{a.mode}/summary.csv 가 없습니다. 있는 방식: {subs or '없음'}")
+        src = os.path.join(src, a.mode)
+    elif subs and not os.path.exists(os.path.join(src, "summary.csv")):
+        src = os.path.join(src, subs[0])
+        print(f"방식 폴더 {subs} 중 {subs[0]} 을 씀 (다른 방식은 --mode)")
+    elif subs:
+        print(f"!! 맨 위 결과를 씀. 방식 폴더도 있음: {subs} (고르려면 --mode)")
+    attr_mode = os.path.basename(src) if src != base else None
     # 출처 판정: 가짜 표지(_source.txt=fake 또는 _FAKE_DATA_README.txt)가 있으면 fake.
     #   real 은 "가짜 표지가 없고, 폴더가 results/raw_export" 일 때만 (실제 반출 파일에는 표지가 없음)
-    fake = is_fake_dir(src) or os.path.basename(src) == "fake_export"
-    is_raw = os.path.abspath(src) == os.path.abspath(RAW_EXPORT)
+    fake = is_fake_dir(src) or is_fake_dir(base) or os.path.basename(base) == "fake_export"
+    is_raw = os.path.abspath(base) == os.path.abspath(RAW_EXPORT)
     if a.expect == "real" and fake:
         raise SystemExit(f"!! {os.path.relpath(src, ROOT)} 에 가짜 표지(_source.txt=fake)가 있습니다 → 실제 기획서를 만들지 않습니다. 폴더 내용을 확인하세요")
     if not fake and not is_raw:
@@ -531,7 +545,7 @@ def main():
                              ("sites", "선정지 백분위 막대", ["validation_sites.csv", "matplotlib"]), ("skt", "외출 지수 산점도", ["points_SKT_*_dong.csv", "pop60.csv", "matplotlib"])]:
             B.img(k, lab, need, None)
 
-    data = {"source": source, "src": os.path.relpath(src, ROOT), "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
+    data = {"source": source, "src": os.path.relpath(src, ROOT), "attr_mode": attr_mode, "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
             "targets": targets, "base_target": T0, "fields": B.fields, "images": B.images, "tables": B.tables, "missing": B.missing()}
     os.makedirs(os.path.dirname(OUT_JSON), exist_ok=True)
     with open(OUT_JSON, "w", encoding="utf-8") as f:
