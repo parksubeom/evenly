@@ -124,6 +124,8 @@ def run_step(s, mode=None):
     env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")   # 자식 출력은 UTF-8 로 받아 그대로 화면·파일에
     if mode:
         env["HBI_SUBRUN"] = mode
+    else:
+        env["HBI_NOPICK"] = "1"         # 방식 없이 돌 때 지난 --modes 결과 폴더를 고르지 않게 (config.py)
     args = [sys.executable, s] + (["--dem1m"] if s == "02_network.py" and "--dem1m" in sys.argv else [])
     out(f"\n########## {s}{f'  [방식 {mode}]' if mode else ''} ##########")
     p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)

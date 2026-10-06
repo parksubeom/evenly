@@ -18,7 +18,7 @@
 #  [안심구역에서 반드시 고칠 곳] ★ 표시가 있는 3줄 (데이터 폴더 경로)
 #   1일차에 01_inspect.py 를 돌려 보고, 결과가 이상하면 ▲ 표시 항목을 고칩니다.
 # ════════════════════════════════════════════════════════════════════
-import os
+import os, sys
 
 # 이 config.py 파일이 들어 있는 폴더의 절대경로. (JS의 __dirname 과 같음)
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -218,8 +218,20 @@ _apply_mapping(globals())
 
 # [v6] python run_all.py --modes register,all 처럼 여러 건물 용도 방식을 한 번에 돌릴 때 (run_all 이 HBI_SUBRUN 을 정함):
 #   방식마다 결과는 output/<방식>/, 중간 결과는 work/<방식>/ 에. 길 네트워크(work/network.npz)는 한 번 만들어 같이 씀
+#   12·13·14 처럼 따로 치는 단계: --mode <방식> 으로 고르거나, 없으면 check 가 고른 방식 → layer·register·gisbld·all 순서로 결과가 있는 방식
 WORK_NET = WORK
-if os.environ.get("HBI_SUBRUN"):
-    BUILDING_ATTR_MODE = os.environ["HBI_SUBRUN"]
+_sub = os.environ.get("HBI_SUBRUN")
+_me = os.path.basename(sys.argv[0]) if sys.argv and sys.argv[0] else ""
+if not _sub and not os.environ.get("HBI_NOPICK") and _me[:2].isdigit() and _me[:2] not in ("01", "02"):   # run_all 이 부른 단계는 고르지 않음
+    if "--mode" in sys.argv and sys.argv.index("--mode") + 1 < len(sys.argv):
+        _sub = sys.argv[sys.argv.index("--mode") + 1]
+    elif not os.path.exists(os.path.join(WORK, "buildings_hbi.csv")):
+        _have = [m for m in ("layer", "register", "gisbld", "all") if os.path.exists(os.path.join(WORK, m, "buildings_hbi.csv"))]
+        _ch = (MAPPING.get("building_attr_chosen") or "").strip().lower()
+        _sub = _ch if _ch in _have else (_have[0] if _have else None)
+        if _sub:
+            print(f"(--modes 결과 중 '{_sub}' 방식 결과로 실행: output/{_sub}/. 다른 방식은 --mode 방식 이름, 있는 방식 {_have})", flush=True)
+if _sub:
+    BUILDING_ATTR_MODE = _sub
     OUTPUT = os.path.join(OUTPUT, BUILDING_ATTR_MODE)
     WORK = os.path.join(WORK, BUILDING_ATTR_MODE)
