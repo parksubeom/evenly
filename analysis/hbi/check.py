@@ -437,6 +437,6 @@ if __name__ == "__main__":
             for w, t in STOP:
                 print(f"  - {w}")
         else:
-            print(f"통과 (경고 {len(WARN)}건) → python run_all.py")
+            print(f"통과 (경고 {len(WARN)}건) → python run_all.py --modes auto,all")
     print(f"(저장: output/check_report.txt)")
     sys.exit(1 if STOP else 0)

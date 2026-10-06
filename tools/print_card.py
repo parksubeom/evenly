@@ -179,6 +179,8 @@ def v4_card(pg):
 
 
 MODES_TIME = "⟪○○분⟫"      # 두 방식(--modes auto,all) 걸린 시간: 화요일 runlog 의 03 이후 소요로 채움
+if "--no-runlog" in sys.argv:   # runlog 없이 보낼 때
+    MODES_TIME = "시간 기록 없음 (화면 진행을 보며 판단)"
 
 
 def v6_card(pg):
@@ -257,6 +259,8 @@ def main():
             fail = True; continue
         out = os.path.join(DOCS, f"{'2차방문' if tag == 'v6' else '1차방문'}_{tag}_카드.pdf")
         print(f"→ {os.path.relpath(out, ROOT)} ({render(card['html'], out)}쪽)")
+        if "⟪" in card["html"]:
+            print("!! 카드에 아직 채우지 않은 칸이 있음 (⟪…⟫) → runlog 로 채우거나 --no-runlog")
     if fail:
         sys.exit(1)
 

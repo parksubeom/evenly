@@ -18,6 +18,10 @@ tools/print_guide.py ─ docs/1차방문_안내서.md → 인쇄용 A4 PDF (docs
 import html, os, re, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+NO_RUNLOG = "--no-runlog" in sys.argv          # [v6] runlog 없이 보낼 때: 시간 빈칸을 "기록 없음" 으로 찍고 그 경고만 통과
+if NO_RUNLOG:
+    sys.argv.remove("--no-runlog")
+RUNLOG_BLANKS = {"⟪두 방식 시간⟫": "기록 없음, 화면 진행을 보며 판단", "⟪○○분⟫": "기록 없음, 화면 진행을 보며 판단"}
 SRC = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.join(ROOT, "docs", "1차방문_안내서.md")   # 다른 안내서: python tools/print_guide.py <md> [pdf]
 OUT = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else os.path.splitext(SRC)[0] + ".pdf"
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
@@ -221,11 +225,18 @@ def convert(md):
     return "\n".join(out)
 
 
+def fill_blanks(md):
+    if NO_RUNLOG:
+        for k, v in RUNLOG_BLANKS.items():
+            md = md.replace(k, v)
+    return md
+
+
 def main():
     if not os.path.exists(CHROME):
         raise SystemExit(f"Google Chrome 이 없습니다: {CHROME}")
     doc = (f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>1차 방문 안내서</title><style>{CSS}</style></head>'
-           f'<body>{convert(open(SRC, encoding="utf-8").read())}</body></html>')
+           f'<body>{convert(fill_blanks(open(SRC, encoding="utf-8").read()))}</body></html>')
     with tempfile.TemporaryDirectory() as td:
         hp = os.path.join(td, "doc.html")
         open(hp, "w", encoding="utf-8").write(doc)
@@ -233,7 +244,9 @@ def main():
                        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     pages = len(re.findall(rb"/Type\s*/Page[^s]", open(OUT, "rb").read()))
     print(f"→ {os.path.relpath(OUT, ROOT)} ({pages}쪽)")
-    left = re.findall(r"⟪[^⟫]*⟫", open(SRC, encoding="utf-8").read())
+    left = re.findall(r"⟪[^⟫]*⟫", fill_blanks(open(SRC, encoding="utf-8").read()))
+    if NO_RUNLOG:
+        print("(--no-runlog: 시간 빈칸을 '기록 없음, 화면 진행을 보며 판단' 으로 찍음)")
     if left:
         print(f"!! 아직 채우지 않은 칸 {len(left)}개: {sorted(set(left))} → 인쇄 전에 채울 것")
 
