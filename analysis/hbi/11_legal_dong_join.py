@@ -51,10 +51,10 @@ for name, cfg in todo.items():
     rows, enc, sep = read_table(cfg["path"], cfg.get("sep"))
     n0 = len(rows)
     for col, val in (cfg.get("filter") or {}).items():
-        ok = set(str(x) for x in (val if isinstance(val, (list, tuple)) else [val]))
-        rows = [r for r in rows if str(r.get(col, "")).strip() in ok]
+        ok = set(str(x).strip().upper() for x in (val if isinstance(val, (list, tuple)) else [val]))   # [v6] 대소문자 무시
+        rows = [r for r in rows if str(r.get(col, "")).strip().upper() in ok]
     for col, txt in (cfg.get("contains") or {}).items():
-        rows = [r for r in rows if str(txt) in str(r.get(col, ""))]
+        rows = [r for r in rows if str(txt).upper() in str(r.get(col, "")).upper()]   # [v6] 대소문자 무시
     n1 = len(rows)
     cnt = {}
     for r in rows:

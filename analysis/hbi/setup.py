@@ -126,7 +126,7 @@ def sample(path, enc=None, n=300):
 
 def share(vals, pat):
     v = [str(x).strip() for x in vals if x not in (None, "")]
-    return (sum(1 for x in v if re.fullmatch(pat, x)) / len(v)) if v else 0.0
+    return (sum(1 for x in v if re.fullmatch(pat, x, re.I)) / len(v)) if v else 0.0     # [v6] 대소문자 무시 (bdu001 = BDU001)
 
 
 def is_parcel(names, vals):

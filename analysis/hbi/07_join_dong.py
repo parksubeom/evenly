@@ -51,8 +51,8 @@ for name, cfg in C.JOIN_DATA.items():
         if val == "__LATEST__":                                   # [v5] 그 열의 가장 늦은 값만 (예: 기준시점)
             val = max(str(r.get(k, "")).strip() for r in rows)
             log(f"  filter {k} = 가장 늦은 값 '{val}'")
-        ok = set(str(x) for x in (val if isinstance(val, (list, tuple)) else [val]))   # [v5] 목록이면 그중 하나
-        rows = [r for r in rows if str(r.get(k, "")).strip() in ok]
+        ok = set(str(x).strip().upper() for x in (val if isinstance(val, (list, tuple)) else [val]))   # [v5] 목록이면 그중 하나, [v6] 대소문자 무시
+        rows = [r for r in rows if str(r.get(k, "")).strip().upper() in ok]
     log(f"  조건 통과 {len(rows):,}/{n0:,}행")
     agg, base = {}, {}
     for r in rows:                                          # 행정동별 합산

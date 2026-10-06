@@ -143,6 +143,23 @@ def main():
     os.makedirs(f"{OUT}/dxf_only/도엽", exist_ok=True)
     for n in ("37612006.dxf", "37612007.dxf"):
         open(f"{OUT}/dxf_only/도엽/{n}", "w").write("0\nSECTION\n0\nENDSEC\n0\nEOF\n")
+    # 대소문자 시험판: tiles_std 와 내용은 같고, 파일 이름은 소문자·확장자는 대문자(N3A_B0010000.shp → n3a_b0010000.SHP), 코드 값은 소문자(BDU001 → bdu001)
+    import glob, shutil
+    for src in sorted(glob.glob(f"{OUT}/tiles_std/*/*.shp")):
+        d = os.path.join(OUT, "tiles_lowcase", os.path.basename(os.path.dirname(src)))
+        os.makedirs(d, exist_ok=True)
+        cpg = os.path.exists(os.path.splitext(src)[0] + ".cpg")
+        ds = gdal.OpenEx(src, gdal.OF_VECTOR, open_options=[] if cpg else ["ENCODING=CP949"]); lyr = ds.GetLayer(0); defn = lyr.GetLayerDefn()
+        names = [defn.GetFieldDefn(i).GetName() for i in range(defn.GetFieldCount())]
+        feats = [(f.GetGeometryRef().ExportToWkt(), {k: str(f.GetField(k) or "").lower() if k != "NAME" else f.GetField(k) for k in names}) for f in lyr]
+        enc = "UTF-8" if cpg else "CP949"
+        stem = os.path.splitext(os.path.basename(src))[0].lower()
+        tmp = os.path.join(d, stem + ".shp")
+        shp(tmp, lyr.GetGeomType(), names, feats, enc, cpg)
+        ds = None
+        for f in glob.glob(os.path.join(d, stem + ".*")):
+            b_, e_ = os.path.splitext(f)
+            os.rename(f, b_ + e_.upper() + ".tmp"); os.rename(b_ + e_.upper() + ".tmp", b_ + e_.upper())
     json.dump(meta, open(f"{OUT}/meta.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print("완료:", OUT, {g: m["folder"] for g, m in meta.items()})
 

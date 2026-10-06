@@ -68,10 +68,10 @@ for name, cfg in todo.items():
     vcols = cfg.get("value_cols") or []                        # [v5] 값 합계 모드 (SKT 유동인구처럼 점=셀, 값을 더함)
     summing = cfg.get("agg") == "sum" and bool(vcols)
     for col, val in (cfg.get("filter") or {}).items():   # 정확히 일치 (리스트면 그중 하나)
-        ok = set(str(x) for x in (val if isinstance(val, (list, tuple)) else [val]))
-        rows = [r for r in rows if str(r.get(col, "")).strip() in ok]
+        ok = set(str(x).strip().upper() for x in (val if isinstance(val, (list, tuple)) else [val]))   # [v6] 대소문자 무시
+        rows = [r for r in rows if str(r.get(col, "")).strip().upper() in ok]
     for col, txt in (cfg.get("contains") or {}).items(): # 글자 포함
-        rows = [r for r in rows if str(txt) in str(r.get(col, ""))]
+        rows = [r for r in rows if str(txt).upper() in str(r.get(col, "")).upper()]   # [v6] 대소문자 무시
     n1 = len(rows)
     xy = np.array([(fnum(r.get(cfg["x_col"])), fnum(r.get(cfg["y_col"]))) for r in rows], float).reshape(-1, 2)
     if summing:
