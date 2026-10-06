@@ -178,32 +178,38 @@ def v4_card(pg):
     return {"cmds": prep + zone + end + ["ren output output_B"], "html": html_body}
 
 
+MODES_TIME = "⟪○○분⟫"      # 두 방식(--modes auto,all) 걸린 시간: 화요일 runlog 의 03 이후 소요로 채움
+
+
 def v6_card(pg):
     prep = [r"cd /d C:\Users\user\Desktop\박수범", "python hbi_code_bundle_v6.txt", "cd hbi6"]
     prep_see = ["<b>박</b> 까지 치고 Tab", q("완료: 파일 46개"), f"맨 아래 {q('…' + chr(92) + 'hbi6>')}"]
-    main = ["python setup.py", "python check.py", "python run_all.py"]
-    main_see = ["질문은 모두 <b>Enter</b> (기본 폴더)", f"끝에 {q('통과')} (멈춤 → 7)", f"끝 {q('결과 점검표')} 에 빨강 없음"]
+    main = ["python setup.py", "python check.py", "python run_all.py --modes auto,all"]
+    main_see = ["질문은 모두 <b>Enter</b> (기본 폴더)", f"끝에 {q('통과')} (멈춤 → 7)", f"두 방식 {MODES_TIME}, 끝에 빨강 없음"]
     fix = ["notepad mapping.txt", "python run_all.py --from 06", "chcp 65001"]
-    fix_see = [f"{q('→')} 안내대로, = 오른쪽만", "06 자리에 멈춘 번호", "화면 한글이 깨지면 치고 같은 명령 다시"]
+    fix_see = [f"{q('→')} 안내대로, = 오른쪽만", "06 자리에 멈춘 번호 (방식은 기억함)", "화면 한글이 깨지면 치고 같은 명령 다시"]
     more = ["python run_all.py --from 09", "python 12_isochrone.py", "python 13_siting.py", "python 14_dong_context.py"]
     sec = lambda t: f'<tr class="sec"><td colspan="5">{t}</td></tr>'
     head6 = HEAD.replace('<col style="width:60%"><col style="width:21.5%">', '<col style="width:55%"><col style="width:26.5%">')
     k, out = 0, ["<h2>명령 (위에서부터 한 줄씩, 끝나면 □)</h2>", head6, sec("준비 (한 번)")]
-    for c, s_, g in zip(prep, prep_see, [p(pg, "2")] * 3):
+    def add(c, s_, g):
+        nonlocal k
         k += 1
         if len(c) > 30:      # 긴 명령은 "볼 것" 칸까지 써서 한 줄에 (볼 것은 명령 뒤에 작게)
             out.append(f'<tr><td class="box">□</td><td class="n">{k}</td><td colspan="2"><code>{html.escape(c)}</code> '
                        f'<span class="see">{s_}</span></td><td class="pg">{g}</td></tr>')
         else:
             out.append(row(k, c, s_, g))
+    for c, s_, g in zip(prep, prep_see, [p(pg, "2")] * 3):
+        add(c, s_, g)
     out.append(sec("명령 세 줄 (이것이 전부)"))
     for c, s_, g in zip(main, main_see, [p(pg, "3", "3-2"), p(pg, "4"), p(pg, "5", "5-2")]):
-        k += 1; out.append(row(k, c, s_, g))
+        add(c, s_, g)
     out.append(sec("멈췄을 때"))
     for c, s_, g in zip(fix, fix_see, [p(pg, "4-2"), p(pg, "6"), p(pg, "9")]):
-        k += 1; out.append(row(k, c, s_, g))
+        add(c, s_, g)
     out.append(sec("실측 좌표를 넣은 뒤 (안내서대로 interventions.csv)"))
-    k += 1; out.append(row(k, more[0], "09 시설 효과", p(pg, "7")))
+    add(more[0], "09 시설 효과", p(pg, "7"))
     k += 1
     out.append(f'<tr><td class="box">□</td><td class="n">{k}</td><td>' + "<br>".join(f"<code>{html.escape(c)}</code>" for c in more[1:])
                + f'</td><td class="see">한 줄씩. 13 은 좌표 없는 시설 건너뜀</td><td class="pg">{p(pg, "7")}</td></tr>')
@@ -211,9 +217,8 @@ def v6_card(pg):
     folders6 = ('<h2>담당자에게 물을 것</h2><table><colgroup><col style="width:24%"><col style="width:26%"><col style="width:24%"><col style="width:26%"></colgroup>'
                 '<tr><td>박수범 폴더에 자료·번들</td><td>○ / ×</td><td>대장·GIS 건물 파일</td><td>○ / ×</td></tr></table>')
     memo = ('<h2>메모 칸 (값은 적지 않음)</h2><table><colgroup><col style="width:17%"><col style="width:33%"><col style="width:17%"><col style="width:33%"></colgroup>'
-            '<tr><td>용도 방식</td><td>layer / register / all (대장·속성 판 있음/없음)</td><td>연결망·노드</td><td class="blank">____ 개, ____ %</td></tr>'
-            '<tr><td>대장 연결률</td><td class="blank">____ %</td><td>걸린 시간</td><td class="blank">__:__ → __:__</td></tr>'
-            '<tr><td>오류 마지막 줄</td><td class="blank"></td><td>반출 시각</td><td class="blank"></td></tr></table>')
+            '<tr><td>고른 방식·연결률</td><td class="blank">______ ____ %</td><td>연결망·노드</td><td class="blank">____ 개, ____ %</td></tr>'
+            '<tr><td>오류 마지막 줄</td><td class="blank"></td><td>시간·반출</td><td class="blank">__:__ → __:__, 반출 __:__</td></tr></table>')
     html_body = ("<h1>2차 방문 카드 · v6 (hbi_code_bundle_v6.txt)</h1>" + gold(pg["9"]) + folders6 + "".join(out) + memo)
     return {"cmds": prep + main + fix + more, "html": html_body}
 

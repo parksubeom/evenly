@@ -233,6 +233,9 @@ def main():
                        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     pages = len(re.findall(rb"/Type\s*/Page[^s]", open(OUT, "rb").read()))
     print(f"→ {os.path.relpath(OUT, ROOT)} ({pages}쪽)")
+    left = re.findall(r"⟪[^⟫]*⟫", open(SRC, encoding="utf-8").read())
+    if left:
+        print(f"!! 아직 채우지 않은 칸 {len(left)}개: {sorted(set(left))} → 인쇄 전에 채울 것")
 
 
 if __name__ == "__main__":

@@ -32,17 +32,30 @@ if any(v.get("path") for v in C.LEGAL_DONG_DATA.values()): steps.append("11_lega
 
 # [v6] --modes register,all : 건물 용도 방식 여러 개를 한 번에 (auto = check 가 고른 방식, 예: --modes auto,all). 01·02 는 한 번, 03 부터는 방식마다 output/<방식>/·work/<방식>/
 MODES = None
+MODE_NOTE = ""
+LAST_MODES = os.path.join(C.WORK, "last_modes.txt")     # 지난번 --modes (--from 만 쳐도 같은 방식들로 이어서)
+if "--modes" not in sys.argv and "--from" in sys.argv and os.path.exists(LAST_MODES):
+    sys.argv += ["--modes", open(LAST_MODES, encoding="utf-8").read().strip()]
+    MODE_NOTE = f"지난번 --modes {sys.argv[-1]} 를 그대로 씀"
 if "--modes" in sys.argv:
     i = sys.argv.index("--modes")
-    MODES = [m.strip().lower() for m in (sys.argv[i + 1] if i + 1 < len(sys.argv) else "").split(",") if m.strip()]
+    MODES_ARG = sys.argv[i + 1] if i + 1 < len(sys.argv) else ""          # 사용자가 친 그대로
+    MODES = [m.strip().lower() for m in MODES_ARG.split(",") if m.strip()]
     if "auto" in MODES:                    # auto = check.py 가 고른 방식 (mapping 의 building_attr_chosen)
         ch = (C.MAPPING.get("building_attr_chosen") or "").strip().lower()
         if not ch:
             raise SystemExit("--modes 에 auto 가 있는데 check.py 가 고른 방식이 없습니다 → python check.py 먼저")
-        MODES = list(dict.fromkeys(ch if m == "auto" else m for m in MODES))
+        full = [ch if m == "auto" else m for m in MODES]
+        MODES = list(dict.fromkeys(full))
+        if len(MODES) < len(full):         # 예: --modes auto,all 인데 check 가 all 을 고름 → 같은 계산을 두 번 하지 않음
+            MODE_NOTE = (MODE_NOTE + " / " if MODE_NOTE else "") + f"auto = {ch} 이라 한 번만 실행 (방식: {', '.join(MODES)})"
     bad = [m for m in MODES if m not in ("layer", "register", "gisbld", "all")]
     if not MODES or bad:
         raise SystemExit(f"--modes 뒤에는 layer·register·gisbld·all 을 쉼표로 (예: --modes register,all). 틀린 값: {bad}")
+    os.makedirs(C.WORK, exist_ok=True)
+    open(LAST_MODES, "w", encoding="utf-8").write(MODES_ARG)
+elif "--from" not in sys.argv and os.path.exists(LAST_MODES):
+    os.remove(LAST_MODES)                  # --modes 없이 처음부터 돌리면 지난 방식 기억을 지움
 
 # [v6] --from NN : 그 번호 단계부터 (예: --from 03). 02 를 건너뛰면 work/network.npz 가 있어야 함
 if "--from" in sys.argv:
@@ -113,6 +126,8 @@ def out(s):
 
 out(f"# run_all.py {' '.join(sys.argv[1:])} / 단계: {', '.join(s[:2] for s in steps)} / 대상 구: {','.join(C.TARGET_GU) or '전체'} / "
     f"건물 용도 방식: {','.join(MODES) if MODES else C.BUILDING_ATTR_MODE} / AREA_BBOX: {C.AREA_BBOX}")
+if MODE_NOTE:
+    out(f"# {MODE_NOTE}")
 try:
     from lib.schema import dump
     out(f"# 자료 구조 저장 → {os.path.relpath(dump(), C.BASE)}")
@@ -137,7 +152,7 @@ def run_step(s, mode=None):
     if p.wait() != 0:        # 0 이 아니면 = 오류로 끝남
         out(f"!! {s} 에서 중단. 위 오류 메시지를 확인하세요.")
         d = diagnose(tail, s)
-        again = f"python run_all.py --from {s[:2]}" + (f" --modes {','.join(MODES)}" if MODES else "")
+        again = f"python run_all.py --from {s[:2]}"     # --modes 는 기억해 두므로 다시 안 쳐도 됨
         if d:
             out(f"!! 원인: {d[0]}\n!! 할 일: {d[1]}\n!! 고친 뒤: {again}")
         else:
@@ -179,4 +194,5 @@ if MODES:
     for m in MODES:
         r = summary_reds.get(m, [])
         out(f"  output/{m}/  →  " + ("빨강 없음" if not r else f"빨강 {len(r)}개: {', '.join(dict.fromkeys(r))}"))
+    out("  반출: output 폴더 하나 (방식별 결과가 output/<방식>/ 에 모두 들어 있음). 빨강이 있는 방식은 고친 뒤 다시 돌리거나, 빨강 없는 방식만 써도 됨")
 logf.close()
