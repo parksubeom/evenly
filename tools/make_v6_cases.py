@@ -69,6 +69,7 @@ box = lambda x0, y0, x1, y1: f"POLYGON(({x0} {y0},{x1} {y0},{x1} {y1},{x0} {y1},
 def main():
     G, CODE = gu_geoms()
     reg = []
+    GIS = {}
     meta = {}
     for gi, gu in enumerate(GU):
         g = G[gu]
@@ -102,6 +103,14 @@ def main():
         std = [(box(x - 6, y - 6, x + 6, y + 6), {"BPRP_SE": u, "BULD_SE": "BDC001", "BFLR_CO": int(f)}) for (x, y), u, f in zip(pts, use, flo)]
         shp(f"{OUT}/tiles_ufid/{folder}/N3A_B0010000.shp", ogr.wkbPolygon, ["UFID"], ufid, enc, cpg)
         shp(f"{OUT}/tiles_std/{folder}/N3A_B0010000.shp", ogr.wkbPolygon, ["BPRP_SE", "BULD_SE", "BFLR_CO"], std, enc, cpg)
+        # GIS건물통합정보 가짜판: 같은 건물을 1m 옮긴 도형 + 국가공간정보포털 칸 순서 이름(A8 용도코드, A9 용도명, A26 지상층수, A14 연면적)
+        #   gis_raw 는 10곳 중 1곳을 뺌(연결률 약 90%), gis_half 는 둘 중 하나를 뺌(약 50%) → auto 선택 시험
+        code = {"BDU001": ("01000", "단독주택"), "BDU002": ("02000", "공동주택"), "BDU003": ("03000", "제1종근린생활시설"),
+                "BDU009": ("09000", "의료시설"), "BDU011": ("11000", "노유자시설")}
+        for gv, skip in (("gis_raw", lambda i: i % 10 == 9), ("gis_half", lambda i: i % 2 == 1)):
+            gf = [(box(x - 5, y - 5, x + 7, y + 7), {"A0": f"G{gi:02d}{i:05d}", "A8": code[u][0], "A9": code[u][1], "A26": int(f), "A14": 100 + 10 * int(f)})
+                  for i, ((x, y), u, f) in enumerate(zip(pts, use, flo)) if not skip(i)]
+            GIS.setdefault(gv, []).extend(gf)
         cx, cy = g.PointOnSurface().GetX(), g.PointOnSurface().GetY()
         for variant in ("ufid", "std"):
             d = os.path.join(OUT, "tiles_" + variant, folder)
@@ -138,6 +147,8 @@ def main():
         meta[gu] = dict(folder=folder, n_bld=len(pts), n_res=int(np.isin(use, ["BDU001", "BDU002"]).sum()))
     shp(f"{OUT}/parcel_gyeonggi/경기/수원시.shp", ogr.wkbPolygon, ["pnu", "jimok"],
         [(box(300000 + i * 40, 500000, 300030 + i * 40, 500030), {"pnu": f"4111110100{1}{i + 1:04d}0000", "jimok": "대"}) for i in range(30)], "UTF-8", False)
+    for gv, feats in GIS.items():
+        shp(f"{OUT}/{gv}/AL_D010_11_20260901.shp", ogr.wkbPolygon, ["A0", "A8", "A9", "A26", "A14"], feats, "CP949", False)
     with open(f"{OUT}/building_register.csv", "w", encoding="utf-8", newline="") as f:
         w = csv.writer(f); w.writerow(["bldrgst_pk", "pnu", "main_use_cd", "main_use_nm", "use_class", "grnd_flr", "tot_area", "main_atch"]); w.writerows(reg)
     os.makedirs(f"{OUT}/dxf_only/도엽", exist_ok=True)

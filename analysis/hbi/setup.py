@@ -30,6 +30,11 @@ gdal.PushErrorHandler("CPLQuietErrorHandler")      # 인코딩을 시험해 보�
 safe_console()
 
 UNZIP = os.path.join(C.WORK, "unzipped")
+# [v6] 안심구역 PC 의 자료 위치는 매번 같음 → 기본값. 하위 폴더는 화요일(10/6) 반출 runlog·schema 에 찍힌 실제 이름으로 채움 (None = 아직 모름 → 자동 탐색)
+DEFAULT_ROOT = r"C:\Users\user\Desktop\박수범"
+DEFAULT_SUBDIRS = {"수치지형도": "수치지형도2", "필지": None, "DEM 5m": None, "DEM 1m": None, "상호제공": None}
+SKIP_DIRS = {"hbi", "hbi6", "hbi_geopandas"}      # 우리 코드 폴더(결과·풀린 zip 포함)는 자료로 훑지 않음
+QUIET = False                                      # 기본 경로에 자료가 다 있으면 질문 없이 진행
 VEC, RAS, TAB = (".shp",), (".img", ".tif", ".tiff", ".asc"), (".csv",)
 GEOM = {"sidewalk_cl": "line", "road_cl": "line", "stairs": "poly", "building": "poly", "bus_stop": "point",
         "bridge": "poly", "tunnel": "poly", "overpass": "any", "station": "any"}
@@ -49,13 +54,31 @@ def hr(t):
 
 
 # ───────────────────────── 1. 훑기 ─────────────────────────
-def scan(roots):
+def scan(roots, skip=True):
     files = collections.defaultdict(list)
     for root in roots:
         for p in glob.glob(os.path.join(root, "**", "*"), recursive=True):
+            parts = set(os.path.relpath(p, root).replace("\\", "/").split("/")[:-1])
+            if skip and parts & SKIP_DIRS:
+                continue
             if os.path.isfile(p):
                 files[os.path.splitext(p)[1].lower()].append(p)
     return files
+
+
+def q(prompt, default=""):
+    """질문. QUIET(기본 경로에 자료가 다 있음)이면 묻지 않고 추천값"""
+    if QUIET:
+        print(f"{prompt}{default or 'Enter'}  (기본 경로라 묻지 않음)")
+        return default
+    return ask(prompt, default)
+
+
+def defaults_ok(root):
+    """기본 하위 폴더가 모두 알려져 있고(None 없음) 있으며 비어 있지 않으면 True"""
+    if any(v is None for v in DEFAULT_SUBDIRS.values()):
+        return False
+    return all(os.path.isdir(os.path.join(root, v)) and any(os.scandir(os.path.join(root, v))) for v in DEFAULT_SUBDIRS.values())
 
 
 def zip_names(zf):
@@ -236,9 +259,13 @@ def write_config(vals):
 
 # ───────────────────────── 본문 ─────────────────────────
 def main():
+    global QUIET
     root = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("-") else ""
-    if not root:
-        print("자료 최상위 폴더 주소를 넣으세요. (편한 방법: Enter 로 끝내고 명령창에 python setup.py 를 친 뒤, 띄우고 폴더 앞글자 + Tab)")
+    if not root and os.path.isdir(DEFAULT_ROOT):
+        root = ask(f"자료 폴더 = {DEFAULT_ROOT}  (Enter = 이 기본값 사용, 다르면 주소 입력): ", DEFAULT_ROOT)
+    elif not root:
+        print(f"기본 자료 폴더({DEFAULT_ROOT})가 없습니다. 자료 최상위 폴더 주소를 넣으세요."
+              " (편한 방법: Enter 로 끝내고 명령창에 python setup.py 를 친 뒤, 띄우고 폴더 앞글자 + Tab)")
         root = ask("자료 폴더: ")
     root = root.strip().strip('"')
     if not root or not os.path.isdir(root):
@@ -249,7 +276,16 @@ def main():
     cfg = {}
 
     hr("1. 폴더 훑기")
-    files = scan([root])
+    if os.path.normcase(os.path.abspath(root)) == os.path.normcase(os.path.abspath(DEFAULT_ROOT)) and defaults_ok(root):
+        QUIET = True
+        print("  기본 경로에 자료가 그대로 있습니다 → 질문 없이 진행 (확인 표만 보임)")
+        for k, v in DEFAULT_SUBDIRS.items():
+            print(f"    {k:<8} {os.path.join(root, v)}")
+        files = scan([os.path.join(root, v) for v in DEFAULT_SUBDIRS.values()])
+    else:
+        if os.path.normcase(os.path.abspath(root)) == os.path.normcase(os.path.abspath(DEFAULT_ROOT)):
+            print("  기본 하위 폴더가 없거나 달라졌습니다 → 자동 탐색")
+        files = scan([root])
     print(f"  {root}")
     print("  " + ", ".join(f"{k} {len(v)}개" for k, v in sorted(files.items(), key=lambda kv: -len(kv[1])) if k in VEC + RAS + TAB + (".zip", ".dxf", ".xlsx", ".txt")))
 
@@ -264,7 +300,7 @@ def main():
                 print(f"  {i}. {os.path.relpath(z, root)} ({os.path.getsize(z) / 1e6:,.1f}MB, 안에 {', '.join(f'{k} {v}' for k, v in kinds.most_common(4))})")
             except zipfile.BadZipFile:
                 print(f"  {i}. {os.path.relpath(z, root)}: 열 수 없는 zip (건너뜀)")
-        a = ask(f"  풀까요? 받은 폴더는 그대로 두고 hbi\\work\\unzipped 에 풉니다 (y/n, Enter = y): ", "y").lower()
+        a = q(f"  풀까요? 받은 폴더는 그대로 두고 hbi\\work\\unzipped 에 풉니다 (y/n, Enter = y): ", "y").lower()
         if a.startswith("y"):
             for z in zips:
                 try:
@@ -353,7 +389,7 @@ def main():
             for i, g in enumerate(groups, 1):
                 ov = area.overlap_gu(genv[g], gp) if (gp and genv[g]) else []
                 print(f"   {i:>4}  {'○' if use[g] else '×':^4}  {g}  →  {', '.join(ov) or '없음'}")
-            a = ask("  Enter = 이대로 / 번호(예: 3 7) = ○·× 바꾸기: ")
+            a = q("  Enter = 이대로 / 번호(예: 3 7) = ○·× 바꾸기: ")
             if not a:
                 break
             for t in re.findall(r"\d+", a):
@@ -440,14 +476,16 @@ def main():
     reg_ok = reg is not None
     none_txt = "없음 (external\\building_register.csv 또는 작업 폴더에 같은 이름)"
     print(f"  건축물대장: {os.path.relpath(reg, os.path.dirname(C.BASE)) if reg_ok else none_txt}")
+    from lib.battr import gis_path
+    gis = gis_path()
+    print(f"  GIS건물통합정보: {os.path.relpath(gis, os.path.dirname(C.BASE)) if gis else '없음 (external' + chr(92) + 'gis_building.gpkg)'}")
     has_use = vals.get("bld_use") not in (None, "?")
-    rec = "layer" if has_use else ("register" if (reg_ok and seoul) else "all")
-    why = {"layer": "건물 레이어에 용도 칸이 있음", "register": "건물에 용도 칸이 없고, 건축물대장과 필지가 있음 (건물 → 필지 → 대장)",
-           "all": "건물에 용도 칸이 없고 건축물대장" + ("" if reg_ok else "(external/building_register.csv)") + ("·필지가" if not seoul else "이") + " 없음 → 모든 건물을 집으로 (용도 미구분)"}[rec]
-    print(f"  추천: {rec}  ({why})")
-    print("  고를 수 있는 값: layer(건물 칸) / register(건축물대장) / all(모든 건물을 집, 용도 미구분) / stop(멈춤)")
-    a = ask(f"  Enter = {rec}, 다른 값이면 입력: ", rec).lower()
-    vals["building_attr_mode"] = a if a in ("layer", "register", "all", "stop") else rec
+    can = [m for m, ok in (("layer", has_use), ("register", reg_ok and bool(seoul)), ("gisbld", gis is not None), ("all", True)) if ok]
+    print(f"  쓸 수 있는 방식: {' → '.join(can)}  (이 순서로 check.py 가 표본 연결률을 재서 처음으로 80% 를 넘는 방식을 고름)")
+    print("  고를 수 있는 값: auto(추천, check 가 고름) / layer / register / gisbld / all / stop")
+    a = q("  Enter = auto, 직접 정하려면 입력: ", "auto").lower()
+    vals["building_attr_mode"] = a if a in ("auto", "layer", "register", "gisbld", "all", "stop") else "auto"
+    vals["building_attr_chosen"] = ""
 
     hr("7. 상호제공 CSV")
     paths = {}
@@ -469,7 +507,7 @@ def main():
     for grp, key, need in CSV_SIGNS:
         print(f"  {key}: {os.path.relpath(paths[key], root) if key in paths else '없음 (못 받았으면 그대로)'}")
     if paths:
-        a = ask("  위 파일 경로를 config.py 에 넣을까요? (y/n, Enter = y): ", "y").lower()
+        a = q("  위 파일 경로를 config.py 에 넣을까요? (y/n, Enter = y): ", "y").lower()
         if a.startswith("y"):
             cfg["paths"] = paths
 

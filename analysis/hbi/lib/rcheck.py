@@ -24,7 +24,7 @@ G, Y, R = "[초록]", "[노랑]", "[빨강]"
 # 지표: (이름, 초록 범위, 노랑 범위) — 범위 밖이면 빨강. None = 그쪽 한계 없음
 RANGES = {
     "주거 비율": ((0.55, 0.85), (0.35, 0.97)),
-    "대장 연결률": ((0.80, None), (0.50, None)),
+    "용도 연결률": ((0.80, None), (0.50, None)),
     "노드 비율": ((0.90, None), (0.70, None)),
     "길 연결": ((0.95, None), (0.80, None)),
     "경계 제외": ((None, 0.25), (None, 0.60)),
@@ -34,7 +34,7 @@ RANGES = {
 # 빨강일 때: (원인 후보, 고칠 곳, 다시 돌릴 단계)
 FIX = {
     "주거 비율": ("건물 용도를 못 붙였거나 용도 코드가 다름", "mapping.txt 의 building_attr_mode, bld_use (config 의 RESIDENTIAL_USE)", "03"),
-    "대장 연결률": ("필지·대장 번호 체계가 다르거나 필지 칸 이름이 틀림", "mapping.txt 의 parcel_id, register_join, reg_pnu (안 되면 building_attr_mode = gisbld 또는 all)", "03"),
+    "용도 연결률": ("필지·대장 번호 체계가 다르거나 필지 칸 이름이 틀림", "mapping.txt 의 parcel_id, register_join, reg_pnu (안 되면 building_attr_mode = gisbld 또는 all)", "03"),
     "노드 비율": ("길 폴더가 빠졌거나 길이 조각나 있음", "mapping.txt 의 map_folders, layer_road_cl·layer_sidewalk_cl (python setup.py 다시)", "02"),
     "길 연결": ("집 가까이에 길이 없음: 길 레이어가 빠졌거나 좌표계가 어긋남", "mapping.txt 의 layer_road_cl·map_folders, config 의 DEFAULT_CRS", "02"),
     "경계 제외": ("자료 가장자리 집이 너무 많음: 옆 구 자료가 빠짐", "mapping.txt 의 map_folders 에 옆 구 폴더 넣기 (python setup.py 다시), AREA_BBOX", "02"),
@@ -82,7 +82,7 @@ def rows(out=None, work=None, net_work=None):
         R_.append(("주거 비율", v, f"{v:.1%} ({nres:,}/{nb:,})" if v is not None else "-"))
     if mode in ("register", "gisbld"):
         v = st.get("link_rate")
-        R_.append(("대장 연결률", v, f"{v:.1%} ({'건물 겹침' if mode == 'gisbld' else st.get('join_used', '')})" if v is not None else "-"))
+        R_.append(("용도 연결률", v, f"{v:.1%} ({'건물 겹침' if mode == 'gisbld' else st.get('join_used', '')})" if v is not None else "-"))
     try:
         z = np.load(os.path.join(net_work, "network.npz"))
         v = float(z["giant"].mean())

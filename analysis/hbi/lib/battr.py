@@ -45,11 +45,84 @@ STATS_FILE = os.path.join(C.WORK, "battr_stats.json")
 LAST_STATS = {}
 
 
+MODES = ("layer", "register", "gisbld", "all", "stop", "auto")
+GIS_MIN_OVERLAP = 0.3     # gisbld: LX 건물 면적의 30% 이상 겹치는 GIS 건물이 있어야 연결 (조각 겹침으로 남의 용도를 붙이지 않게)
+
+
 def mode():
     m = getattr(C, "BUILDING_ATTR_MODE", "layer") or "layer"
-    if m not in ("layer", "register", "all", "stop"):
-        raise SystemExit(f"mapping.txt 의 building_attr_mode = {m} 는 쓸 수 없습니다 (layer / register / all / stop 중 하나)")
+    if m not in MODES:
+        raise SystemExit(f"mapping.txt 의 building_attr_mode = {m} 는 쓸 수 없습니다 ({' / '.join(MODES)} 중 하나)")
+    if m == "auto":                       # [v6] check.py 가 표본으로 재서 고른 방식 (mapping 의 building_attr_chosen)
+        c = (getattr(C, "MAPPING", {}).get("building_attr_chosen") or "").strip().lower()
+        if c not in ("layer", "register", "gisbld", "all"):
+            raise SystemExit("building_attr_mode = auto 인데 아직 고른 방식이 없습니다 → python check.py 를 먼저 (연결률을 재서 고름)")
+        return c
     return m
+
+
+def gis_path():
+    """GIS건물통합정보 가공 파일 (tools/prep_gis_building.py 결과): mapping 의 gis_file → hbi 바깥(작업 폴더)의 같은 이름"""
+    p = getattr(C, "GIS_FILE", None)
+    if not p:
+        return None
+    cand = [p, os.path.join(os.path.dirname(C.BASE), os.path.basename(p))]
+    return next((x for x in cand if os.path.exists(x)), None)
+
+
+def _gisbld(blds, quiet=False):
+    """LX 건물마다 겹치는 면적이 가장 큰 GIS 건물의 용도·층수 (겹침이 건물 면적의 GIS_MIN_OVERLAP 미만이면 연결 안 함)"""
+    p = gis_path()
+    if not p:
+        raise SystemExit(f"GIS건물통합정보 파일이 없습니다: {getattr(C, 'GIS_FILE', '')} → tools/prep_gis_building.py 결과를 external 에 넣거나 building_attr_mode 를 바꾸기")
+    F = C.FIELD
+    X = np.array([b[1] for b in blds]); Y = np.array([b[2] for b in blds])
+    bbox = [float(X.min()) - 100, float(Y.min()) - 100, float(X.max()) + 100, float(Y.max()) + 100]
+    want = [w for w in (F.get("gis_use_cd"), F.get("gis_use_nm"), F.get("gis_floor")) if w]
+    cell = 50.0
+    gis, bucket = [], collections.defaultdict(list)
+    for g, a in iter_layer(files=[p], fields=want, bbox=bbox):
+        k = len(gis)
+        gis.append((g.Clone(), a))
+        x0, x1, y0, y1 = g.GetEnvelope()
+        for cx in range(int(x0 // cell), int(x1 // cell) + 1):
+            for cy in range(int(y0 // cell), int(y1 // cell) + 1):
+                bucket[(cx, cy)].append(k)
+    out, st, ov = [], collections.Counter(), []
+    for g, x, y, _ in blds:
+        x0, x1, y0, y1 = g.GetEnvelope()
+        cand = {k for cx in range(int(x0 // cell), int(x1 // cell) + 1) for cy in range(int(y0 // cell), int(y1 // cell) + 1)
+                for k in bucket.get((cx, cy), ())}
+        best, area = None, 0.0
+        for k in cand:
+            gg = gis[k][0]
+            if not g.Intersects(gg):
+                continue
+            try:
+                ia = g.Intersection(gg).GetArea()
+            except RuntimeError:
+                continue
+            if ia > area:
+                best, area = k, ia
+        a0 = g.GetArea() or 1.0
+        if best is None:
+            out.append(("", None)); st["겹침 없음"] += 1; continue
+        r = area / a0
+        if r < GIS_MIN_OVERLAP:
+            out.append(("", None)); st["겹침 작음"] += 1; continue
+        a = gis[best][1]
+        fl = _num(a.get(F.get("gis_floor"))) if F.get("gis_floor") else None
+        out.append((reg_use_code(str(a.get(F.get("gis_use_nm")) or "") if F.get("gis_use_nm") else "",
+                                 str(a.get(F.get("gis_use_cd")) or "") if F.get("gis_use_cd") else ""), fl))
+        st["연결"] += 1; ov.append(min(r, 1.0))
+    n = len(blds)
+    stats = dict(mode="gisbld", n_bld=n, n_gis_read=len(gis), linked=st["연결"], link_rate=round(st["연결"] / n, 4) if n else 0.0,
+                 overlap_mean=round(float(np.mean(ov)), 4) if ov else None, no_overlap=st["겹침 없음"], small_overlap=st["겹침 작음"],
+                 gis_file=os.path.basename(p))
+    if not quiet:
+        log(f"  GIS건물통합정보 {os.path.basename(p)}: 건물 {len(gis):,}개 읽음 → LX 건물 연결 {st['연결']:,}/{n:,} ({stats['link_rate']:.1%}), "
+            f"평균 겹침률 {stats['overlap_mean'] or 0:.0%}, 겹침 없음 {st['겹침 없음']:,}, 겹침 {GIS_MIN_OVERLAP:.0%} 미만 {st['겹침 작음']:,}")
+    return out, stats
 
 
 def reg_use_code(nm, cd):
@@ -238,7 +311,7 @@ def iter_buildings(save=True, quiet=False):
         if not quiet:
             log(f"  건물 용도 방식 all: 건물 {n:,}개를 모두 집으로 봄 (용도 미구분, 의료·노유자 건물 목적지 없음)")
         return
-    # register: 건물을 먼저 다 읽고(대표점 필요), 필지·대장을 붙인 뒤 돌려줌
+    # register·gisbld: 건물을 먼저 다 읽고(대표점·도형 필요), 필지·대장 또는 GIS 건물을 붙인 뒤 돌려줌
     blds = []
     for g, a in iter_layer("building", fields=[c for c in (cf, C.COL.get("bld_ufid")) if c]):
         p = g.PointOnSurface()
@@ -246,9 +319,9 @@ def iter_buildings(save=True, quiet=False):
             continue
         blds.append((g, p.GetX(), p.GetY(), a))
     if not blds:
-        LAST_STATS = dict(mode="register", n_bld=0, linked=0, link_rate=0.0); _save(LAST_STATS)
+        LAST_STATS = dict(mode=m, n_bld=0, linked=0, link_rate=0.0); _save(LAST_STATS)
         return
-    res, stats = _register(blds, quiet)
+    res, stats = (_gisbld if m == "gisbld" else _register)(blds, quiet)
     LAST_STATS = stats; _save(stats)
     for (g, _, _, a), (use, fl) in zip(blds, res):
         yield g, {"use": use, "kind": "", "floor": fl if fl is not None else (a.get(cf) if cf else None)}

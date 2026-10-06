@@ -22,18 +22,23 @@ def collect(src, prefix, skip_external=False):
             rel = os.path.relpath(p, src).replace(os.sep, "/")
             if skip_external and rel.startswith("external/"):
                 continue
-            if rel.startswith("external/building_register"):   # [v6] 건축물대장 가공본은 크기 때문에 번들에 넣지 않고 따로 반입
+            if rel.startswith(("external/building_register", "external/gis_building")):   # [v6] 건축물대장 가공본은 크기 때문에 번들에 넣지 않고 따로 반입
                 continue
             txt = open(p, encoding="utf-8-sig").read()
             assert Q3 not in txt and not txt.endswith("\\"), f"번들에 넣을 수 없는 문자열 포함: {p}"
             out[f"{prefix}/{rel}"] = txt
     return dict(sorted(out.items()))
 
-A = collect(os.path.join(ROOT, "analysis", "hbi"), "hbi")
-B = collect(os.path.join(ROOT, "analysis", "hbi_geopandas"), "hbi_geopandas", skip_external=True)
-k = "hbi_geopandas/config.py"
-B[k] = B[k].replace('EXTERNAL = os.path.join(BASE, "external")  # 반입한 공개데이터 CSV',
-                    'EXTERNAL = os.path.join(BASE, "..", "hbi", "external")  # 공개데이터는 hbi/external 공용')
+# [v6] v6 부터는 hbi6/ 로 풀림 (안심구역에 남아 있는 v5 의 hbi/ 를 덮어쓰지 않게). hbi_geopandas(대체 구현)는 v6 에서 고치지 않아 넣지 않음
+_n = ver.lower().lstrip("v").split("-")[0]
+V6 = _n.isdigit() and int(_n) >= 6
+A = collect(os.path.join(ROOT, "analysis", "hbi"), "hbi6" if V6 else "hbi")
+B = {}
+if not V6:
+    B = collect(os.path.join(ROOT, "analysis", "hbi_geopandas"), "hbi_geopandas", skip_external=True)
+    k = "hbi_geopandas/config.py"
+    B[k] = B[k].replace('EXTERNAL = os.path.join(BASE, "external")  # 반입한 공개데이터 CSV',
+                        'EXTERNAL = os.path.join(BASE, "..", "hbi", "external")  # 공개데이터는 hbi/external 공용')
 files = {**A, **B}
 name = f"hbi_code_bundle_{ver}.txt"
 hdr = f"""# -*- coding: utf-8 -*-
@@ -64,11 +69,11 @@ for _name, _text in FILES.items():
     os.makedirs(os.path.dirname(_p), exist_ok=True)
     with open(_p, "w", encoding="utf-8-sig" if _name.endswith(".csv") else "utf-8") as _fp:
         _fp.write(_text)
-for _d in ("hbi/work", "hbi/output", "hbi_geopandas/work", "hbi_geopandas/output"):
+for _d in (("hbi6/work", "hbi6/output") if "hbi6/setup.py" in FILES else ("hbi/work", "hbi/output", "hbi_geopandas/work", "hbi_geopandas/output")):
     os.makedirs(os.path.join(_out, *_d.split("/")), exist_ok=True)
 print(f"완료: 파일 {len(FILES)}개 → {_out}")
-print("다음: cd hbi  →  python 01_inspect.py   (README.md 참고)" if "hbi/setup.py" not in FILES else
-      "다음: cd hbi  →  python setup.py 자료폴더   (README.md 참고)")
+print("다음: cd hbi6  →  python setup.py   (README.md 참고)" if "hbi6/setup.py" in FILES else
+      "다음: cd hbi  →  python 01_inspect.py   (README.md 참고)")
 """
 dst = os.path.join(ROOT, "deliverables", name)
 open(dst, "w", encoding="utf-8").write(hdr + body + tail)

@@ -27,7 +27,8 @@ DEFAULTS = {
     "map_folders": ("", "수치지형도에서 읽을 하위 폴더 (; 로 구분, 비우면 전부). setup.py 가 정함", "범위"),
     "area_reason": ("", "AREA_BBOX 를 정한 이유 (setup.py 가 적음, 설명용)", "범위"),
     # ── 건물 ──
-    "building_attr_mode": ("layer", "건물 용도·층수를 어디서: layer(건물 칸) / register(건축물대장) / all(모든 건물을 집) / stop", "건물"),
+    "building_attr_mode": ("layer", "건물 용도·층수를 어디서: auto(check 가 연결률로 고름) / layer(건물 칸) / register(건축물대장) / gisbld(GIS건물통합정보) / all(모든 건물을 집) / stop", "건물"),
+    "building_attr_chosen": ("", "auto 일 때 check.py 가 고른 방식과 이유 (check 가 적음)", "건물"),
     "bld_use": ("BPRP_SE", "건물 레이어의 용도 칸", "건물"),
     "bld_kind": ("BULD_SE", "건물 레이어의 종류 칸", "건물"),
     "bld_floor": ("BFLR_CO", "건물 레이어의 층수 칸", "건물"),
@@ -45,6 +46,10 @@ DEFAULTS = {
     # ── 건축물대장 (building_attr_mode = register 일 때) ──
     "register_join": ("auto", "필지 ↔ 대장 연결: auto(연결률 높은 쪽, 같으면 pnu) / pnu(필지번호) / pk(대장번호)", "건축물대장"),
     "register_file": ("external/building_register.csv", "건축물대장 가공 파일 (hbi 폴더 기준 또는 전체 주소)", "건축물대장"),
+    "gis_file": ("external/gis_building.gpkg", "GIS건물통합정보 가공 파일 (tools/prep_gis_building.py 결과, hbi 기준 또는 전체 주소)", "GIS건물"),
+    "gis_use_cd": ("use_cd", "GIS 건물 용도 코드 칸", "GIS건물"),
+    "gis_use_nm": ("use_nm", "GIS 건물 용도 이름 칸", "GIS건물"),
+    "gis_floor": ("grnd_flr", "GIS 건물 지상층수 칸", "GIS건물"),
     "reg_pk": ("bldrgst_pk", "대장의 건축물대장 번호 칸", "건축물대장"),
     "reg_pnu": ("pnu", "대장의 필지 고유번호 칸", "건축물대장"),
     "reg_use_cd": ("main_use_cd", "대장의 주용도 코드 칸 (비어 있으면 이름으로)", "건축물대장"),
@@ -143,7 +148,10 @@ def apply(g):
             col[k] = m.get(k)
     g["LAYERS"], g["COL"] = lay, col
     g["REGISTER_JOIN"] = (m.get("register_join") or "auto").strip().lower()
+    gf = m.get("gis_file") or ""
+    g["GIS_FILE"] = gf if (not gf or os.path.isabs(gf)) else os.path.join(HERE, gf)
     g["FIELD"] = {k: m.get(k) for k in ("parcel_id", "parcel_bldrgst", "parcel_ufid", "parcel_emd_cd", "jimok", "sgg_nm", "emd_nm",
+                                        "gis_use_cd", "gis_use_nm", "gis_floor",
                                         "reg_pk", "reg_pnu", "reg_use_cd", "reg_use_nm", "reg_floor", "reg_area", "reg_main")}
     g["TARGET_GU"] = split_list(m.get("target_gu"))
     g["NEIGHBOR_GU"] = split_list(m.get("neighbor_gu"))

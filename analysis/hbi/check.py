@@ -110,6 +110,66 @@ def broken_share(vals):
     return bad / len(vals)
 
 
+AUTO_ORDER = ["layer", "register", "gisbld", "all"]
+AUTO_MIN_RATE = 0.80     # 이 연결률 이상인 첫 방식을 고름 (근거: docs/결과점검_기준.md, 결과 점검표의 "대장 연결률" 초록 기준과 같음)
+
+
+def choose_mode(wins, have, reg_ok):
+    """[v6] building_attr_mode = auto: 표본 창에서 layer → register → gisbld → all 순서로 연결률을 재서 처음으로 80% 를 넘는 방식.
+    고른 방식과 이유를 화면에 보이고 mapping.txt 의 building_attr_chosen 줄에 적음 (run_all 은 그 방식으로 돔)"""
+    print(f"  [자동 선택] 순서 {' → '.join(AUTO_ORDER)}, 기준 연결률 {AUTO_MIN_RATE:.0%}")
+    bnames = fields_of(have["building"][0])
+    avail = {"layer": has_field(bnames, C.COL.get("bld_use")), "register": reg_ok and bool(C.DATA_ROOT_PARCEL),
+             "gisbld": battr.gis_path() is not None, "all": True}
+    keep, old = C.BUILDING_ATTR_MODE, C.AREA_BBOX
+    chosen, why = None, ""
+    for m in AUTO_ORDER:
+        if not avail[m]:
+            print(f"    {m:<9} 건너뜀 (" + {"layer": "건물 레이어에 용도 칸 없음", "register": "건축물대장 또는 필지 없음",
+                                          "gisbld": "GIS건물통합정보 파일 없음"}.get(m, "") + ")")
+            continue
+        if m == "all":
+            chosen, why = "all", "앞 방식이 모두 기준 미만이거나 쓸 수 없음 → 모든 건물을 집으로 (용도 미구분)"
+            print(f"    all       → 고름 ({why})")
+            break
+        C.BUILDING_ATTR_MODE = m
+        n = k = 0
+        try:
+            for w_ in wins:
+                C.AREA_BBOX = w_[1]
+                uses = [a["use"] for _, a in battr.iter_buildings(save=False, quiet=True)]
+                if m == "layer":       # 건물 칸 방식: 용도 칸 값이 들어 있는 건물 비율
+                    n += len(uses); k += sum(1 for u in uses if u)
+                else:                  # register·gisbld: 대장·GIS 건물이 붙은 건물 비율
+                    n += battr.LAST_STATS.get("n_bld", 0); k += battr.LAST_STATS.get("linked", 0)
+        except SystemExit as e:
+            print(f"    {m:<9} 못 씀 ({e})"); n = 0
+        finally:
+            C.AREA_BBOX = old
+        rate = k / n if n else 0.0
+        ok = rate >= AUTO_MIN_RATE
+        print(f"    {m:<9} 연결률 {rate:.0%} (표본 건물 {n:,}) → {'고름' if ok else '기준 미만, 다음 방식'}")
+        if ok:
+            chosen, why = m, f"표본 연결률 {rate:.0%} ≥ {AUTO_MIN_RATE:.0%}"
+            break
+    C.BUILDING_ATTR_MODE = keep
+    set_chosen(chosen, why)
+    print(f"  → 고른 방식: {chosen} ({why}) — mapping.txt 의 building_attr_chosen 에 적음. 바꾸려면 building_attr_mode 를 직접 정하기")
+    C.MAPPING["building_attr_chosen"] = chosen
+
+
+def set_chosen(m, why):
+    p = os.path.join(C.BASE, "mapping.txt")
+    line = f"building_attr_chosen = {m}  # check.py 가 고름: {why}"
+    txt = open(p, encoding="utf-8-sig").read() if os.path.exists(p) else ""
+    if re.search(r"^building_attr_chosen\s*=.*$", txt, re.M):
+        txt = re.sub(r"^building_attr_chosen\s*=.*$", line, txt, count=1, flags=re.M)
+    else:
+        txt = txt.rstrip("\n") + "\n" + line + "\n"
+    with open(p, "w", encoding="utf-8-sig") as f:
+        f.write(txt)
+
+
 def main():
     print("=== 1. 경로 ===")
     for nm, p in [("수치지형도", C.DATA_ROOT_MAP), ("DEM 5m", C.DATA_ROOT_DEM), ("국토정보필지", C.DATA_ROOT_PARCEL)]:
@@ -196,6 +256,8 @@ def main():
         rec = "register" if (reg_ok and C.DATA_ROOT_PARCEL) else "all"
         stop("건물 레이어에 용도 칸이 없음 (layer 방식으로는 집을 고를 수 없음)",
              f"mapping.txt 의 building_attr_mode = {rec} (" + ("건축물대장·필지로 용도를 붙임" if rec == "register" else "모든 건물을 집으로 봄, 용도 미구분") + ")")
+    if mode == "gisbld" and battr.gis_path() is None:
+        stop("gisbld 방식인데 GIS건물통합정보 파일이 없음", "external 에 gis_building.gpkg (tools/prep_gis_building.py 결과) 를 넣거나 building_attr_mode = auto")
     if mode == "register":
         print(f"  건축물대장: {'있음 (' + os.path.relpath(battr.register_path(), os.path.dirname(C.BASE)) + ')' if reg_ok else '없음'}")
         if not reg_ok:
@@ -275,6 +337,10 @@ def main():
             cx, cy = (e[0] + e[2]) / 2, (e[1] + e[3]) / 2
             wins.append(("자료 가운데", [cx - WIN / 2, cy - WIN / 2, cx + WIN / 2, cy + WIN / 2]))
     old = C.AREA_BBOX
+    if C.BUILDING_ATTR_MODE == "auto" and wins:
+        choose_mode(wins, have, reg_ok)
+        if STOP:
+            return
     tot = collections.Counter(); links = []; jr = collections.Counter()
     for g, w in wins:
         C.AREA_BBOX = w
@@ -335,7 +401,8 @@ def main():
     if not STOP and tot["n"]:
         rs = tot["res"] / tot["n"]
         print(f"  합계: 건물 {tot['n']:,}, 주거 비율 {rs:.0%}")
-        if mode != "all" and (tot["res"] == 0 or rs >= 0.999):
+        eff = battr.mode() if mode == "auto" else mode          # auto 면 고른 방식으로 판단
+        if eff != "all" and (tot["res"] == 0 or rs >= 0.999):
             stop(f"주거 비율 {rs:.0%} (말이 안 됨)", "mapping.txt 의 bld_use 칸·building_attr_mode 확인 (layer 인데 용도 칸이 비었으면 register)")
         if links and np.mean(links) < 0.5:
             stop(f"주거 건물 → 길 연결 {np.mean(links):.0%} (50% 미만)", "길 레이어가 덜 들어왔거나 좌표계가 어긋남: layer_road_cl·map_folders·좌표계 확인")
