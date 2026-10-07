@@ -96,6 +96,27 @@ def cover_share(gu_geom, envs):
     return float(gu_geom.Intersection(u).GetArea() / gu_geom.GetArea())
 
 
+COVER_MIN = 0.5        # [v6.1] 구 면적의 이 비율 넘게 자료 범위 안이어야 "자료가 덮는 구" (check 의 GU_COVER_MIN 과 같음)
+
+
+def covered_gu(names, gp, envs, min_share=COVER_MIN):
+    """[v6.1] names 중 자료 범위(envs = 파일 네모 목록)가 덮는 구 → (덮는 구 목록, 안 덮는 구 목록, {구: 비율}). 경계 파일에 없는 이름은 안 덮는 쪽"""
+    sh = {g: cover_share(gp[g], envs) if g in gp else 0.0 for g in names}
+    return [g for g in names if sh[g] >= min_share], [g for g in names if sh[g] < min_share], sh
+
+
+def target_proposal(base_t, base_n, gp, envs):
+    """[v6.1] 원래 대상 구·옆 구(base_t, base_n) 중 자료가 덮는 것만 남긴 안 → dict 또는 None (모두 덮거나 하나도 안 덮으면 None)
+    반환: {"target": 덮는 대상 구, "neighbor": 덮는 옆 구, "miss": 안 덮는 대상 구, "share": 비율, "note": 설명}"""
+    cov, miss, sh = covered_gu(base_t, gp, envs)
+    if not cov or not miss:
+        return None
+    ncov, _, nsh = covered_gu(base_n, gp, envs)
+    sh.update(nsh)
+    return {"target": cov, "neighbor": ncov, "miss": miss, "share": sh,
+            "note": f"대상 {len(base_t)}개 구 중 {len(cov)}개 구만 자료 있음 (자료 없음: {', '.join(miss)})"}
+
+
 def decide_bbox(data_env, tr):
     """자료 범위 data_env 와 대상 범위 tr 로 AREA_BBOX 결정 → (값, 이유)"""
     if tr is None:

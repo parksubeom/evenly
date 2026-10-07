@@ -369,6 +369,9 @@ def main():
 
     hr("4. 읽을 수치지형도 폴더와 분석 범위")
     tgt, nb = M.split_list(vals.get("target_gu", M.DEFAULTS["target_gu"][0])), M.split_list(vals.get("neighbor_gu", M.DEFAULTS["neighbor_gu"][0]))
+    if M.split_list(vals.get("target_gu_all")):             # [v6.1] 지난번에 자료가 덮는 구만 남겼으면 원래 대상 구에서 다시 판정
+        tgt, nb = M.split_list(vals.get("target_gu_all")), M.split_list(vals.get("neighbor_gu_all"))
+    base_t, base_n = list(tgt), list(nb)
     C.TARGET_GU, C.NEIGHBOR_GU = tgt, nb
     print(f"  대상 구: {','.join(tgt) or '전체'} / 옆 구: {','.join(nb) or '없음'}  (바꾸려면 mapping.txt 의 target_gu·neighbor_gu)")
     gp = area.gu_polys(set(tgt) | set(nb)) if (tgt and area.boundary_file()) else {}
@@ -404,6 +407,27 @@ def main():
     else:
         vals["map_folders"] = ""
     C.MAP_FOLDERS = M.split_list(vals["map_folders"], ";")
+    # [v6.1] 대상 구 중 일부만 자료가 덮으면 (예: 관악 11도엽만 받은 날) 덮는 구만 분석할지 묻기. Enter = 예 → mapping 의 target_gu 를 줄이고
+    #        원래 대상 구는 target_gu_all 에 남김 (자료를 더 받고 setup 을 다시 하면 같은 판정으로 되돌아감)
+    vals.update(M.target_values(base_t, base_n))
+    if gp and tgt:
+        keyf = set(maps.get("building", []) + maps.get("road_cl", []) + maps.get("sidewalk_cl", []))
+        fenv = [e for e in (extent(p) for g in sel for p in groups[g] if p in keyf) if e]
+        prop = area.target_proposal(base_t, base_n, gp, fenv)
+        cov, miss, sh = area.covered_gu(base_t, gp, fenv)
+        print("  대상 구 자료 범위: " + ", ".join(f"{g} {sh[g]:.0%}" for g in base_t))
+        if prop:
+            a = q(f"  자료가 덮는 대상 구: {', '.join(prop['target'])}. 이 구만 분석할까요? (Enter = 예 / n = 그대로 두기): ", "y").lower()
+            if a.startswith(("y", "예", "ㅛ")):
+                vals.update(M.target_values(base_t, base_n, prop))
+                tgt, nb = prop["target"], prop["neighbor"]
+                C.TARGET_GU, C.NEIGHBOR_GU = tgt, nb
+                gp = {g: v for g, v in gp.items() if g in set(tgt) | set(nb)}
+                print(f"  → {prop['note']} → 대상 구 {', '.join(tgt)} 로 분석 (mapping 의 target_gu. 원래 대상 구는 target_gu_all)")
+            else:
+                print("  → 그대로 둠 (check 가 자료 없는 구에서 멈춤)")
+        elif not cov:
+            print("  ▲ 대상 구가 하나도 자료 범위 안에 없습니다 → check 가 멈춤 (map_folders 와 받은 자료 확인)")
     data_env = union_env([genv[g] for g in sel])
     tr = area.bbox_of(list(gp.values()), area.MARGIN) if gp else None
     bb, why = area.decide_bbox(data_env, tr)

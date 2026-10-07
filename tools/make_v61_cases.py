@@ -5,7 +5,7 @@ tools/make_v61_cases.py ─ v6.1 시험용 가짜 자료: 1차 반출(10/2) 스�
 [실행]  (QGIS 파이썬으로)  python tools/make_v61_cases.py <만들 폴더>
 [근거]  docs/1차방문_반출결과.md (칸 이름·도엽 폴더·DEM·필지 모양). 값은 정의서 별표 2 코드표(lib/codebook.py)에 있는 것만 씀
 [만드는 것]  <폴더>/제공자료/  (안심구역 바탕화면 폴더처럼)
-   수치지형도2/<도엽 폴더 "376xxxxx_2024_…">/  구마다 한 폴더, 레이어별 shp
+   수치지형도2/<도엽 폴더 "376xxxxx_2024_…">/  레이어별 shp. 관악구는 실제처럼 1:5,000 도엽 11장 폴더(경계에서 잘림), 다른 구는 구마다 한 폴더
      - 건물 N3A_B0010000: 한글 칸 [명칭, 구분, 종류, 용도, 주기, 층수(Integer64), 측량방법, UFID]
      - 도로중심선 N3L_A0020000: 한글 칸 [도로번호, 명칭, 도로구분, 시점, 종점, 포장재질, 분리대유무, 차로수, 도로폭, 일방통행, 자동차전용, 기타, UFID]
          300m 격자 길(도로구분 소로, 자동차전용 일반) + 고속국도 대각선 1개(도로구분 고속국도) + 자동차전용 도로 1개(도로구분 특별시도, 자동차전용)
@@ -34,6 +34,7 @@ GU = ["관악구", "종로구", "중구", "광진구", "강서구", "성북구",
 S5186 = osr.SpatialReference(); S5186.ImportFromEPSG(5186); S5186.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
 W84 = osr.SpatialReference(); W84.ImportFromEPSG(4326); W84.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
 TO84 = osr.CoordinateTransformation(S5186, W84)
+TO5186 = osr.CoordinateTransformation(W84, S5186)
 rng = np.random.RandomState(61)
 box = lambda x0, y0, x1, y1: f"POLYGON(({x0} {y0},{x1} {y0},{x1} {y1},{x0} {y1},{x0} {y0}))"
 
@@ -96,6 +97,58 @@ def dem(path, x0, y1, nx, ny, res, cx, cy):
     r.GetRasterBand(1).WriteArray(z.astype("float32")); r.GetRasterBand(1).SetNoDataValue(-9999); r = None
 
 
+# 관악구: 실제처럼 1:5,000 도엽 11장 폴더로 나눔 (docs/1차방문_반출결과.md 의 도엽 번호, 37612 = 위 37°30′·왼쪽 126°45′, 1.5′ 칸 10×10)
+GWANAK_SHEETS = ["007", "008", "009", "010", "017", "018", "019", "020", "028", "029", "030"]
+
+
+def sheet_polys():
+    """{도엽 폴더 이름: 도엽 네모(5186)}. 이웃 도엽은 같은 모서리 점을 써서 틈이 없음"""
+    out = {}
+    st = 1.5 / 60
+    for i, sh in enumerate(GWANAK_SHEETS):
+        n = int(sh) - 1
+        top, left = 37.5 - (n // 10) * st, 126.75 + (n % 10) * st
+        ring = ogr.Geometry(ogr.wkbLinearRing)
+        for lon, lat in [(left, top), (left + st, top), (left + st, top - st), (left, top - st), (left, top)]:
+            x, y, _ = TO5186.TransformPoint(lon, lat)
+            ring.AddPoint_2D(x, y)
+        g = ogr.Geometry(ogr.wkbPolygon); g.AddGeometry(ring)
+        out[f"37612{sh}_2024_{357077400 + i:014d}" if sh != "008" else "37612008_2024_00000357077318"] = g
+    return out
+
+
+def clip(feats, poly, gtype):
+    """도엽 네모로 자른 (wkt, 속성) 목록. 점은 안에 든 것만"""
+    out = []
+    for wkt, at in feats:
+        g = ogr.CreateGeometryFromWkt(wkt)
+        if gtype == ogr.wkbPoint:
+            if poly.Contains(g):
+                out.append((wkt, at))
+            continue
+        if not g.Intersects(poly):
+            continue
+        c = g.Intersection(poly)
+        if c is None or c.IsEmpty():
+            continue
+        t = ogr.GT_Flatten(c.GetGeometryType())
+        if t == ogr.wkbGeometryCollection:                  # 선·면만 골라 묶음
+            want = (ogr.wkbLineString,) if gtype == ogr.wkbLineString else (ogr.wkbPolygon,)
+            m = ogr.Geometry(ogr.wkbMultiLineString if gtype == ogr.wkbLineString else ogr.wkbMultiPolygon)
+            for k in range(c.GetGeometryCount()):
+                if ogr.GT_Flatten(c.GetGeometryRef(k).GetGeometryType()) in want:
+                    m.AddGeometry(c.GetGeometryRef(k))
+            if m.GetGeometryCount() == 0:
+                continue
+            c = m
+        elif gtype == ogr.wkbLineString and t not in (ogr.wkbLineString, ogr.wkbMultiLineString):
+            continue
+        elif gtype == ogr.wkbPolygon and t not in (ogr.wkbPolygon, ogr.wkbMultiPolygon):
+            continue
+        out.append((c.ExportToWkt(), at))
+    return out
+
+
 S, I, I64, F = ogr.OFTString, ogr.OFTInteger, ogr.OFTInteger64, ogr.OFTReal
 BLD_F = [("명칭", S), ("구분", S), ("종류", S), ("용도", S), ("주기", S), ("층수", I64), ("측량방법", S), ("UFID", S)]
 ROAD_F = [("도로번호", S), ("명칭", S), ("도로구분", S), ("시점", S), ("종점", S), ("포장재질", S), ("분리대유무", S),
@@ -104,6 +157,8 @@ ROAD_F = [("도로번호", S), ("명칭", S), ("도로구분", S), ("시점", S)
 
 def main():
     G, CODE = gu_geoms()
+    global SHEETS
+    SHEETS = sheet_polys()
     meta, stops, parcels = {}, [], []
     for gi, gu in enumerate(GU):
         g = G[gu]
@@ -113,6 +168,15 @@ def main():
         enc, cpg = "CP949", gi % 2 == 1                # 한글 칸 이름 "분리대유무" 는 CP949 로 10바이트 (dbf 칸 이름 한도) → 실제 자료도 CP949
         folder = f"376{12 + gi:02d}{gi + 1:03d}_2024_{357077318 + gi:014d}"
         d = os.path.join(R, "수치지형도2", folder)
+
+        def put(fname, gtype, fields, feats):
+            if gu != "관악구":
+                shp(f"{d}/{fname}", gtype, fields, feats, enc, cpg)
+                return
+            for k, (sf, poly) in enumerate(SHEETS.items()):
+                cf = clip(feats, poly, gtype)
+                if cf:
+                    shp(f"{R}/수치지형도2/{sf}/{fname}", gtype, fields, cf, enc, k % 2 == 1)
         # 길: 300m 격자 (소로·일반) + 고속국도 대각선 + 자동차전용 도로(격자 사이 가로)
         grid = lambda: {"도로구분": val("RDC014", ROADK, style), "자동차전용": val("MWI001", MTRWY, style), "차로수": 2, "도로폭": 6.0, "UFID": ""}
         roads = [(f"LINESTRING({x0} {y},{x1} {y})", dict(grid(), 명칭=f"가상{gi}로")) for y in np.arange(y0, y1 + 1, 300)]
@@ -122,16 +186,19 @@ def main():
         ex_b = f"LINESTRING({x0} {ym},{x1} {ym})"
         roads.append((ex_a, {"도로구분": val("RDC001", ROADK, style), "자동차전용": val("MWI002", MTRWY, style), "명칭": "가상고속국도", "차로수": 6, "도로폭": 30.0}))
         roads.append((ex_b, {"도로구분": val("RDC004", ROADK, style), "자동차전용": val("MWI002", MTRWY, style), "명칭": "가상도시고속도로", "차로수": 4, "도로폭": 20.0}))
-        shp(f"{d}/N3L_A0020000.shp", ogr.wkbLineString, ROAD_F, roads, enc, cpg)
+        put("N3L_A0020000.shp", ogr.wkbLineString, ROAD_F, roads)
         ex_len = ogr.CreateGeometryFromWkt(ex_a).Length() + ogr.CreateGeometryFromWkt(ex_b).Length()
         # 인도(보도) 면: 가로 길 절반을 따라 길 가운데선에서 4~7m 떨어진 폭 3m 띠
         side = [(box(x0, y + 4, x1, y + 7), {"UFID": "", "폭": 3.0, "재질": ""}) for y in np.arange(y0, y1 + 1, 600)]
-        shp(f"{d}/N3A_A0033320.shp", ogr.wkbPolygon, [("UFID", S), ("폭", F), ("재질", S)], side, enc, cpg)
+        put("N3A_A0033320.shp", ogr.wkbPolygon, [("UFID", S), ("폭", F), ("재질", S)], side)
         # 건물: 동네 4곳 × 40채, 가로 길에서 15~45m
         gx, gy = np.arange(x0, x1 + 1, 300), np.arange(y0, y1 + 1, 300)
         cand = [(x, y) for x in gx for y in gy if x0 + 600 < x < x1 - 600 and y0 + 600 < y < y1 - 600]
         rng.shuffle(cand)
         centers = []
+        if gu == "관악구":                                  # 동네 하나는 봉천동 선정지(external/sites.csv) 옆 격자 교차점 → 04 선정지 백분위가 계산되게
+            sx_, sy_, _ = TO5186.TransformPoint(126.94017, 37.48075)
+            centers.append((x0 + np.round((sx_ - x0) / 300) * 300, y0 + np.round((sy_ - y0) / 300) * 300))
         for cx_, cy_ in cand:
             p = ogr.Geometry(ogr.wkbPoint); p.AddPoint_2D(cx_, cy_)
             if g.Contains(p):
@@ -144,16 +211,16 @@ def main():
         blds = [(box(x - 6, y - 6, x + 6, y + 6), {"명칭": "", "구분": "", "종류": val("BDC001" if u == "BDU001" else ("BDC003" if u == "BDU002" else "BDC001"), KIND, style),
                                                     "용도": val(u, USE, style), "주기": "", "층수": int(f), "측량방법": "", "UFID": f"B{gi:02d}{i:05d}"})
                 for i, ((x, y), u, f) in enumerate(zip(pts, use, flo))]
-        shp(f"{d}/N3A_B0010000.shp", ogr.wkbPolygon, BLD_F, blds, enc, cpg)
+        put("N3A_B0010000.shp", ogr.wkbPolygon, BLD_F, blds)
         cx, cy = g.PointOnSurface().GetX(), g.PointOnSurface().GetY()
         # 계단 1 (길을 가로지름) + 스텐드 1 (빠져야 함)
         sx = x0 + np.round((cx - x0) / 300) * 300          # 세로 길 위
         stairs = [(box(sx - 2, cy + 40, sx + 2, cy + 120), {"명칭": "", "구조": val("PGS001", STAIR, style), "폭": 4.0, "UFID": ""}),
                   (box(sx + 100, cy + 40, sx + 130, cy + 60), {"명칭": "", "구조": val("PGS002", STAIR, style), "폭": 30.0, "UFID": ""})]
-        shp(f"{d}/N3A_C0390000.shp", ogr.wkbPolygon, [("명칭", S), ("구조", S), ("폭", F), ("UFID", S)], stairs, enc, cpg)
+        put("N3A_C0390000.shp", ogr.wkbPolygon, [("명칭", S), ("구조", S), ("폭", F), ("UFID", S)], stairs)
         # 정거장: 종류 칸 없음
-        shp(f"{d}/N3P_A0131122.shp", ogr.wkbPoint, [("명칭", S), ("UFID", S)],
-            [(f"POINT({sx} {y0 + np.round((cy - y0) / 300) * 300 + 5})", {"명칭": f"가상{gi}역", "UFID": ""})], enc, cpg)
+        put("N3P_A0131122.shp", ogr.wkbPoint, [("명칭", S), ("UFID", S)],
+            [(f"POINT({sx} {y0 + np.round((cy - y0) / 300) * 300 + 5})", {"명칭": f"가상{gi}역", "UFID": ""})])
         # 버스정류소 (공개 파일 모양): 동네마다 2곳, 길 위
         for k, (cx_, cy_) in enumerate(centers):
             for dx in (-150, 150):
@@ -169,7 +236,7 @@ def main():
             parcels.append((box(x - 15, y - 15, x + 15, y + 15),
                             {"pnu": pnu, "sgg_cd": CODE[gu], "emd_cd": CODE[gu] + "10100", "jimok": "대" if i % 9 else "도",
                              "sgg_nm": gu, "emd_nm": f"가상{gi}동", "bldrgst_pk": "", "owner_nm": "OWNER-SHOULD-NOT-BE-READ", "jiga": "999999"}))
-        meta[gu] = dict(folder=folder, style=style, enc=enc, n_bld=len(pts), n_res=int(np.isin(use, ["BDU001", "BDU002"]).sum()),
+        meta[gu] = dict(folder=folder if gu != "관악구" else list(SHEETS)[0], folders=[folder] if gu != "관악구" else list(SHEETS), style=style, enc=enc, n_bld=len(pts), n_res=int(np.isin(use, ["BDU001", "BDU002"]).sum()),
                         ex_len_m=round(ex_len))
     pf = [(n, S) for n in ("pnu", "sgg_cd", "emd_cd", "jimok", "sgg_nm", "emd_nm", "bldrgst_pk", "owner_nm", "jiga")]
     shp(f"{R}/국토정보필지_서울특별시/AL_11_D194_LAND_INFO_BASE_MAP_202606/AL_11_D194_LAND_INFO_BASE_MAP_202606.shp",

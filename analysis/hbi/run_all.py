@@ -130,6 +130,8 @@ out(f"# run_all.py {' '.join(sys.argv[1:])} / 단계: {', '.join(s[:2] for s in 
     f"건물 용도 방식: {','.join(MODES) if MODES else C.BUILDING_ATTR_MODE} / AREA_BBOX: {C.AREA_BBOX}")
 if MODE_NOTE:
     out(f"# {MODE_NOTE}")
+if getattr(C, "TARGET_NOTE", ""):                  # [v6.1] 예: 대상 5개 구 중 1개 구만 자료 있음 (자료 없음: …)
+    out(f"# 대상 구 범위: {C.TARGET_NOTE} → {','.join(C.TARGET_GU)} 만 분석")
 try:
     from lib.schema import dump
     out(f"# 자료 구조 저장 → {os.path.relpath(dump(), C.BASE)}")

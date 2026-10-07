@@ -113,6 +113,8 @@ def report(out=None, work=None, net_work=None):
     out = out or C.OUTPUT
     R_, tg, mode = rows(out, work, net_work)
     L, reds = [f"=== 결과 점검표 (방식 {mode}) — {G} 기대 범위 / {Y} 확인 필요 / {R} 다시 돌리기 ==="], []
+    if getattr(C, "TARGET_NOTE", ""):              # [v6.1] 대상 구를 줄인 날: 결과는 그 구만이라는 것을 맨 위에
+        L.append(f"  · 대상 구 범위: {C.TARGET_NOTE} → 결과는 {', '.join(C.TARGET_GU)} 만")
     for item in R_:
         name, v, txt = item[0], item[1], item[2]
         gr = grade(name, v)

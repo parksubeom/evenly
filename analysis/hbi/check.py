@@ -19,7 +19,8 @@ check.py ─ [v6] 분석 출발 전 점검 (python setup.py 다음, python run_a
 import os, re, sys, collections
 import numpy as np
 import config as C
-from lib.conout import Tee, safe_console
+from lib.conout import Tee, safe_console, ask
+from lib import mapping as M
 from lib.qio import find_files, open_vector, layer_srs, layer_files, iter_layer, read_csv, transformer, transform_xy, TARGET, value_shape
 from lib import area, battr
 from lib.qgraph import NearestIndex
@@ -214,6 +215,28 @@ def main():
     if tgt and not gp:
         warn("external/dong_boundary.geojson 이 없어 대상 구 확인을 못 함 (결과는 자료 전체)")
     elif tgt:
+        # [v6.1] 원래 대상 구(target_gu_all, 없으면 target_gu) 중 자료가 덮는 구가 지금 대상 구와 다르면 덮는 구로 분석할지 묻기 (Enter = 예)
+        base_t = list(C.TARGET_GU_ALL) or tgt
+        base_n = list(C.NEIGHBOR_GU_ALL) if C.TARGET_GU_ALL else list(C.NEIGHBOR_GU)
+        prop = area.target_proposal(base_t, base_n, gp, envs)
+        want = prop["target"] if prop else (base_t if area.covered_gu(base_t, gp, envs)[0] == base_t else tgt)
+        if want != tgt:
+            if prop:
+                print(f"  자료가 덮는 대상 구: {', '.join(prop['target'])} ({prop['note']})")
+            else:
+                print(f"  자료가 원래 대상 구({', '.join(base_t)})를 모두 덮음")
+            a = ask(f"  {', '.join(want)} 로 분석할까요? (Enter = 예 / n = 그대로): ", "y").lower()
+            if a.startswith(("y", "예", "ㅛ")):
+                upd = M.target_values(base_t, base_n, prop)
+                M.set_lines(upd)
+                C.TARGET_GU, C.NEIGHBOR_GU = M.split_list(upd["target_gu"]), M.split_list(upd["neighbor_gu"])
+                C.TARGET_GU_ALL, C.TARGET_NOTE = M.split_list(upd["target_gu_all"]), upd["target_note"]
+                C.MAPPING.update(upd)
+                tgt = list(C.TARGET_GU)
+                print(f"  → mapping.txt 의 target_gu = {upd['target_gu']} 로 적음" + (f" (원래 대상 구는 target_gu_all)" if prop else ""))
+        if C.TARGET_NOTE:
+            warn(f"{C.TARGET_NOTE} → {', '.join(C.TARGET_GU)} 만 분석 (summary·결과 점검표에 남음)",
+                 "나머지 구 자료를 받으면 python setup.py 다시 (원래 대상 구로 되돌림)")
         miss = []
         for g in tgt:
             if g not in gp:
@@ -224,8 +247,8 @@ def main():
                 miss.append(g)
         if miss:
             stop(f"대상 구가 자료 범위 밖: {', '.join(miss)}",
-                 "그 구의 수치지형도 폴더가 map_folders 에 있는지 (python setup.py 다시), AREA_BBOX 가 그 구를 덮는지 확인."
-                 " 받은 자료에 그 구가 없으면 담당자에게 요청")
+                 "자료가 덮는 구만 분석하려면 python check.py 다시 → 질문에 Enter."
+                 " 그 구 자료가 있어야 하면: 수치지형도 폴더가 map_folders 에 있는지 (python setup.py 다시), 받은 자료에 없으면 담당자에게 요청")
         for g in C.NEIGHBOR_GU:
             if g in gp and area.cover_share(gp[g], envs) < GU_COVER_MIN:
                 warn(f"옆 구 {g} 자료가 거의 없음 → 대상 구 경계 근처 집의 목적지가 빠질 수 있음")

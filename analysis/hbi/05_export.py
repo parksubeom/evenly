@@ -121,8 +121,11 @@ if st.get("mode") == "all":
     summary.append(["meta", "건물 용도", "용도 미구분 (모든 건물을 집으로 봄, 의료·노유자 건물 목적지 없음)"])
 if C.TARGET_GU and st.get("n_res_all", 0) > st.get("n_res_target", 0):
     summary.append(["meta", "대상 구 (출발점은 이 구의 집만, 옆 구는 길·목적지로만)", ",".join(C.TARGET_GU)])
+if getattr(C, "TARGET_NOTE", ""):                 # [v6.1] 자료가 일부 구만 덮어 대상 구를 줄였을 때 (예: 대상 5개 구 중 1개 구만 자료 있음)
+    summary.append(["meta", "대상 구 범위", C.TARGET_NOTE])
 write_csv(os.path.join(C.OUTPUT, "run_meta.csv"), ["key", "value"], [
     ["target_gu", ",".join(C.TARGET_GU) or "(전체)"], ["neighbor_gu", ",".join(C.NEIGHBOR_GU)],
+    ["target_gu_all", ",".join(getattr(C, "TARGET_GU_ALL", []))], ["target_note", getattr(C, "TARGET_NOTE", "")],
     ["building_attr_mode", st.get("mode", C.BUILDING_ATTR_MODE)],
     ["register_link_rate", st.get("link_rate", "")], ["register_join", st.get("register_join", "")], ["register_join_used", st.get("join_used", "")],
     ["register_rate_pnu", st.get("rate_pnu", "")], ["register_rate_pk", st.get("rate_pk", "")],

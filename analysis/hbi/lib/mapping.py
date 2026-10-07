@@ -24,6 +24,9 @@ DEFAULTS = {
     # ── 범위 ──
     "target_gu": ("종로구,중구,관악구,광진구,강서구", "결과(격자·행정동·요약)를 낼 구. 비우면 자료 전체", "범위"),
     "neighbor_gu": ("성북구,성동구,동대문구", "옆 구: 길·목적지를 잇는 데만 씀 (결과에는 안 들어감)", "범위"),
+    "target_gu_all": ("", "[v6.1] 원래 대상 구: 자료가 일부 구만 덮어 target_gu 를 줄였을 때 setup·check 가 적음 (자료를 더 받고 setup 을 다시 하면 이 구들로 되돌림)", "범위"),
+    "neighbor_gu_all": ("", "[v6.1] 원래 옆 구 (target_gu_all 과 함께)", "범위"),
+    "target_note": ("", "[v6.1] 대상 구를 줄인 이유 (summary·run_meta·결과 점검표에 남음)", "범위"),
     "map_folders": ("", "수치지형도에서 읽을 하위 폴더 (; 로 구분, 비우면 전부). setup.py 가 정함", "범위"),
     "area_reason": ("", "AREA_BBOX 를 정한 이유 (setup.py 가 적음, 설명용)", "범위"),
     # ── 건물 ──
@@ -163,11 +166,37 @@ def apply(g):
                                         "reg_pk", "reg_pnu", "reg_use_cd", "reg_use_nm", "reg_floor", "reg_area", "reg_main")}
     g["TARGET_GU"] = split_list(m.get("target_gu"))
     g["NEIGHBOR_GU"] = split_list(m.get("neighbor_gu"))
+    g["TARGET_GU_ALL"] = split_list(m.get("target_gu_all"))            # [v6.1] 비어 있으면 줄이지 않은 것
+    g["NEIGHBOR_GU_ALL"] = split_list(m.get("neighbor_gu_all"))
+    g["TARGET_NOTE"] = m.get("target_note") or ""
     g["MAP_FOLDERS"] = split_list(m.get("map_folders"), ";")
     g["AREA_REASON"] = m.get("area_reason") or ""
     g["BUILDING_ATTR_MODE"] = (m.get("building_attr_mode") or "layer").strip().lower()
     rf = m.get("register_file") or ""
     g["REGISTER_FILE"] = rf if (not rf or os.path.isabs(rf)) else os.path.join(HERE, rf)
+
+
+def target_values(base_t, base_n, prop=None):
+    """[v6.1] 대상 구 관련 mapping 값 묶음. prop = area.target_proposal 의 결과 (None 이면 원래 대상 구 그대로)"""
+    if not prop:
+        return {"target_gu": ",".join(base_t), "neighbor_gu": ",".join(base_n), "target_gu_all": "", "neighbor_gu_all": "", "target_note": ""}
+    return {"target_gu": ",".join(prop["target"]), "neighbor_gu": ",".join(prop["neighbor"]),
+            "target_gu_all": ",".join(base_t), "neighbor_gu_all": ",".join(base_n), "target_note": prop["note"]}
+
+
+def set_lines(updates, path=MAPPING_FILE):
+    """[v6.1] mapping.txt 의 몇 줄만 바꿈 (다른 줄·주석은 그대로). updates = {키: 값}. 없는 키는 설명과 함께 맨 끝에"""
+    import re
+    txt = open(path, encoding="utf-8-sig").read() if os.path.exists(path) else ""
+    for k, v in updates.items():
+        desc = DEFAULTS.get(k, ("", "", ""))[1]
+        line = f"{k} = {v}" + (f"  # {desc}" if desc else "")
+        if re.search(rf"^{re.escape(k)}\s*=.*$", txt, re.M):
+            txt = re.sub(rf"^{re.escape(k)}\s*=.*$", lambda _m: line, txt, count=1, flags=re.M)
+        else:
+            txt = txt.rstrip("\n") + "\n" + line + "\n"
+    with open(path, "w", encoding="utf-8-sig") as f:
+        f.write(txt)
 
 
 def write(vals, path=MAPPING_FILE, notes=None, header=""):
