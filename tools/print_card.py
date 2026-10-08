@@ -225,9 +225,10 @@ def v6_card(pg):
     return {"cmds": prep + main + fix + more, "html": html_body}
 
 
-def v61_card(pg):
-    """[v6.1] 2차 방문 카드: 관악만 분석하는 날 (관악 11도엽). 시간은 1차 실측(68㎢ 에서 01~05 약 1분·06 약 30초)으로 어림"""
-    prep = [r"cd /d C:\Users\user\Desktop\박수범", "python hbi_code_bundle_v6.1.txt", "cd hbi6"]
+def v61_card(pg, ver="v6.1"):
+    """[v6.1] 2차 방문 카드: 관악만 분석하는 날 (관악 11도엽). 시간은 1차 실측(68㎢ 에서 01~05 약 1분·06 약 30초)으로 어림.
+    [v6.1a] ver="v6.1a" 이면 번들 이름·제목만 v6.1a, 12·13 칸에 "관악 밖은 건너뜀" (v6.1 카드는 글자 그대로)"""
+    prep = [r"cd /d C:\Users\user\Desktop\박수범", f"python hbi_code_bundle_{ver}.txt", "cd hbi6"]
     prep_see = ["<b>박</b> 까지 치고 Tab", q("완료: 파일 47개"), f"맨 아래 {q('…' + chr(92) + 'hbi6>')}"]
     main = ["python setup.py", "python check.py", "python run_all.py --modes auto,all"]
     main_see = ["질문은 모두 <b>Enter</b>", f"끝에 {q('통과')}. {q('범위 밖')} 멈춤 → 다시, Enter",
@@ -259,7 +260,7 @@ def v61_card(pg):
     add(more[0], "09 시설 효과", p(pg, "7"))
     k += 1
     out.append(f'<tr><td class="box">□</td><td class="n">{k}</td><td>' + "<br>".join(f"<code>{html.escape(c)}</code>" for c in more[1:])
-               + f'</td><td class="see">한 줄씩. 13 은 좌표 없는 시설 건너뜀</td><td class="pg">{p(pg, "7")}</td></tr>')
+               + f'</td><td class="see">한 줄씩. 13 은 좌표 없는 시설 건너뜀{", 관악 밖은 건너뜀" if ver != "v6.1" else ""}</td><td class="pg">{p(pg, "7")}</td></tr>')
     out.append(note_row("<code>output</code> 폴더 반출 신청 (work 는 반출 안 함), 반출 시각 메모", p(pg, "8")) + "</table>")
     folders6 = ('<h2>담당자에게 물을 것</h2><table><colgroup><col style="width:32%"><col style="width:18%"><col style="width:28%"><col style="width:22%"></colgroup>'
                 '<tr><td>박수범 폴더에 자료·번들</td><td>○ / ×</td><td>나머지 4개 구 자료</td><td>들어옴 / 아직</td></tr></table>')
@@ -268,7 +269,7 @@ def v61_card(pg):
             '<tr><td>★ 02 값 두 줄</td><td colspan="3" class="blank"></td></tr>'
             '<tr><td>★ 폴더 이름</td><td colspan="3" class="blank">DEM 5m ______ · DEM 1m ______ · 상호제공 ______</td></tr>'
             '<tr><td>오류 마지막 줄</td><td class="blank"></td><td>시간·반출</td><td class="blank">__:__ → __:__, 반출 __:__</td></tr></table>')
-    html_body = ("<h1>2차 방문 카드 · v6.1 · 관악만 분석하는 날</h1>" + gold(pg["9"]) + folders6 + "".join(out) + memo)
+    html_body = (f"<h1>2차 방문 카드 · {ver} · 관악만 분석하는 날</h1>" + gold(pg["9"]) + folders6 + "".join(out) + memo)
     return {"cmds": prep + main + fix + more, "html": html_body}
 
 
@@ -299,6 +300,10 @@ def main():
     v61b = os.path.join(ROOT, "deliverables", "hbi_code_bundle_v6.1.txt")
     if os.path.exists(os.path.join(DOCS, "2차방문_v6.1_안내서.pdf")) and os.path.exists(v61b):
         jobs.append(("v6.1", v61_card, "2차방문_v6.1_안내서", open(v61b, encoding="utf-8").read(), "hbi_code_bundle_v6.1.txt"))
+    # [v6.1a] 반입본을 v6.1a 로 바꿈 (10/8). 번들 deliverables/hbi_code_bundle_v6.1a.txt 로 대조
+    v61ab = os.path.join(ROOT, "deliverables", "hbi_code_bundle_v6.1a.txt")
+    if os.path.exists(os.path.join(DOCS, "2차방문_v6.1a_안내서.pdf")) and os.path.exists(v61ab):
+        jobs.append(("v6.1a", lambda pg: v61_card(pg, "v6.1a"), "2차방문_v6.1a_안내서", open(v61ab, encoding="utf-8").read(), "hbi_code_bundle_v6.1a.txt"))
     if "--only" in sys.argv:                 # [v6.1] python3 tools/print_card.py --only v6.1 → 그 카드만 (동결된 1차 방문 카드는 다시 만들지 않음)
         want = sys.argv[sys.argv.index("--only") + 1]
         jobs = [j for j in jobs if j[0] == want]
