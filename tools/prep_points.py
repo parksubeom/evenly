@@ -2,26 +2,65 @@
 """
 tools/prep_points.py ─ [안심구역 밖] 아무 점 CSV → name, lon, lat (범용 변환기)
 
-[실행]  python3 tools/prep_points.py 원본.csv 출력.csv [EPSG:xxxx] [--seoul]
+[실행]  python3 tools/prep_points.py 원본.csv 출력.csv [EPSG:xxxx] [--seoul] [--drop 열=값 ...]
         예) 역사 좌표 → 공개 대조군 목적지:  python3 tools/prep_points.py 역사마스터.csv data_public/stations.csv
         좌표가 미터 단위(X·Y)면 세 번째 인자로 좌표계를 적습니다 (예: EPSG:5186, EPSG:5179, EPSG:5174)
 [하는 일] 이름 열·경도/위도(또는 X/Y) 열을 자동으로 찾고, 미터 좌표면 경위도로 바꿔 name, lon, lat 만 남김
           (osgeo 가 있으면 osgeo, 없으면 pyproj). 좌표가 비었거나 숫자가 아닌 행은 뺌
           --seoul : 서울 행정동 경계(analysis/hbi/external/dong_boundary.geojson) 안의 점만 남김
+          --drop 열=값 : 그 열이 그 값인 행을 뺌 (여러 번 가능). 예) 버스정류소의 --drop 정류소타입=한강선착장 (한강버스 배 선착장)
+          원본이 .xlsx 면 첫 시트를 읽음 (표준 라이브러리만, 첫 줄 = 열 이름)
+        예) 서울시 버스정류소 위치정보(xlsx, X좌표·Y좌표 = WGS84 경위도) → analysis/hbi/external/bus_stops.csv:
+            python3 tools/prep_points.py "data_public/raw/서울시버스정류소위치정보(20260902).xlsx" analysis/hbi/external/bus_stops.csv --seoul --drop 정류소타입=한강선착장
 [결과] 출력.csv (utf-8-sig) + 화면에 "읽음 → 좌표 있음 (→ 서울 안)" 행 수
 """
 import csv, json, os, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-NAME = ["역사명", "역명", "정류장명", "시설명", "사업장명", "약국명", "기관명", "명칭", "이름", "name", "station_nm", "bldg_nm"]
+NAME = ["역사명", "역명", "정류장명", "정류소명", "시설명", "사업장명", "약국명", "기관명", "명칭", "이름", "name", "station_nm", "bldg_nm"]
 LON = ["경도", "lon", "longitude", "lng", "x좌표(경도)"]
 LAT = ["위도", "lat", "latitude", "y좌표(위도)"]
 XC = ["x", "x좌표", "좌표정보(x)", "xcoord", "좌표x"]
 YC = ["y", "y좌표", "좌표정보(y)", "ycoord", "좌표y"]
 
 
+def read_xlsx(p):
+    """xlsx 첫 시트 → [{열 이름: 값}] (openpyxl 없이 zip 안의 xml 을 읽음)"""
+    import re, zipfile, xml.etree.ElementTree as ET
+    M = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+    R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+    z = zipfile.ZipFile(p)
+    ss = []
+    if "xl/sharedStrings.xml" in z.namelist():
+        ss = ["".join(x.text or "" for x in si.iter(M + "t")) for si in ET.fromstring(z.read("xl/sharedStrings.xml")).findall(M + "si")]
+    wb = ET.fromstring(z.read("xl/workbook.xml"))
+    rid = {r.get("Id"): r.get("Target") for r in ET.fromstring(z.read("xl/_rels/workbook.xml.rels"))}
+    sh = next(wb.iter(M + "sheet"))
+    tgt = rid[sh.get(R + "id")].lstrip("/")
+    tgt = tgt if tgt.startswith("xl/") else "xl/" + tgt
+    rows = []
+    for row in ET.fromstring(z.read(tgt)).iter(M + "row"):
+        d = {}
+        for c in row.iter(M + "c"):
+            col = re.match(r"[A-Z]+", c.get("r")).group(0)
+            v = c.find(M + "v")
+            if v is None:
+                isv = c.find(M + "is")
+                d[col] = "".join(t.text or "" for t in isv.iter(M + "t")) if isv is not None else ""
+            else:
+                d[col] = ss[int(v.text)] if c.get("t") == "s" else v.text
+        rows.append(d)
+    if not rows:
+        return []
+    head = rows[0]
+    print(f"xlsx: 시트 {sh.get('name')}, 열 {list(head.values())}, 행 {len(rows) - 1:,}")
+    return [{head[k]: r.get(k, "") for k in head} for r in rows[1:]]
+
+
 def read_any(p):
+    if p.lower().endswith(".xlsx"):
+        return read_xlsx(p)
     for enc in ("utf-8-sig", "cp949", "euc-kr"):
         try:
             with open(p, encoding=enc, newline="") as f:
@@ -88,8 +127,15 @@ def in_seoul_fn():
 
 
 def main():
-    args = [a for a in sys.argv[1:] if a != "--seoul"]
-    seoul = "--seoul" in sys.argv
+    argv = sys.argv[1:]
+    drops = []
+    while "--drop" in argv:                      # --drop 열=값
+        i = argv.index("--drop")
+        k, _, v = argv[i + 1].partition("=")
+        drops.append((k, v))
+        del argv[i:i + 2]
+    args = [a for a in argv if a != "--seoul"]
+    seoul = "--seoul" in argv
     if len(args) < 2:
         raise SystemExit(__doc__)
     src, dst = args[0], args[1]
@@ -97,6 +143,12 @@ def main():
     rows = read_any(src)
     if not rows:
         raise SystemExit("빈 파일")
+    for k, v in drops:
+        if rows and k not in rows[0]:
+            raise SystemExit(f"--drop 의 열 {k} 이 없음. 열: {list(rows[0])}")
+        n0 = len(rows)
+        rows = [r for r in rows if str(r.get(k, "")).strip() != v]
+        print(f"--drop {k}={v}: {n0 - len(rows):,}행 뺌")
     cols = list(rows[0])
     cn, clon, clat, cx, cy = pick(cols, NAME), pick(cols, LON), pick(cols, LAT), pick(cols, XC), pick(cols, YC)
     print(f"인식한 열: 이름={cn}, 경도={clon}, 위도={clat}, X={cx}, Y={cy}")
