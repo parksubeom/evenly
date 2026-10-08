@@ -257,10 +257,10 @@ def v61_card(pg, ver="v6.1"):
     for c, s_, g in zip(fix, fix_see, [p(pg, "4-2"), p(pg, "6"), p(pg, "9")]):
         add(c, s_, g)
     out.append(sec("실측 좌표를 넣은 뒤 (안내서대로 interventions.csv)"))
-    add(more[0], "09 시설 효과", p(pg, "7"))
+    add(more[0], "09 시설 효과" + (". 봉천 건너뜀 = 좌표 오타" if ver != "v6.1" else ""), p(pg, "7"))
     k += 1
     out.append(f'<tr><td class="box">□</td><td class="n">{k}</td><td>' + "<br>".join(f"<code>{html.escape(c)}</code>" for c in more[1:])
-               + f'</td><td class="see">한 줄씩. 13 은 좌표 없는 시설 건너뜀{", 관악 밖은 건너뜀" if ver != "v6.1" else ""}</td><td class="pg">{p(pg, "7")}</td></tr>')
+               + f'</td><td class="see">{"한 줄씩. 12 관악 밖·13 좌표 없는 시설 건너뜀. 14 뒤 다시는 --from 03" if ver != "v6.1" else "한 줄씩. 13 은 좌표 없는 시설 건너뜀"}</td><td class="pg">{p(pg, "7")}</td></tr>')
     out.append(note_row("<code>output</code> 폴더 반출 신청 (work 는 반출 안 함), 반출 시각 메모", p(pg, "8")) + "</table>")
     folders6 = ('<h2>담당자에게 물을 것</h2><table><colgroup><col style="width:32%"><col style="width:18%"><col style="width:28%"><col style="width:22%"></colgroup>'
                 '<tr><td>박수범 폴더에 자료·번들</td><td>○ / ×</td><td>나머지 4개 구 자료</td><td>들어옴 / 아직</td></tr></table>')
@@ -274,7 +274,8 @@ def v61_card(pg, ver="v6.1"):
 
 
 def render(body, out):
-    doc = f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>1차 방문 카드</title><style>{CSS}</style></head><body>{body}</body></html>'
+    m_ = re.search(r"<h1>(.*?)</h1>", body)                     # [v6.1a] PDF 제목 = 카드 첫 제목
+    doc = f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>{m_.group(1) if m_ else "1차 방문 카드"}</title><style>{CSS}</style></head><body>{body}</body></html>'
     with tempfile.TemporaryDirectory() as td:
         hp = os.path.join(td, "card.html")
         open(hp, "w", encoding="utf-8").write(doc)
