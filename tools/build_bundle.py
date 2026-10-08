@@ -42,6 +42,11 @@ if not V6:
                         'EXTERNAL = os.path.join(BASE, "..", "hbi", "external")  # 공개데이터는 hbi/external 공용')
 files = {**A, **B}
 name = f"hbi_code_bundle_{ver}.txt"
+# [v6.1b] 풀린 뒤 안내: v6 부터는 hbi6/ 하나 (v6.1a 까지는 v5 때 글이 그대로 남아 있었음)
+UNPACK = ("#   → 같은 폴더에 hbi6/ 폴더가 생깁니다 (1차 때의 hbi/ 는 그대로 둠).\n"
+          "#   → 이후 cd hbi6 → python setup.py (hbi6/README.md 참고)\n") if V6 else (
+          "#   → 같은 폴더에 hbi/ (기본, QGIS 내장 Python용) 와 hbi_geopandas/ (대체) 폴더가 생깁니다.\n"
+          "#   → 이후 hbi/README.md 순서대로 실행 (python 01_inspect.py ...)\n")
 hdr = f"""# -*- coding: utf-8 -*-
 # =====================================================================
 #  언덕 위 우리동네 - 분석 코드 묶음 {ver} (데이터안심구역 반입용)
@@ -51,9 +56,7 @@ hdr = f"""# -*- coding: utf-8 -*-
 #   A) OSGeo4W Shell(QGIS와 함께 설치됨)에서:   python {name}
 #   B) QGIS 메뉴 플러그인 → Python 콘솔에서:
 #        import os; os.chdir(r"이 파일이 있는 폴더"); exec(open("{name}", encoding="utf-8").read())
-#   → 같은 폴더에 hbi/ (기본, QGIS 내장 Python용) 와 hbi_geopandas/ (대체) 폴더가 생깁니다.
-#   → 이후 hbi/README.md 순서대로 실행 (python 01_inspect.py ...)
-#
+{UNPACK}#
 #  아래 FILES 안의 내용은 각 파일의 원문 그대로이며, 누구나 읽고 검토할 수 있습니다.
 # =====================================================================
 import os

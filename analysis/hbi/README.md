@@ -196,8 +196,8 @@ python 01_inspect.py
 ### 반출 전 체크리스트 (output 폴더)
 밖에서는 원자료를 다시 계산할 수 없으니, 반출 신청 전에 아래가 모두 있는지 확인하세요.
 - [ ] `summary.csv` — 목적지별 요약 (기획서 16장)
-- [ ] `grid_hbi.csv`, `grid_hbi_medical.gpkg` 등 — 격자 결과·지도 (16장, 본선 데모)
-- [ ] `dong_hbi.csv` — 행정동 결과 (weight_all·weight_high 열 포함 → 밖에서 고령인구 추정)
+- [ ] `grid_hbi.csv`, `grid_hbi_medical.gpkg` 등 — 격자 결과·지도 (16장, 본선 데모). [v6.1b] `weight`(연면적) 칸은 빈 칸
+- [ ] `dong_hbi.csv` — 행정동 결과 (weight_all·weight_high 열 포함 → 밖에서 고령인구 추정). [v6.1b] weight_high 는 1~4채 몫이 드러나면 빈 칸
 - [ ] `validation_sites.csv`, `validation_routes.csv`, `validation_new_candidates.csv`, `validation_ablation.csv` (17·18장)
 - [ ] `validation_measured.csv` — [v5] 실측 vs 예측 상관계수 (실측 3구간 이상일 때, 17장)
 - [ ] `intervention_summary.csv`, `intervention_grid.csv`, `intervention_dong.csv` — [v5] 시설 설치 효과 (22·23장). 맨 뒤 열 n_exit_high·weight_exit_high·n_exit_mid (summary), weight_exit_high (dong) = 설치 후 HBI 1.8(1.3) 아래로 내려온 주거 건물 (연면적은 MIN_COUNT 개 미만이면 빈 칸)

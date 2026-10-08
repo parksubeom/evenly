@@ -9,9 +9,12 @@
   summary.csv              : 목적지 종류별 요약 (HBI 중앙값, 1.8 이상 비율 등) → 기획서 16장 숫자
                              [v6.1] + HBI·왕복 추가 시간(분)의 50·75·90·95·99% 분위수 (구간 1.3·1.8 을 다시 볼 때)
   grid_hbi.csv             : 250m 격자별 표 (격자 중심 좌표, 건물 수, 평균 HBI ...)
+                             [v6.1b] weight(연면적 합) 칸은 빈 칸 (--modes 로 두 방식을 함께 내면 같은 칸 weight 차가 몇 채 연면적이 됨)
   grid_hbi_<종류>.gpkg     : 같은 내용을 지도 파일로 → QGIS에서 색칠해서 결과 지도 제작
   map_<종류>.png           : matplotlib 이 있으면 자동으로 그린 지도 이미지
   dong_hbi.csv             : 행정동별 표 → 07_join_dong.py 가 SKT·KCB 와 결합. weight_all·weight_high 로 밖에서 고령인구 추정 가능
+                             [v6.1b] weight_high 는 1~4채 몫이 드러나면 빈 칸 (그 동의 elderly_in_high_est 도 빈 칸).
+                             summary 의 연면적 줄은 이 표와 같은 목적지(의료)만, 동 합과 빼서 1~4채가 남으면 빈 칸
   (모든 통계에서 데이터 경계 EDGE_BUFFER m 이내 건물은 제외)
 
 [matplotlib 이 없을 때 QGIS로 지도 만들기]
@@ -26,6 +29,22 @@ from lib.deps import HAS_MPL
 from lib.qio import log, write_csv, write_grid_gpkg, find_files, read_csv, iter_layer
 from lib.bload import load_buildings, targets, usable
 
+
+def band_weights(n_base, ns, ws):
+    """[v6.1b] 연면적(ws)을 낼지 정함 → 값 또는 빈 칸. ns = 그 연면적의 건물 수, n_base = 같은 묶음에서 함께 공개되는 전체 연면적의 건물 수.
+    몇 채의 연면적이 빼기로 드러나지 않게: 0채면 0, 아니면 그 건물 수가 MIN_COUNT 이상이고 앞에서 낸 값(처음은 전체)과의 차가
+    0 이거나 MIN_COUNT 이상일 때만 냄 (v6.2 와 같은 규칙)"""
+    out, prev = [], n_base
+    for n_, w_ in zip(ns, ws):
+        if n_ == 0:
+            out.append(0)
+            continue
+        ok = n_ >= C.MIN_COUNT and (prev - n_ == 0 or prev - n_ >= C.MIN_COUNT)
+        out.append(round(float(w_)) if ok else "")
+        if ok:
+            prev = n_
+    return out
+
 os.makedirs(C.OUTPUT, exist_ok=True)
 b = load_buildings()
 X, Y = b["x"], b["y"]
@@ -34,6 +53,9 @@ U = usable(b)                                     # 데이터 경계 근처 건�
 gx = np.floor(X / C.GRID).astype(np.int64)        # 건물별 격자 번호
 gy = np.floor(Y / C.GRID).astype(np.int64)
 summary, grid_rows = [], []
+DT = "medical" if "medical_hbi" in b else (targets(b)[0] if targets(b) else None)   # [v6.1b] 행정동 표의 목적지 (summary 연면적도 이 목적지만)
+V_DT = (np.isfinite(b[f"{DT}_hbi"]) & U) if DT else None
+SUMH = {}                                         # [v6.1b] DT 의 summary 고위험 연면적 줄: 동 집계 뒤 빼기 검사로 다시 정함
 
 for T in targets(b):                              # 목적지 종류마다 반복 (medical, bus, elderly ...)
     H = b[f"{T}_hbi"]
@@ -49,8 +71,12 @@ for T in targets(b):                              # 목적지 종류마다 반�
                 [T, "귀갓길(목적지→집) 편도 배수 중앙값(경계 제외)", round(float(np.nanmedian(b[f"{T}_home_ratio"][v])), 3)],
                 [T, "고령자 왕복 중앙값(분, 경계 제외)", round(float(np.nanmedian(b[f"{T}_t_elder"][v])) / 60, 1)],
                 [T, "휠체어 도달불가 비율", round(float(np.mean(~np.isfinite(b[f"{T}_t_wheel"][U]))), 3)],
-                [T, f"HBI {hi} 이상 건물의 연면적 합(㎡, 고령인구 배분용)", round(float(b["weight"][v & (H >= hi)].sum()))],
-                [T, "분석 건물 연면적 합(㎡)", round(float(b["weight"][v].sum()))]]
+                # [v6.1b] 연면적은 DT 만 (목적지끼리 빼면 몇 채 몫이 드러남: 의료·약국은 고위험 집합이 거의 같음).
+                #         분석 건물 연면적 합은 분석 건물이 DT 와 똑같은 목적지면 같은 값이라 냄, 다르면 빈 칸
+                [T, f"HBI {hi} 이상 건물의 연면적 합(㎡, 고령인구 배분용)", band_weights(int(v.sum()), [int((v & (H >= hi)).sum())], [b["weight"][v & (H >= hi)].sum()])[0] if T == DT else ""],
+                [T, "분석 건물 연면적 합(㎡)", round(float(b["weight"][v].sum())) if (T == DT or np.array_equal(v, V_DT)) else ""]]
+    if T == DT:
+        SUMH = {"n": int((v & (H >= hi)).sum()), "row": len(summary) - 2}
     # [v6.1] 구간(1.3·1.8)을 다시 볼 때 쓰는 분위수: HBI, 왕복 추가 시간(분) = 경사 반영 왕복 - 평지 가정 왕복 (경계 제외).
     #        건물이 QUANT_MIN 개 미만이면 빈 칸 (몇 채로 분위수를 내면 개별 값에 가까워짐)
     add_min = (b[f"{T}_t_elder"] - b[f"{T}_t_flat"]) / 60
@@ -71,7 +97,7 @@ for T in targets(b):                              # 목적지 종류마다 반�
     fl = np.array([np.nanmedian(b[f"{T}_t_flat"][v][inv == k]) / 60 for k in range(len(u))])   # 평지 가정 왕복(분)
     for k in np.where(keep)[0]:
         grid_rows.append([T, (u[k] // 10**7 + 0.5) * C.GRID, (u[k] % 10**7 + 0.5) * C.GRID, int(cnt[k]),
-                          round(wt[k]), round(mean[k], 3), round(med[k], 3), round(high[k], 3), round(el[k], 1), round(fl[k], 1)])
+                          "", round(mean[k], 3), round(med[k], 3), round(high[k], 3), round(el[k], 1), round(fl[k], 1)])   # [v6.1b] weight 는 빈 칸
     cells = [(int(a // 10**7), int(a % 10**7)) for a in u[keep]]
     write_grid_gpkg(os.path.join(C.OUTPUT, f"grid_hbi_{T}.gpkg"), f"grid_{T}", cells, C.GRID,
                     {"n_bld": cnt[keep], "hbi_mean": mean[keep], "hbi_median": med[keep],
@@ -132,10 +158,6 @@ write_csv(os.path.join(C.OUTPUT, "run_meta.csv"), ["key", "value"], [
     ["ufid_match_rate", "" if st.get("rate_ufid") is None else st.get("rate_ufid")],
     ["n_residential_read", st.get("n_res_all", "")], ["n_residential_target", st.get("n_res_target", "")],
     ["area_bbox", C.AREA_BBOX if C.AREA_BBOX else "None"], ["area_reason", C.AREA_REASON], ["map_folders", len(C.MAP_FOLDERS)]])
-write_csv(os.path.join(C.OUTPUT, "summary.csv"), ["target", "metric", "value"], summary)
-log("summary:")
-for r in summary:
-    print("   ", r)
 if not HAS_MPL:
     log("matplotlib 없음 → QGIS에서 output/grid_hbi_*.gpkg 를 열어 hbi_mean 으로 색칠 후 이미지로 내보내기 (파일 맨 위 설명 참고)")
 
@@ -158,21 +180,34 @@ if bd:
     # 고령인구(선택): external/elderly_pop.csv 에 adm_cd, pop65 가 있으면 "HBI 1.8 이상 집에 사는 고령자 수" 추정
     pop = {r["adm_cd"]: float(r["pop65"]) for r in read_csv(os.path.join(C.EXTERNAL, "elderly_pop.csv")) if r.get("pop65")}
     rows, total = [], 0
+    pub_high = []                                         # [v6.1b] weight_high 를 낸 동의 고위험 건물 수 (summary 와 빼기 검사용)
     for k, (g, a) in enumerate(polys):
         m = v & (which == k)
         if m.sum() < C.MIN_COUNT:
             continue
         code = str(a[ck])
+        n_all = int(((which == k) & U).sum())                # weight_all 이 덮는 건물 수 (가림 기준)
         wall = b["weight"][(which == k) & U].sum()            # 동 전체 주거 연면적 (경계 제외)
+        n_high = int((m & (H >= hi)).sum())
         whigh = b["weight"][m & (H >= hi)].sum()              # 그중 HBI 1.8 이상 건물의 연면적
-        est = round(pop[code] * whigh / wall) if code in pop and wall > 0 else ""   # 고령인구 × 연면적 비율
+        wh_pub = band_weights(n_all, [n_high], [whigh])[0]    # [v6.1b] 1~4채 몫이 드러나면 빈 칸 (v6.1a 까지는 그대로 냈음)
+        est = round(pop[code] * whigh / wall) if code in pop and wall > 0 and wh_pub != "" else ""   # 고령인구 × 연면적 비율 (가렸으면 빈 칸)
         if est != "":
             total += est
+        if wh_pub != "":
+            pub_high.append(n_high)
         rows.append([code, str(a.get(sk, "")) if sk else "", a.get(nk, "") if nk else "", int(m.sum()), round(float(H[m].mean()), 3),
-                     round(float(np.mean(H[m] >= hi)), 3), round(float(wall)), round(float(whigh)), est])
+                     round(float(np.mean(H[m] >= hi)), 3), round(float(wall)), wh_pub, est])
     write_csv(os.path.join(C.OUTPUT, "dong_hbi.csv"),
               ["adm_cd", "adm_cd_stat", "adm_nm", "n_bld", "hbi_mean", "share_high", "weight_all", "weight_high", "elderly_in_high_est"], rows)
     # weight_all/weight_high 를 함께 반출하므로, 고령인구 파일이 없어도 밖에서
     #   고령인구 추정 = pop65 × weight_high ÷ weight_all  로 계산할 수 있습니다
     log(f"→ output/dong_hbi.csv (행정동 {len(rows)}개" + (f", HBI {hi} 이상 거주 고령인구 추정 약 {int(total):,}명)" if pop else ")"))
+    # [v6.1b] summary 의 DT 고위험 연면적 − 공개된 동 weight_high 합 = 가린 동(과 5채 미만 동) 몫. 그 건물 수가 1~4 면 summary 쪽도 가림
+    if SUMH and 0 < SUMH["n"] - sum(pub_high) < C.MIN_COUNT:
+        summary[SUMH["row"]][2] = ""
+write_csv(os.path.join(C.OUTPUT, "summary.csv"), ["target", "metric", "value"], summary)   # [v6.1b] 동 집계 뒤에 씀 (위의 빼기 검사)
+log("summary:")
+for r in summary:
+    print("   ", r)
 log("완료 → output/ (반출 신청 대상)")
