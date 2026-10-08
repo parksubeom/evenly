@@ -46,7 +46,9 @@ function TB(s, rows, o, explicit) {
 const DATA_PATH = path.join('data', 'results.json');
 const R = fs.existsSync(DATA_PATH) ? JSON.parse(fs.readFileSync(DATA_PATH, 'utf8')) : { source:'none', fields:{}, images:{}, tables:{} };
 const FAKE = R.source === 'fake';
+const REH = R.source === 'rehearsal';             // [v6.1] 공개데이터 대역 리허설 (LX 미반영)
 if (FAKE) pres.title = '[테스트 데이터 — 제출 금지] ' + pres.title;
+if (REH) pres.title = '[공개 대역 리허설 — 제출 금지] ' + pres.title;
 const missing = [], notes = [], seen = new Set();
 const fallbacks = [], seenFb = new Set();
 // 선택 항목(optional)이나 Q() 기본 문구로 바뀐 곳: 필수 빈칸은 아니지만 missing.txt 의 "선택 항목 대체" 절에 남김 (check_deck 은 세지 않음)
@@ -91,9 +93,11 @@ function TBL(key) {
 }
 // 가짜 데이터 워터마크: 모든 슬라이드 하단
 function wm(s) {
-  if (!FAKE) return;
-  s.addShape(pres.shapes.RECTANGLE, { x:3.1, y:5.42, w:3.8, h:0.19, fill:{color:'B23A2A', transparency:8}, line:{color:'B23A2A'} });
-  T(s, '테스트 데이터 — 제출 금지', { x:3.1, y:5.42, w:3.8, h:0.19, fontSize:9, bold:true, color:C.white, align:'center', valign:'middle' });
+  if (!FAKE && !REH) return;
+  const txt = FAKE ? '테스트 데이터 — 제출 금지' : '공개 대역 리허설 (LX 미반영) — 제출 금지';
+  const col = FAKE ? 'B23A2A' : '1F5FA8';
+  s.addShape(pres.shapes.RECTANGLE, { x:2.6, y:5.42, w:4.8, h:0.19, fill:{color:col, transparency:8}, line:{color:col} });
+  T(s, txt, { x:2.6, y:5.42, w:4.8, h:0.19, fontSize:9, bold:true, color:C.white, align:'center', valign:'middle' });
 }
 
 let sec = 0;
@@ -922,6 +926,7 @@ if (pending.length) { console.error('!! 빈칸으로 그려지지 않은 누락 
 if (page > 30) { console.error(`!! 슬라이드 ${page}장 — 30장 제한 초과`); process.exit(1); }
 const OUT = R.source === 'real' ? '../deliverables/언덕위우리동네_기획서_final.pptx'
           : R.source === 'fake' ? '../deliverables/_test_기획서.pptx'
+          : R.source === 'rehearsal' ? '../deliverables/_rehearsal_기획서.pptx'
           : '../deliverables/_blank_기획서.pptx';
 const lines = [`# 기획서 누락 목록 — source=${R.source}${R.src ? ', src=' + R.src : ''}, ${new Date().toISOString().slice(0, 19)}`,
   `# 출력: ${OUT.replace('../', '')} (${page}장)`,
@@ -932,6 +937,7 @@ fs.mkdirSync('data', { recursive:true });
 fs.writeFileSync(path.join('data', 'missing.txt'), lines.join('\n') + '\n');
 if (R.source === 'none') console.warn('!! data/results.json 없음 → 빈칸 버전으로 생성합니다 (npm run build:fake 또는 build:real 을 쓰세요)');
 if (FAKE) console.warn('!! 가짜(테스트) 데이터 — 모든 장에 "테스트 데이터 — 제출 금지" 워터마크');
+if (REH) console.warn('!! 공개 대역 리허설 — 모든 장에 "공개 대역 리허설 (LX 미반영) — 제출 금지" 띠');
 console.log(`슬라이드 ${page}장, 누락 ${missing.length}건, 선택 항목 대체 ${fallbacks.length}건 → deck/data/missing.txt`);
 missing.forEach(m => console.log(`  누락: ${m.page}장, ${m.label}, ${m.need.join(' / ') || '-'}`));
 notes.forEach(n => console.log('  ' + n));

@@ -33,10 +33,31 @@ def mark_fake(d, note=""):
         f.write("fake\n" + note + ("\n" if note else ""))
 
 
+PUBLIC_REHEARSAL = "public_rehearsal"       # [v6.1] 공개데이터 대역 리허설 결과 (실제도 가짜도 아님, 제출 금지)
+
+
+def source_of(d):
+    """폴더 출처 표지: "fake" / "public_rehearsal" / "" (표지 없음 = 실제 반출이거나 모름)"""
+    if is_fake_dir(d):
+        return "fake"
+    p = os.path.join(d, SOURCE_FILE)
+    if os.path.exists(p) and open(p, encoding="utf-8").read().strip().lower().startswith(PUBLIC_REHEARSAL):
+        return PUBLIC_REHEARSAL
+    return ""
+
+
+def mark_source(d, kind, note=""):
+    """_source.txt 쓰기 (kind = fake / public_rehearsal)"""
+    with open(os.path.join(d, SOURCE_FILE), "w", encoding="utf-8") as f:
+        f.write(kind + "\n" + note + ("\n" if note else ""))
+
+
 def refuse_raw_export(d, why):
-    """시험·가짜 결과를 results/raw_export 에 쓰려 하면 멈춤"""
-    if os.path.abspath(d) == os.path.abspath(RAW_EXPORT):
-        raise SystemExit(f"!! results/raw_export 에는 실제 반출 파일만 둡니다. {why} → 다른 폴더(--out)에 쓰세요")
+    """시험·가짜·공개 대역 결과를 results/raw_export 에 쓰려 하면 멈춤.
+    [v6.1] 실제 경로(realpath)로 비교하고, raw_export **안쪽**이거나 raw_export 를 **품은** 폴더(results/ 등)도 막음 (지우고 덮어쓰는 도구가 있어서)"""
+    d, raw = os.path.realpath(d), os.path.realpath(RAW_EXPORT)
+    if d == raw or d.startswith(raw + os.sep) or raw.startswith(d + os.sep):
+        raise SystemExit(f"!! results/raw_export 에는 실제 반출 파일만 둡니다 (그 안·그 위 폴더도 안 됨). {why} → 다른 폴더(--out)에 쓰세요")
 
 # ── EPSG:5186 (Korea 2000 / Central Belt 2010) ─────────────────────────
 _A = 6378137.0

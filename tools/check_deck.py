@@ -25,7 +25,7 @@ def scan(path):
     for n in slides:
         no = int(re.findall(r"\d+", n)[0])
         x = z.read(n).decode("utf-8")
-        if "테스트 데이터 — 제출 금지" in "".join(re.findall(r"<a:t>([^<]*)</a:t>", x)):
+        if "제출 금지" in "".join(re.findall(r"<a:t>([^<]*)</a:t>", x)):     # 가짜("테스트 데이터 — 제출 금지")·공개 대역 리허설 띠 모두
             wm += 1
         for m in OBJ_RE.finditer(x):
             o = m.group(0)

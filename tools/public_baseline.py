@@ -344,8 +344,13 @@ def main():
         cmp.append(["비고", NOTE])
         # 어떤 LX 격자와 비교했는지 기록 → 기획서 파이프라인이 가짜 결과와 비교한 파일을 실제 빌드에서 거부 (prepare_deck_data.py)
         lxp = os.path.abspath(a.lx_grid)
-        fake = os.path.exists(os.path.join(os.path.dirname(lxp), "_FAKE_DATA_README.txt")) or "fake_export" in lxp
-        cmp += [["lx_grid 입력", lxp], ["lx_grid 출처", "fake" if fake else "real"]]
+        # [v6.1] 출처: 폴더(와 방식 폴더의 부모)의 _source.txt 표지 → fake / public_rehearsal / real. 실제는 results/raw_export 안일 때만
+        from evenly_common import source_of, PUBLIC_REHEARSAL, RAW_EXPORT
+        kinds = {source_of(os.path.dirname(lxp)), source_of(os.path.dirname(os.path.dirname(lxp)))} - {""}
+        fake = "fake" in kinds or os.path.exists(os.path.join(os.path.dirname(lxp), "_FAKE_DATA_README.txt")) or "fake_export" in lxp
+        in_raw = os.path.realpath(lxp).startswith(os.path.realpath(RAW_EXPORT) + os.sep)
+        prov = "fake" if fake else (PUBLIC_REHEARSAL if PUBLIC_REHEARSAL in kinds else ("real" if in_raw else "unknown"))
+        cmp += [["lx_grid 입력", lxp], ["lx_grid 출처", prov]]
         with open(os.path.join(a.out, f"compare_{a.target}.csv"), "w", encoding="utf-8-sig", newline="") as f:
             w = csv.writer(f); w.writerow(["metric", "value"]); w.writerows(cmp)
         for m in cmp:

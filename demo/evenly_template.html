@@ -146,8 +146,9 @@ const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).
 const G = D.grid; // 격자 크기(m)
 const note = document.getElementById('note');
 if (D.source === 'fake') { note.classList.add('fake'); note.innerHTML = '<b>테스트 데이터 — 실제 결과가 아닙니다.</b> tools/make_fake_results.py 로 만든 가짜 값으로 화면 동작만 확인하는 버전입니다. 제출·발표에 쓰지 마세요.'; }
+if (D.source === 'rehearsal') { note.classList.add('fake'); note.innerHTML = '<b>공개 대역 리허설 — 실제 결과가 아닙니다.</b> 공개데이터(연속수치지형도·GIS건물통합정보·오픈스트리트맵 계단·공개 지형)로 안심구역 자료를 흉내 낸 결과입니다. LX 데이터 미반영, 제출·발표에 쓰지 마세요.'; }
 else { note.innerHTML = '<b>LX 미개방데이터 분석 결과(250m 격자 집계)</b> · 데이터안심구역에서 수치지형도·DEM 5m로 계산해 반출 승인을 받은 집계 결과입니다.'; }
-document.getElementById('srcnote').textContent = D.source === 'fake' ? '데이터: 가짜(테스트) 결과 — 실제 분석값 아님.' : '데이터: 한국국토정보공사 수치지형도(1:1,000)·DEM 5m, 데이터안심구역 분석 후 250m 격자 집계로 반출.';
+document.getElementById('srcnote').textContent = D.source === 'fake' ? '데이터: 가짜(테스트) 결과 — 실제 분석값 아님.' : D.source === 'rehearsal' ? '데이터: 공개데이터 대역 리허설 — LX 미반영, 실제 분석값 아님.' : '데이터: 한국국토정보공사 수치지형도(1:1,000)·DEM 5m, 데이터안심구역 분석 후 250m 격자 집계로 반출.';
 
 // ── 컨트롤 ──
 const gus = document.getElementById('gus');

@@ -31,3 +31,7 @@ _render/
 # 건축물대장 가공본 (data_public 원본에서 매번 다시 만듦, 반입은 따로)
 analysis/hbi/external/building_register.*
 analysis/hbi/external/gis_building.*
+# 공개 대역 리허설 자료·결과 (공개데이터로 다시 만듦)
+data_public/rehearsal/
+results/public_rehearsal/
+demo/evenly_demo_rehearsal.html

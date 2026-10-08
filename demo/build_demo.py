@@ -12,7 +12,7 @@ import argparse, json, math, os, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "tools"))
-from evenly_common import (ROOT, TARGET_GU, TARGET_LABEL, FAKE_MARKER, is_fake_dir, load_dongs, load_sites, dong_of, simplify, read_csv, num, truthy)
+from evenly_common import (ROOT, TARGET_GU, TARGET_LABEL, FAKE_MARKER, RAW_EXPORT, is_fake_dir, source_of, PUBLIC_REHEARSAL, load_dongs, load_sites, dong_of, simplify, read_csv, num, truthy)
 
 SHORT = {"중곡": "광진구 중곡동 (무지개계단)", "화곡": "강서구 화곡동", "봉천": "관악구 봉천동 (비안어린이공원)", "숭인": "종로구 숭인동 (창신역 일대 계단)", "신당": "중구 신당동 (청구동 마을마당)"}
 
@@ -24,6 +24,12 @@ def main():
     a = ap.parse_args()
     src = os.path.abspath(a.src)
     fake = is_fake_dir(src) or os.path.basename(src) == "fake_export"
+    # [v6.1] 공개 대역 리허설: 띠를 달고, 기본 출력(evenly_demo.html) 대신 evenly_demo_rehearsal.html 에 씀
+    reh = not fake and PUBLIC_REHEARSAL in (source_of(src), source_of(os.path.dirname(src)))
+    if not fake and not reh and not os.path.realpath(src).startswith(os.path.realpath(RAW_EXPORT)):
+        raise SystemExit(f"!! 표지 없는 폴더는 results/raw_export 에서만 (실제 결과): {os.path.relpath(src, ROOT)}")
+    if reh and os.path.abspath(a.out) == os.path.join(HERE, "evenly_demo.html"):
+        a.out = os.path.join(HERE, "evenly_demo_rehearsal.html")
     grid = read_csv(os.path.join(src, "grid_hbi.csv"))
     if not grid:
         raise SystemExit(f"grid_hbi.csv 가 없습니다: {src}")
@@ -90,7 +96,7 @@ def main():
         cand.append({"x": round(x), "y": round(y), "hbi": h, "n": int(num(r.get("n_bld")) or 0),
                      "where": f"{d['gu']} {d['adm_nm'].split()[-1]}" if d else f"({round(x)}, {round(y)})"})
 
-    data = {"source": "fake" if fake else "real", "grid": 250, "o": [ox, oy], "targets": targets, "base": base,
+    data = {"source": "fake" if fake else ("rehearsal" if reh else "real"), "grid": 250, "o": [ox, oy], "targets": targets, "base": base,
             "tlabel": {t: TARGET_LABEL.get(t, t) for t in targets}, "gus": TARGET_GU, "gubbox": gubbox, "bbox": bbox,
             "dongs": dout, "dongmeta": dmeta, "cells": cells, "tmax": tmax, "sites": sites, "cand": cand}
     tpl = open(os.path.join(HERE, "evenly_template.html"), encoding="utf-8").read()

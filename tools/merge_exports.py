@@ -26,7 +26,7 @@ tools/merge_exports.py ─ [안심구역 밖] 1차 방문(v4)에서 구역별로
 import csv, math, os, shutil, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from evenly_common import ROOT, load_dongs, dong_of, load_sites, read_csv, write_csv, num, truthy, is_fake_dir, mark_fake, refuse_raw_export
+from evenly_common import ROOT, load_dongs, dong_of, load_sites, read_csv, write_csv, num, truthy, is_fake_dir, mark_fake, refuse_raw_export, source_of, mark_source, PUBLIC_REHEARSAL
 
 ZONES = {"A": ["종로구", "중구"], "B": ["관악구"], "C": ["광진구"], "D": ["강서구"]}
 # 1차 방문 구역별 AREA_BBOX (EPSG:5186, 대상 구 범위 + 1,000m, 100m 단위). docs/1차방문_안내서.md 와 같은 값
@@ -85,9 +85,18 @@ def main():
     zones, out = parse_args(sys.argv[1:])
     if os.path.abspath(out) in zones.values():
         raise SystemExit("--out 은 구역 폴더와 달라야 합니다")
-    fake_in = [z for z, d in zones.items() if is_fake_dir(d)]          # 출처 표지: 하나라도 가짜면 결과도 가짜
+    kind = {z: source_of(d) for z, d in zones.items()}                # 출처 표지: fake / public_rehearsal / "" (실제)
+    fake_in = [z for z, k in kind.items() if k == "fake"]              # 하나라도 가짜면 결과도 가짜
+    reh_in = [z for z, k in kind.items() if k == PUBLIC_REHEARSAL]     # [v6.1] 공개 대역 리허설
+    real_in = [z for z, k in kind.items() if not k]
+    if (fake_in or reh_in) and real_in:
+        raise SystemExit(f"!! 실제 구역 {real_in} 과 가짜·공개 대역 구역 {fake_in + reh_in} 을 섞어 합치지 않습니다")
+    if fake_in and reh_in:
+        raise SystemExit(f"!! 가짜 구역 {fake_in} 과 공개 대역 구역 {reh_in} 을 섞어 합치지 않습니다")
     if fake_in:
         refuse_raw_export(out, f"입력 구역 {fake_in} 이 가짜(_source.txt=fake) 입니다")
+    if reh_in:
+        refuse_raw_export(out, f"입력 구역 {reh_in} 이 공개 대역 리허설(_source.txt=public_rehearsal) 입니다")
     os.makedirs(out, exist_ok=True)
     dongs = load_dongs(sum(ZONES.values(), []))
     gu_code = {}
@@ -257,6 +266,9 @@ def main():
     if fake_in:
         mark_fake(out, f"merge_exports: 가짜 입력 구역 {fake_in}")
         notes.append(f"출처: 가짜 (입력 구역 {fake_in} 이 fake) → _source.txt=fake")
+    if reh_in:
+        mark_source(out, PUBLIC_REHEARSAL, f"merge_exports: 공개 대역 입력 구역 {reh_in}")
+        notes.append(f"출처: 공개 대역 리허설 (입력 구역 {reh_in}) → _source.txt=public_rehearsal")
     with open(os.path.join(out, "merge_notes.txt"), "w", encoding="utf-8") as f:
         f.write("\n".join(notes) + "\n")
     print("\n".join(notes))

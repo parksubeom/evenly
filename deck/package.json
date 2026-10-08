@@ -6,6 +6,7 @@
     "build:fake": "node py.js ../tools/make_fake_results.py && node py.js ../tools/prepare_deck_data.py --src ../results/fake_export && node build_deck.js",
     "build:fake:partial": "node py.js ../tools/make_fake_results.py --partial && node py.js ../tools/prepare_deck_data.py --src ../results/fake_export && node build_deck.js",
     "build:real": "node py.js ../tools/prepare_deck_data.py --src ../results/raw_export --expect real && node build_deck.js",
+    "build:rehearsal": "node py.js ../tools/prepare_deck_data.py --src ../results/public_rehearsal/${REHEARSAL:-gwanak_v61} --expect rehearsal && node build_deck.js",
     "build:fake:v4": "node py.js ../tools/make_fake_results.py --schema v4 && node py.js ../tools/prepare_deck_data.py --src ../results/fake_export && node build_deck.js"
   },
   "dependencies": {

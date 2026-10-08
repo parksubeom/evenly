@@ -235,12 +235,24 @@ def main():
         print(f"  분석 대상 구인데 이름이 안 맞은 통계 행 {len(unmatched)}개: {', '.join(unmatched) if unmatched else '-'}")
         print(f"  통계가 안 붙은 결과 동 {len(nostat)}개: {', '.join(nostat) if nostat else '-'}")
     out = opt["out"]
+    # [v6.1] 출처: 입력 dong_hbi.csv 폴더(와 그 부모)의 _source.txt. 실제가 아니면 기본 출력(results/dong_joined.csv) 대신 입력 옆에 씀
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from evenly_common import source_of, RAW_EXPORT
+    dd = os.path.dirname(os.path.abspath(opt["dong"]))
+    kind = source_of(dd) or source_of(os.path.dirname(dd))
+    in_raw = os.path.realpath(opt["dong"]).startswith(os.path.realpath(RAW_EXPORT) + os.sep)
+    prov = kind or ("real" if in_raw else "unknown")
+    if prov != "real" and os.path.abspath(out) == os.path.join(ROOT, "results", "dong_joined.csv"):
+        out = os.path.join(dd, "dong_joined.csv")
+        print(f"(입력 출처 {prov}: 실제 반출이 아니라 results/dong_joined.csv 대신 입력 옆에 씀)")
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     with open(out, "w", encoding="utf-8-sig", newline="") as f:
         w = csv.DictWriter(f, fieldnames=head, extrasaction="ignore")
         w.writeheader()
         w.writerows(dong)
-    print(f"→ {os.path.abspath(out)}")
+    with open(os.path.splitext(out)[0] + "_source.txt", "w", encoding="utf-8") as f:   # 기획서 실제 빌드가 확인함
+        f.write(f"{prov}\n{os.path.abspath(opt['dong'])}\n")
+    print(f"→ {os.path.abspath(out)} (출처 {prov})")
 
 
 if __name__ == "__main__":

@@ -19,7 +19,7 @@ tools/prepare_deck_data.py ─ 반출 결과 파일 → 기획서에 넣을 값(
 import argparse, datetime, json, math, os, re, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from evenly_common import (ROOT, TARGET_GU, TARGET_LABEL, FAKE_MARKER, RAW_EXPORT, is_fake_dir, load_dongs, dong_of, read_csv, num, truthy)
+from evenly_common import (ROOT, TARGET_GU, TARGET_LABEL, FAKE_MARKER, RAW_EXPORT, is_fake_dir, source_of, PUBLIC_REHEARSAL, load_dongs, dong_of, read_csv, num, truthy)
 
 HI, LO = 1.8, 1.3
 # 19장 KCB 중첩 방향. v5 기본 KCB 값 "KCB_60세이상_월200만원이하비율" = C1~C3 인원 ÷ C1~C22 인원
@@ -157,7 +157,7 @@ class Box:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--src", default=os.path.join(ROOT, "results", "raw_export"))
-    ap.add_argument("--expect", choices=["real", "fake"], help="build:real 은 real: 가짜 표지가 있으면 멈춤")
+    ap.add_argument("--expect", choices=["real", "fake", "rehearsal"], help="build:real 은 real: 가짜·공개 대역 표지가 있으면 멈춤. build:rehearsal 은 rehearsal")
     ap.add_argument("--mode", help="v6 run_all --modes 로 나뉜 결과에서 쓸 방식 폴더 (layer / register / gisbld / all)")
     a = ap.parse_args()
     src = os.path.abspath(a.src)
@@ -179,15 +179,24 @@ def main():
     # 출처 판정: 가짜 표지(_source.txt=fake 또는 _FAKE_DATA_README.txt)가 있으면 fake.
     #   real 은 "가짜 표지가 없고, 폴더가 results/raw_export" 일 때만 (실제 반출 파일에는 표지가 없음)
     fake = is_fake_dir(src) or is_fake_dir(base) or os.path.basename(base) == "fake_export"
+    # [v6.1] 공개 대역 리허설: _source.txt = public_rehearsal (tools/run_public_rehearsal.py 가 붙임). 실제도 가짜도 아님
+    rehearsal = not fake and PUBLIC_REHEARSAL in (source_of(src), source_of(base))
     is_raw = os.path.abspath(base) == os.path.abspath(RAW_EXPORT)
     if a.expect == "real" and fake:
         raise SystemExit(f"!! {os.path.relpath(src, ROOT)} 에 가짜 표지(_source.txt=fake)가 있습니다 → 실제 기획서를 만들지 않습니다. 폴더 내용을 확인하세요")
-    if not fake and not is_raw:
+    if a.expect == "real" and rehearsal:
+        raise SystemExit(f"!! {os.path.relpath(src, ROOT)} 에 공개 대역 표지(_source.txt=public_rehearsal)가 있습니다 → 실제 기획서를 만들지 않습니다 (npm run build:rehearsal)")
+    if rehearsal and is_raw:
+        raise SystemExit("!! results/raw_export 에 공개 대역 표지가 있습니다 → 실제 반출 폴더에 리허설 결과가 섞였는지 확인하세요")
+    if a.expect == "rehearsal" and not rehearsal:
+        raise SystemExit("!! --expect rehearsal 인데 공개 대역 표지(_source.txt=public_rehearsal)가 없습니다")
+    if not fake and not rehearsal and not is_raw:
         raise SystemExit(f"!! 가짜 표지가 없는데 폴더가 results/raw_export 가 아닙니다: {os.path.relpath(src, ROOT)}\n"
                          "   실제 결과는 results/raw_export 에서만 빌드합니다. 시험이면 make_fake_results.py 로 만든 폴더를 쓰세요")
     if a.expect == "fake" and not fake:
         raise SystemExit("!! --expect fake 인데 가짜 표지가 없습니다")
-    source = "fake" if fake else "real"
+    source = "fake" if fake else ("rehearsal" if rehearsal else "real")
+    test = fake or rehearsal                          # 실제가 아닌 빌드: 밖 도구 결과(results/…)를 섞지 않음
     try:                                              # 그림(지도·차트)용. 실제 빌드에서 없으면 그림 빠진 제출본이 조용히 나오므로 멈춤
         import matplotlib  # noqa: F401
     except ImportError:
@@ -334,7 +343,7 @@ def main():
     # ── 밖 도구 결과 (있을 때만, 없으면 표시 안 함) ──
     #   가짜 결과는 <src> 안에서만, 실제 결과는 <src> → results/ 순서로 찾음 (가짜가 실제 기획서에 섞이지 않도록)
     def opt_file(rel):
-        for base in ([src] if fake else [src, os.path.join(ROOT, "results")]):
+        for base in ([src] if test else [src, os.path.join(ROOT, "results")]):
             pth = os.path.join(base, rel)
             if os.path.exists(pth):
                 return pth
@@ -342,9 +351,12 @@ def main():
     optional = lambda key, label, need, value: B.fields.__setitem__(key, {"value": value, "label": label, "need": need, "optional": True})
     cp = opt_file(os.path.join("public_baseline", "compare_station.csv"))
     cmpd = {r["metric"].strip(): r["value"] for r in (read_csv(cp) or [])} if cp else {}
-    if cp and not fake:
+    if cp and not test:
         # 가드: 실제 빌드에서는 "실제 LX 결과와 비교한" compare 만 받음 (public_baseline.py 가 lx_grid 출처를 기록)
         prov = (cmpd.get("lx_grid 출처") or "").strip()
+        lxin = (cmpd.get("lx_grid 입력") or "").strip()
+        if prov == "real" and not os.path.realpath(lxin).startswith(os.path.realpath(RAW_EXPORT) + os.sep):
+            prov = f"real 이라 적혔으나 입력이 results/raw_export 밖 ({lxin})"      # [v6.1]
         if prov != "real":
             raise SystemExit(f"!! {os.path.relpath(cp, ROOT)} 는 lx_grid 출처가 '{prov or '기록 없음'}' 입니다 (입력: {cmpd.get('lx_grid 입력', '-')}).\n"
                              "   가짜 결과와 비교한 파일일 수 있어 실제 기획서에 넣지 않습니다. 반출 grid_hbi.csv 로 public_baseline.py 를 다시 돌리거나 이 파일을 지우세요.")
@@ -355,6 +367,13 @@ def main():
     optional("ABL.pub_note", "공개데이터 대조군 비고", ["results/public_baseline/compare_station.csv"], cmpd.get("비고") or None)
     optional("ABL.pub_n", "공통 격자 수", ["results/public_baseline/compare_station.csv"], cmpd.get("공통 격자 수") or None)
     dj = opt_file("dong_joined.csv")
+    if dj and not test and os.path.dirname(os.path.abspath(dj)) != src:
+        # [v6.1] 실제 빌드에서 밖(results/)의 dong_joined.csv 는 outside_join_dong.py 가 실제 반출(raw_export)로 만든 것만 받음
+        sp = os.path.splitext(dj)[0] + "_source.txt"
+        sl = open(sp, encoding="utf-8").read().split("\n") if os.path.exists(sp) else []
+        if not sl or sl[0].strip() != "real" or not os.path.realpath(sl[1].strip()).startswith(os.path.realpath(RAW_EXPORT) + os.sep):
+            raise SystemExit(f"!! {os.path.relpath(dj, ROOT)} 의 출처가 실제 반출이 아닙니다 ({os.path.relpath(sp, ROOT)}: {sl[:2] or '없음'}).\n"
+                             "   results/raw_export/dong_hbi.csv 로 tools/outside_join_dong.py 를 다시 돌리거나 이 파일을 지우세요")
     jrows = read_csv(dj) if dj else None
     # 라벨(outside_join_dong.py --label) → 표시 이름, 합치는 방식. 라벨에 "_" 가 있을 수 있어 가장 길게 맞는 라벨을 씀
     LABELS = {"장애인_유형": ("지체·뇌병변 장애인", "sum"), "장애인_정도": ("중증 장애인", "first"),
