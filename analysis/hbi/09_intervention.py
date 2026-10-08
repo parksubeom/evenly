@@ -9,6 +9,7 @@
         좌표 4개가 다 채워진 행만 계산합니다. (현장실측 기록지의 시설 양 끝 좌표를 옮겨 적으면 됨)
 [하는 일]
   1. 시설 양 끝을 가장 큰 연결망의 가장 가까운 길 노드에 연결 (50m 넘게 떨어져 있으면 경고 → 좌표 확인)
+     [v6.1a] 끝점이 OUT_OF_DATA_M(500m) 넘게 떨어진 시설은 길 자료 범위 밖으로 보고 건너뜀 (모두 그렇다면 결과 없이 끝냄)
   2. 시설 통과 시간 = 대기 + 양 끝 직선거리 ÷ 속도 + (끝점까지 걸어가는 거리 합) ÷ 고령자 속도
   3. 시나리오: 시설 하나씩 + "ALL(후보 전체)" (ALL 에는 이미 있는 시설 status=existing 은 넣지 않음)
   4. 목적지(config.INTERVENTION_TARGETS 중 결과에 있는 것)마다 설치 전후 고령자 왕복 시간을 비교
@@ -63,6 +64,7 @@ gi = np.where(net["giant"])[0]                                   # 남긴 연결
 idx = NearestIndex(nodes[gi])
 tf = transformer("EPSG:4326")                                    # 경위도 → 분석 좌표계
 fac = []                                                         # [(이름, 상태, (노드a, 노드b, 시간초)), ...]
+out_of_data = []                                                 # [v6.1a] 길 자료 범위 밖이라 건너뛴 시설 이름
 for r in rows:
     typ = (r.get("type") or "elevator").strip().lower()
     base = C.FACILITY.get(typ, C.FACILITY["elevator"])
@@ -72,6 +74,11 @@ for r in rows:
     speed = base["speed"] if speed is None else speed
     (ax, bx), (ay, by) = transform_xy(tf, [fnum(r["a_lon"]), fnum(r["b_lon"])], [fnum(r["a_lat"]), fnum(r["b_lat"])])
     d, i = idx.query(np.array([[ax, ay], [bx, by]]))             # 양 끝에서 가장 가까운 노드까지 거리
+    if not (d[0] <= C.OUT_OF_DATA_M and d[1] <= C.OUT_OF_DATA_M):  # [v6.1a] 길 자료 범위 밖 (가장자리 노드로 잘못 계산하지 않게)
+        far = max(d[0], d[1])
+        log(f"  !! {r['name']}: 끝점이 가장 가까운 길에서 {f'{far:.0f}m' if np.isfinite(far) else '5km 넘게'} 떨어져 있음 → 길 자료 범위 밖으로 보고 건너뜀 (이 시설은 결과 없음)")
+        out_of_data.append(r["name"])
+        continue
     na, nb_ = gi[i[0]], gi[i[1]]
     for tag, dd in (("a(아래)", d[0]), ("b(위)", d[1])):
         if dd > C.INTERVENTION_SNAP_WARN:
@@ -81,6 +88,11 @@ for r in rows:
     fac.append((r["name"], (r.get("status") or "planned").strip().lower(), (int(na), int(nb_), float(t))))
     log(f"  시설 {r['name']} [{typ}, {r.get('status')}] 길이 {straight:.0f}m, 통과 {t / 60:.1f}분 (대기 {wait:g}초, {speed:g}m/s)")
 
+if not fac:                                                      # [v6.1a] 좌표가 찬 시설이 모두 범위 밖 → 실패로 멈추지 않고 결과 없이 끝냄
+    log(f"좌표가 채워진 시설 {len(out_of_data)}곳이 모두 길 자료 범위 밖 → 09 결과 없음 (그 구 자료를 받은 뒤 다시)")
+    raise SystemExit(0)
+if out_of_data:
+    log(f"  길 자료 범위 밖이라 건너뛴 시설 {len(out_of_data)}곳: {', '.join(out_of_data)}")
 scen = [(n, [x]) for n, _, x in fac]                             # 시나리오 = 시설 하나씩
 cand = [x for n, st, x in fac if st != "existing"]               # ALL 에는 이미 있는 시설 제외
 if cand:

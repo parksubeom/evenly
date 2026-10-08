@@ -74,6 +74,24 @@ def guess_crs(minx, maxx):
     return C.DEFAULT_CRS
 
 
+def raster_envelope(files):
+    """[v6.1a] 래스터(DEM) 파일들의 범위를 **분석 좌표계**로 (x0, y0, x1, y1).
+    DEM 좌표계가 분석 좌표계와 다르면(예: 1차 DEM 은 KGD2002 = 5179, 분석은 5186) 네 모서리를 바꿔 감싸는 네모로.
+    v6.1 까지는 바꾸지 않고 비교해 setup·check 가 "DEM 이 대상 구를 다 덮지 못함" 을 잘못 띄웠음 (분석 자체는 DEM 클래스가 바꿔서 영향 없음)"""
+    vrt = gdal.BuildVRT("/vsimem/env.vrt", list(files))
+    gt, nx, ny, wkt = vrt.GetGeoTransform(), vrt.RasterXSize, vrt.RasterYSize, vrt.GetProjection()
+    vrt = None
+    gdal.Unlink("/vsimem/env.vrt")
+    x0, x1, y0, y1 = gt[0], gt[0] + gt[1] * nx, gt[3] + gt[5] * ny, gt[3]
+    if wkt:
+        s = osr.SpatialReference(wkt=wkt)
+        s.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+    else:
+        s = srs_from(guess_crs(x0, x1))
+    xs, ys = transform_xy(transformer(s), [x0, x1, x0, x1], [y0, y0, y1, y1])
+    return (float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys))), abs(gt[1])
+
+
 # ───────────────────────── 파일 찾기 ─────────────────────────
 def find_files(root, keys, ext=".shp"):
     """root 폴더와 모든 하위 폴더에서, 확장자가 ext 이고 파일명에 keys 중 하나가 들어간 파일 목록.

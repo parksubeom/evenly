@@ -6,7 +6,8 @@
 [준비]  external/iso_points.csv 에 점마다 한 줄 (메모장·엑셀로 열어 입력)
           name(이름), lon, lat(경위도), minutes(분, "5;10;15" 처럼 ; 로 여러 개), note(메모)
 [하는 일]
-  1. 점을 가장 가까운 길 노드에 연결 (SNAP_WARN_M 보다 멀면 경고 → 좌표 확인)
+  1. 점을 가장 가까운 길 노드에 연결 (SNAP_WARN_M 보다 멀면 경고 → 좌표 확인).
+     [v6.1a] SNAP_SKIP_M 보다 멀면 길 자료 범위 밖으로 보고 그 점은 건너뜀 (자료 가장자리 노드에서 잘못 계산하지 않게)
   2. 길 네트워크(work/network.npz)에서 모든 노드 → 그 점까지 "걸어오는" 시간을 세 방식으로 계산 (집 → 시설 방향)
        flat  : 평지 가정 (고령자 속도, 경사 무시)
        elder : 고령자, 경사 반영 (lib/model.py 의 elder_time, 03_hbi.py 와 같은 식)
@@ -39,6 +40,7 @@ from lib.deps import HAS_MPL
 BUFFER_M = 25          # 도달한 길 중심선 양쪽으로 몇 m 까지 면으로 칠지
 SIMPLIFY_M = 10        # 면 테두리 단순화 (m). 반출 도형을 가볍게, 건물 윤곽이 드러나지 않게
 SNAP_WARN_M = 60       # 점이 가장 가까운 길에서 이보다 멀면 경고
+SNAP_SKIP_M = C.OUT_OF_DATA_M   # [v6.1a] 이보다 멀면 길 자료 범위 밖 → 그 점은 건너뜀 (결과 파일에 줄을 만들지 않음)
 SLOPE_CHECK = 0.01     # 도달 범위 안 링크의 평균 경사(절댓값)가 이보다 크면 "경사가 있는 곳" 으로 보고 면적 검사
 MODES = [("flat", "평지 가정"), ("elder", "고령자 경사 반영"), ("wheel", "휠체어")]
 COLORS = {"flat": "#9aa5ad", "elder": "#e8743b", "wheel": "#2f6fb0"}
@@ -100,7 +102,7 @@ def safe(name):
     return re.sub(r"[\\/:*?\"<>|\s]+", "_", name.strip())
 
 
-summary, fails = [], 0
+summary, fails, skipped = [], 0, []
 for r in pts:
     name = (r.get("name") or "").strip()
     try:
@@ -111,6 +113,11 @@ for r in pts:
     mins = [int(float(x)) for x in re.split(r"[;,\s]+", r.get("minutes") or "") if x.strip()] or [5, 10, 15]
     (px,), (py,) = transform_xy(tf, [lon], [lat])
     d, i = idx.query(np.array([[px, py]]))
+    if not d[0] <= SNAP_SKIP_M:          # scipy 없는 대체 구현은 5km 넘게 먼 점에 거리 inf·번호 -1 을 줌 → 이것도 여기서 건너뜀
+        far = f"{d[0]:.0f}m" if np.isfinite(d[0]) else "5km 넘게"
+        log(f"  !! {name}: 가장 가까운 길이 {far} 떨어져 있음 → 길 자료 범위 밖으로 보고 건너뜀 (이 점은 결과 없음)")
+        skipped.append(name)
+        continue
     node = int(gi[i[0]])
     if d[0] > SNAP_WARN_M:
         log(f"  !! {name}: 가장 가까운 길이 {d[0]:.0f}m 떨어져 있음 → 좌표 확인 (그대로 계산은 함)")
@@ -187,4 +194,5 @@ for r in pts:
         fig.savefig(os.path.join(C.OUTPUT, f"map_isochrone_{safe(name)}.png"), dpi=120); plt.close(fig)
 
 write_csv(os.path.join(C.OUTPUT, "isochrone_summary.csv"), ["name", "mode", "minutes", "area_km2", "ratio_to_flat", "n_res_bld"], summary)
-log(f"완료 → output/isochrone_*.gpkg, isochrone_summary.csv ({len(summary)}행)" + (f"  !! 검사 실패 {fails}건" if fails else ""))
+log(f"완료 → output/isochrone_*.gpkg, isochrone_summary.csv ({len(summary)}행)" + (f"  !! 검사 실패 {fails}건" if fails else "")
+    + (f", 길 자료 범위 밖이라 건너뜀 {len(skipped)}곳: {', '.join(skipped)}" if skipped else ""))

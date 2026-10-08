@@ -22,7 +22,7 @@ import os, re, sys, glob, zipfile, collections, shutil
 import config as C
 from lib.conout import Tee, safe_console, ask
 from lib import mapping as M
-from lib.qio import open_vector, layer_srs, transformer, transform_xy, iter_layer
+from lib.qio import open_vector, layer_srs, transformer, transform_xy, iter_layer, raster_envelope
 from lib import area
 from osgeo import gdal, ogr
 gdal.UseExceptions(); ogr.UseExceptions()
@@ -436,8 +436,7 @@ def main():
     print(f"  AREA_BBOX = {bb}  ← {why}")
     if dem["5m"] and gp:
         try:
-            vrt = gdal.BuildVRT("/vsimem/s.vrt", dem["5m"]); gt = vrt.GetGeoTransform()
-            de = (gt[0], gt[3] + gt[5] * vrt.RasterYSize, gt[0] + gt[1] * vrt.RasterXSize, gt[3]); vrt = None; gdal.Unlink("/vsimem/s.vrt")
+            de, _ = raster_envelope(dem["5m"])     # [v6.1a] 분석 좌표계로 바꾼 범위 (DEM 이 5179 여도 맞게 비교)
             bad = [g for g in tgt if g in gp and area.cover_share(gp[g], [de]) < 0.95]
             print("  DEM: 대상 구를 " + ("모두 덮음" if not bad else f"다 덮지 못함 → {', '.join(bad)} (경사 0 으로 계산되는 곳이 생김, 담당자에게 DEM 범위 확인)"))
         except Exception:

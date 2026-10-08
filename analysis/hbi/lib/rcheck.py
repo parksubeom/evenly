@@ -77,12 +77,15 @@ def rows(out=None, work=None, net_work=None):
         st = {}
     mode = st.get("mode", C.BUILDING_ATTR_MODE)
     nb, nres = st.get("n_bld_read") or st.get("n_bld"), st.get("n_res_all")
+    where = ""
+    if C.TARGET_GU and st.get("n_bld_target"):      # [v6.1a] 대상 구가 있으면 대상 구 안 건물로 (자료에 섞인 옆 구 건물을 빼고)
+        nb, nres, where = st["n_bld_target"], st.get("n_res_target"), ", 대상 구 안"
     if mode != "all" and nb:
         v = nres / nb if nres is not None else None
-        R_.append(("주거 비율", v, f"{v:.1%} ({nres:,}/{nb:,})" if v is not None else "-"))
+        R_.append(("주거 비율", v, f"{v:.1%} ({nres:,}/{nb:,}{where})" if v is not None else "-"))
     if mode in ("register", "gisbld"):
-        v = st.get("link_rate")
-        R_.append(("용도 연결률", v, f"{v:.1%} ({'건물 겹침' if mode == 'gisbld' else st.get('join_used', '')})" if v is not None else "-"))
+        v = st.get("link_rate_target", st.get("link_rate"))
+        R_.append(("용도 연결률", v, f"{v:.1%} ({'건물 겹침' if mode == 'gisbld' else st.get('join_used', '')}{', 대상 구 안' if 'link_rate_target' in st else ''})" if v is not None else "-"))
     try:
         z = np.load(os.path.join(net_work, "network.npz"))
         v = float(z["giant"][z["node_use"]].mean() if "node_use" in z.files else z["giant"].mean())   # [v6.1] 뺀 길의 노드 제외

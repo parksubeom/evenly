@@ -102,6 +102,7 @@ def _gisbld(blds, quiet=False):
             for cy in range(int(y0 // cell), int(y1 // cell) + 1):
                 bucket[(cx, cy)].append(k)
     out, st, ov = [], collections.Counter(), []
+    flags = [False] * len(blds)                  # [v6.1a] 건물마다 연결됐는지 (대상 구 안 연결률용)
     for g, x, y, _ in blds:
         x0, x1, y0, y1 = g.GetEnvelope()
         cand = {k for cx in range(int(x0 // cell), int(x1 // cell) + 1) for cy in range(int(y0 // cell), int(y1 // cell) + 1)
@@ -127,7 +128,7 @@ def _gisbld(blds, quiet=False):
         fl = _num(a.get(F.get("gis_floor"))) if F.get("gis_floor") else None
         out.append((reg_use_code(str(a.get(F.get("gis_use_nm")) or "") if F.get("gis_use_nm") else "",
                                  str(a.get(F.get("gis_use_cd")) or "") if F.get("gis_use_cd") else ""), fl))
-        st["연결"] += 1; ov.append(min(r, 1.0))
+        st["연결"] += 1; ov.append(min(r, 1.0)); flags[len(out) - 1] = True
     n = len(blds)
     stats = dict(mode="gisbld", n_bld=n, n_gis_read=len(gis), linked=st["연결"], link_rate=round(st["연결"] / n, 4) if n else 0.0,
                  overlap_mean=round(float(np.mean(ov)), 4) if ov else None, no_overlap=st["겹침 없음"], small_overlap=st["겹침 작음"],
@@ -135,7 +136,7 @@ def _gisbld(blds, quiet=False):
     if not quiet:
         log(f"  GIS건물통합정보 {os.path.basename(p)}: 건물 {len(gis):,}개 읽음 → LX 건물 연결 {st['연결']:,}/{n:,} ({stats['link_rate']:.1%}), "
             f"평균 겹침률 {stats['overlap_mean'] or 0:.0%}, 겹침 없음 {st['겹침 없음']:,}, 겹침 {GIS_MIN_OVERLAP:.0%} 미만 {st['겹침 작음']:,}")
-    return out, stats
+    return out, stats, flags
 
 
 def reg_use_code(nm, cd):
@@ -272,14 +273,15 @@ def _register(blds, quiet=False):
         raise SystemExit(f"mapping.txt 의 register_join = {join} 는 쓸 수 없습니다 (auto / pnu / pk)")
     use = join if join != "auto" else ("pk" if r_pk > r_pnu else "pnu")
     out, st = [], collections.Counter()
+    flags = [False] * n                          # [v6.1a] 건물마다 연결됐는지 (대상 구 안 연결률용)
     for i in range(n):
         p = parcel_of[i]
         if p is None:
             out.append(("", None)); st["필지 없음"] += 1
         elif use == "pk" and hit_pk[i]:
-            out.append(pick([by_pk[p[1]]], R)); st["연결"] += 1
+            out.append(pick([by_pk[p[1]]], R)); st["연결"] += 1; flags[i] = True
         elif use == "pnu" and hit_pnu[i]:
-            out.append(pick(by_pnu[p[0]], R)); st["연결"] += 1
+            out.append(pick(by_pnu[p[0]], R)); st["연결"] += 1; flags[i] = True
         else:
             out.append(("", None)); st["필지는 있으나 대장 없음"] += 1
     linked = st["연결"]
@@ -291,7 +293,7 @@ def _register(blds, quiet=False):
             f"{'칸 없음' if r_ufid is None else f'{r_ufid:.1%}'} → {'자동으로 ' if join == 'auto' else ''}{'필지번호' if use == 'pnu' else '대장번호'}로 연결")
         log(f"  건물 → 필지 → 건축물대장 연결 {linked:,}/{n:,} ({stats['link_rate']:.1%}), 필지 없음 {stats['no_parcel']:,}, "
             f"대장 없음 {stats['no_register']:,}  ← 연결 안 된 건물은 용도 미상(집·목적지 아님)")
-    return out, stats
+    return out, stats, flags
 
 
 _REG_CACHE = {}       # check.py 가 표본 창마다 부를 때 대장 파일을 한 번만 읽게
@@ -334,7 +336,14 @@ def iter_buildings(save=True, quiet=False):
     if not blds:
         LAST_STATS = dict(mode=m, n_bld=0, linked=0, link_rate=0.0); _save(LAST_STATS)
         return
-    res, stats = (_gisbld if m == "gisbld" else _register)(blds, quiet)
+    res, stats, flags = (_gisbld if m == "gisbld" else _register)(blds, quiet)
+    if C.TARGET_GU:                              # [v6.1a] 대상 구 안 건물만의 연결률 (관악만 있는 날: 자료에 섞인 옆 구 건물은 대장이 없어 전체 연결률이 낮게 나옴)
+        from lib.area import in_target
+        tm = in_target(np.array([b[1] for b in blds]), np.array([b[2] for b in blds]))
+        nt, lt = int(tm.sum()), int(np.sum(np.asarray(flags) & tm))
+        stats.update(n_bld_target=nt, linked_target=lt, link_rate_target=round(lt / nt, 4) if nt else 0.0)
+        if not quiet:
+            log(f"  대상 구({','.join(C.TARGET_GU)}) 안 건물 연결 {lt:,}/{nt:,} ({stats['link_rate_target']:.1%})  ← 결과 점검표는 이 값으로 봄")
     LAST_STATS = stats; _save(stats)
     for (g, _, _, a), (use, fl) in zip(blds, res):
         yield g, {"use": use, "kind": "", "floor": fl if fl is not None else (a.get(cf) if cf else None)}
