@@ -200,6 +200,10 @@ def main():
             stop(f"{nm} 폴더가 없음", "python setup.py 를 다시 (자료 최상위 폴더를 넣으면 config.py 를 채움)")
     print(f"  mapping.txt: {'있음' if os.path.exists(os.path.join(C.BASE, 'mapping.txt')) else '없음 (기본값 = v5 와 같은 이름)'}")
     print(f"  건물 용도 방식: {C.BUILDING_ATTR_MODE}, 대상 구: {','.join(C.TARGET_GU) or '전체'}, 옆 구: {','.join(C.NEIGHBOR_GU) or '없음'}")
+    print(f"  왕복 추가 구간 [v6.2]: {('·'.join(f'{x:g}' for x in C.MIN_BANDS) + '분 이상') if C.MIN_BANDS else '내지 않음'} (mapping 의 extra_min_bands)")
+    unk = [k for k in M.read_raw() if k not in M.DEFAULTS]
+    if unk:                                       # [v6.2] 철자가 틀린 키는 쓰이지 않고 기본값으로 돎
+        warn(f"mapping.txt 에 모르는 키: {', '.join(unk)} (그 줄은 쓰이지 않음)", "철자 확인 (python setup.py 가 만든 키 이름과 같게)")
     if STOP:
         return
 

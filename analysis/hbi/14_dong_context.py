@@ -59,7 +59,9 @@ def fnum(v):
 
 # ── 1. 건물 (전체 용도) ────────────────────────────────────
 BX, BY, BC, BF, BW = [], [], [], [], []
-for g, a in iter_buildings():                    # [v6] 용도·층수는 mapping 의 building_attr_mode 대로 (03 과 같은 lib/battr.py)
+for g, a in iter_buildings(save=False):          # [v6] 용도·층수는 mapping 의 building_attr_mode 대로 (03 과 같은 lib/battr.py)
+                                                 # [v6.2] save=False: 03 이 적은 work/battr_stats.json(주거 수·대상 구 통계)을 덮어쓰지 않게
+                                                 #        (덮어쓰면 14 뒤에 run_all 을 다시 칠 때 결과 점검표가 "주거 비율: -" 빨강)
     p = g.PointOnSurface()
     if p is None:
         continue

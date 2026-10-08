@@ -11,7 +11,7 @@ lib/mapping.py ─ [v6] mapping.txt 읽기: 자료마다 다른 "칸 이름·레
   JS로 치면 .env 파일을 읽어 process.env 기본값 위에 덮어쓰는 dotenv 와 같습니다.
 
 [config.py 와의 관계]  config.py 맨 끝에서 apply(globals()) 를 불러, 아래 값으로 config 의
-    LAYERS, COL, FIELD, TARGET_GU, NEIGHBOR_GU, MAP_FOLDERS, BUILDING_ATTR_MODE, REGISTER, AREA_REASON 을 채웁니다.
+    LAYERS, COL, FIELD, TARGET_GU, NEIGHBOR_GU, MAP_FOLDERS, BUILDING_ATTR_MODE, REGISTER, AREA_REASON, MIN_BANDS([v6.2]) 를 채웁니다.
   이 파일은 config 를 import 하지 않습니다 (서로 부르면 순환 import).
 """
 import os
@@ -75,6 +75,8 @@ DEFAULTS = {
     "layer_tunnel": ("N3A_A0110020,터널", "터널 (면)", "레이어"),
     "layer_overpass": ("N3A_A0063321,육교", "육교 (점검용)", "레이어"),
     "layer_station": ("N3P_A0131122,정거장", "철도·지하철 정거장 (점)", "레이어"),
+    # ── 결과 구간 [v6.2] ──
+    "extra_min_bands": ("3,5,10", "[v6.2] 왕복 추가 시간(분) 구간 문턱 (쉼표로 여럿). 이 분 이상인 건물 수·비율·연면적을 summary·격자·행정동·결과 점검표에 냄. HBI 1.3·1.8 구간도 그대로 냄", "결과 구간"),
 }
 LAYER_KEYS = ["sidewalk_cl", "road_cl", "stairs", "building", "bus_stop", "bridge", "tunnel", "overpass", "station"]
 
@@ -174,6 +176,26 @@ def apply(g):
     g["BUILDING_ATTR_MODE"] = (m.get("building_attr_mode") or "layer").strip().lower()
     rf = m.get("register_file") or ""
     g["REGISTER_FILE"] = rf if (not rf or os.path.isabs(rf)) else os.path.join(HERE, rf)
+    g["MIN_BANDS"] = min_bands(m.get("extra_min_bands"))
+
+
+def min_bands(v):
+    """[v6.2] extra_min_bands 값 → 문턱(분) 목록 (작은 것부터, 중복 없음). 비우거나 ? 이면 [] (분 구간을 내지 않음)"""
+    import math
+    try:
+        out = sorted({round(float(x.lower().rstrip("분").removesuffix("min").strip()), 2) for x in split_list(v)})   # "3분"·"3min" 도 받음, 소수 둘째 자리까지
+    except ValueError:
+        raise SystemExit(f"mapping.txt 의 extra_min_bands = {v} → 분을 숫자로, 쉼표로 여럿 (예: 3,5,10). 고친 뒤 python check.py")
+    if any(not math.isfinite(x) or x <= 0 for x in out):
+        raise SystemExit(f"mapping.txt 의 extra_min_bands = {v} → 0 보다 큰 분만 (예: 3,5,10). 고친 뒤 python check.py")
+    if len({band_tag(x) for x in out}) < len(out):
+        raise SystemExit(f"mapping.txt 의 extra_min_bands = {v} → 같은 칸 이름이 되는 값이 겹침 (예: 3,5,10). 고친 뒤 python check.py")
+    return out
+
+
+def band_tag(x):
+    """[v6.2] 문턱 → 칸 이름 꼬리 (3 → add3m, 2.5 → add2_5m)"""
+    return f"add{x:g}m".replace(".", "_")
 
 
 def target_values(base_t, base_n, prop=None):

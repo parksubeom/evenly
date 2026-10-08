@@ -146,6 +146,14 @@ def report(out=None, work=None, net_work=None):
         if any(hq):
             L.append(f"  · 분위수 {t} ({'·'.join(str(q) for q in qs)}%): HBI {' / '.join(x or '-' for x in hq)}, "
                      f"왕복 추가 {' / '.join(x or '-' for x in aq)}분 (참고, 판정 없음)")
+    # [v6.2] 왕복 추가 시간(분) 구간 (판정 없음. summary.csv 의 "왕복 추가 N분 이상 비율" 줄, 문턱은 mapping 의 extra_min_bands)
+    import re
+    for t in [t for t in ("medical", "station", "bus") if t in have]:
+        bands = sorted({float(m_.group(1)) for k in tg[t] for m_ in [re.match(r"왕복 추가 ([0-9.]+)분 이상 비율$", k)] if m_})   # summary 에 적힌 문턱 그대로
+        sh = [_num(tg[t].get(f"왕복 추가 {mb:g}분 이상 비율")) for mb in bands]
+        if any(x is not None for x in sh):
+            L.append(f"  · 왕복 추가 {'·'.join(f'{mb:g}' for mb in bands)}분 이상 {t}: "
+                     + " / ".join("-" if x is None else f"{x:.1%}" for x in sh) + " (참고, 판정 없음)")
     sites = _csv(os.path.join(out, "validation_sites.csv"))
     pct = [(_num(r.get("percentile_circle")) or _num(r.get("percentile")), r.get("name", "")) for r in sites]
     got = [(p, n) for p, n in pct if p is not None]
