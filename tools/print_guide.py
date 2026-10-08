@@ -116,7 +116,9 @@ def screen(kind, title, body):
         wt = "OSGeo4W Shell" if kind == "cmd" else "명령 프롬프트"
         w = f'<div class="win cmd"><div class="tb"><span>{wt}</span>{ctl}</div><div class="body">{marks(chr(10).join(lines))}</div></div>'
     elif kind == "notepad":
-        w = (f'<div class="win note"><div class="tb"><span>config.py - 메모장</span>{ctl}</div>'
+        words = (title or "").split()
+        fname = words[0] if words and words[0].endswith((".py", ".txt", ".csv")) else "config.py"   # [v6.1a] 그림 제목의 파일 이름을 창 제목으로
+        w = (f'<div class="win note"><div class="tb"><span>{html.escape(fname)} - 메모장</span>{ctl}</div>'
              f'<div class="menu">파일(F) 편집(E) 서식(O) 보기(V) 도움말(H)</div><div class="body">{marks(esc)}</div></div>')
     elif kind == "start":
         q, *items = esc.split("\n")
@@ -235,7 +237,9 @@ def fill_blanks(md):
 def main():
     if not os.path.exists(CHROME):
         raise SystemExit(f"Google Chrome 이 없습니다: {CHROME}")
-    doc = (f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>1차 방문 안내서</title><style>{CSS}</style></head>'
+    src_md = open(SRC, encoding="utf-8").read()
+    h1 = next((ln[2:].strip() for ln in src_md.splitlines() if ln.startswith("# ")), "1차 방문 안내서")   # [v6.1a] PDF 제목 = 문서 첫 제목
+    doc = (f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>{html.escape(h1)}</title><style>{CSS}</style></head>'
            f'<body>{convert(fill_blanks(open(SRC, encoding="utf-8").read()))}</body></html>')
     with tempfile.TemporaryDirectory() as td:
         hp = os.path.join(td, "doc.html")
