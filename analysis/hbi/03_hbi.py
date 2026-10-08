@@ -50,6 +50,7 @@ def snap(xs, ys, maxd):
 log("건물 레이어 읽기")
 H = {"x": [], "y": [], "floors": [], "area": []}    # 집(출발점) 정보
 MED, ELD = [], []                                   # 의료시설, 노유자시설 좌표
+BX, BY = [], []
 nb = 0
 for g, a in iter_buildings():                       # [v6] 용도·종류·층수를 정해 주는 곳 (lib/battr.py)
     nb += 1
@@ -59,6 +60,7 @@ for g, a in iter_buildings():                       # [v6] 용도·종류·층�
     if p is None:
         continue
     x, y = p.GetX(), p.GetY()
+    BX.append(x); BY.append(y)                      # [v6.1a] 모든 건물 대표점 (대상 구 안 건물 수)
     if use in C.MEDICAL_USE:
         MED.append((x, y))
     if use in C.ELDERLY_USE:
@@ -80,6 +82,8 @@ H = {k: v[keep_t] for k, v in H.items()}
 st = load_stats()
 st.update(n_res_all=n_res_all, n_res_target=int(keep_t.sum()), target_gu=list(C.TARGET_GU), neighbor_gu=list(C.NEIGHBOR_GU),
           n_med=len(MED), n_eld=len(ELD), n_bld_read=nb)
+if C.TARGET_GU:                                     # [v6.1a] 대상 구 안 건물 수 (결과 점검표의 주거 비율 분모)
+    st["n_bld_target"] = int(in_target(np.array(BX), np.array(BY)).sum())
 save_stats(st)
 if C.TARGET_GU:
     log(f"  대상 구({','.join(C.TARGET_GU)}) 안 주거 {int(keep_t.sum()):,}개 / 읽은 주거 {n_res_all:,}개 (나머지는 출발점에서 뺌, 목적지·길로는 씀)")

@@ -21,7 +21,7 @@ import numpy as np
 import config as C
 from lib.conout import Tee, safe_console, ask
 from lib import mapping as M
-from lib.qio import find_files, open_vector, layer_srs, layer_files, iter_layer, read_csv, transformer, transform_xy, TARGET, value_shape
+from lib.qio import find_files, open_vector, layer_srs, layer_files, iter_layer, read_csv, transformer, transform_xy, TARGET, value_shape, raster_envelope
 from lib import area, battr
 from lib.qgraph import NearestIndex
 from osgeo import gdal, ogr
@@ -260,12 +260,8 @@ def main():
         stop("DEM 파일이 없음", "config.py 의 DATA_ROOT_DEM (python setup.py)")
     else:
         try:
-            vrt = gdal.BuildVRT("/vsimem/chk.vrt", dem)
-            gt = vrt.GetGeoTransform()
-            res = gt[1]
-            de = (gt[0], gt[3] + gt[5] * vrt.RasterYSize, gt[0] + gt[1] * vrt.RasterXSize, gt[3])
-            vrt = None; gdal.Unlink("/vsimem/chk.vrt")
-            print(f"  해상도 {res:.2f}m, 범위 x {de[0]:.0f}~{de[2]:.0f} y {de[1]:.0f}~{de[3]:.0f}")
+            de, res = raster_envelope(dem)          # [v6.1a] 분석 좌표계로 바꾼 범위 (DEM 이 5179 여도 맞게 비교)
+            print(f"  해상도 {res:.2f}m, 범위(분석 좌표계) x {de[0]:.0f}~{de[2]:.0f} y {de[1]:.0f}~{de[3]:.0f}")
             if tgt and gp:
                 bad = [g for g in tgt if g in gp and area.cover_share(gp[g], [de]) < 0.95]
                 if bad:

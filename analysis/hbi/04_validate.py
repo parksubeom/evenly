@@ -9,7 +9,7 @@
      전체 격자 중 상위 몇 %인지(percentile). 0.9 이상 = 상위 10% 안 = 모델이 전문가 판단을 재현
      [v5] percentile_circle: 모든 250m 격자 중심에 "같은 반경 원"을 그려 그 평균들과 비교한 백분위 (같은 기준끼리 비교)
      → validation_new_candidates.csv : 선정지보다 HBI 가 높은데 선정 안 된 곳 (= 공모가 놓친 곳)
-  2) 구간 재현    → validation_routes.csv
+  2) 구간 재현    → validation_routes.csv  ([v6.1a] 끝점이 길에서 OUT_OF_DATA_M(500m) 넘게 먼 구간은 길 자료 범위 밖으로 보고 건너뜀)
      external/od_pairs.csv 의 출발·도착 사이 경로 길이·시간. 대현산배수지공원 휠체어 우회(서울시 발표 약 770m)
      와 비교하고, 현장실측 시간(measured_min)이 있으면 성인 속도 예측(adult_min)과 상관계수 계산
      [v5] 실측 3구간 이상이면 상관계수를 validation_measured.csv (n, r_adult_pred_vs_measured) 로도 저장
@@ -110,11 +110,16 @@ if rows:
     dx, dy = transform_xy(tf, [float(r["d_lon"]) for r in rows], [float(r["d_lat"]) for r in rows])
     gi = np.where(net["giant"])[0]
     idx = NearestIndex(nodes[gi])
-    oi = gi[idx.query(np.c_[ox, oy])[1]]                  # 출발점에서 가장 가까운 노드
-    di = gi[idx.query(np.c_[dx, dy])[1]]                  # 도착점에서 가장 가까운 노드
+    od_, oi_ = idx.query(np.c_[ox, oy])                   # 출발점에서 가장 가까운 노드 (거리, 번호)
+    dd_, di_ = idx.query(np.c_[dx, dy])                   # 도착점에서 가장 가까운 노드
+    oi, di = gi[oi_], gi[di_]
     res = []
     N = len(nodes)
     for k, r in enumerate(rows):
+        if not (od_[k] <= C.OUT_OF_DATA_M and dd_[k] <= C.OUT_OF_DATA_M):   # [v6.1a] 길 자료 범위 밖 (가장자리 노드에 붙여 0분이 되지 않게)
+            far = max(od_[k], dd_[k])
+            log(f"  !! 구간 {r['name']}: 끝점이 가장 가까운 길에서 {f'{far:.0f}m' if np.isfinite(far) else '5km 넘게'} 떨어져 있음 → 길 자료 범위 밖으로 보고 건너뜀")
+            continue
         te, le = route(N, e, s, oi[k], di[k], "elder")                 # 고령자
         ta, _ = route(N, e, s, oi[k], di[k], "elder", speed=1.1)       # 성인(1.1m/s) — 팀 실측과 비교용
         tw, lw = route(N, e, s, oi[k], di[k], "wheel")                 # 휠체어 (계단 회피)
