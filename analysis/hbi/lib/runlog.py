@@ -617,9 +617,39 @@ def rc_text(rc):
     return f"종료 코드 {rc}"
 
 
+FATAL = re.compile(r"\s*(Fatal Python error|Windows fatal exception)")
+
+
+def latest_log(script, sub=None, since=0):
+    """[run_all] 그 단계가 쓴 가장 새 로그 파일 (since 뒤에 고친 것)"""
+    base = os.path.splitext(os.path.basename(script))[0] + (f"_{sub}" if sub else "")
+    best = None
+    try:
+        for fn in os.listdir(LOGDIR):
+            if re.fullmatch(rf"\d{{8}}_\d{{6}}_{re.escape(base)}(_\d+)?\.log", fn):
+                p = os.path.join(LOGDIR, fn)
+                t = os.path.getmtime(p)
+                if t >= since - 1 and (best is None or t > best[0]):
+                    best = (t, p)
+    except OSError:
+        return None
+    return best[1] if best else None
+
+
+def fatal_lines(path):
+    """로그의 마지막 faulthandler 글자 (Fatal Python error / Windows fatal exception 부터). Windows 는 처리된 예외도 적을 수 있어 마지막 것"""
+    try:
+        with open(path, encoding="utf-8-sig", errors="replace") as fh:
+            L = fh.read().split("\n")
+    except Exception:
+        return []
+    i = next((k for k in range(len(L) - 1, -1, -1) if FATAL.match(L[k])), None)
+    return L[i:i + 80] if i is not None else []
+
+
 def card_from_text(script, tail, stage=None, rc=None):
     """[run_all] 자식이 카드 없이 끝났을 때(그 스크립트 자체의 SyntaxError, C 코드 충돌 등) 마지막 화면 글자로 카드를 만듦"""
-    fatal = next((i for i, x in enumerate(tail) if re.match(r"\s*(Fatal Python error|Windows fatal exception)", x)), None)
+    fatal = next((i for i in range(len(tail) - 1, -1, -1) if FATAL.match(tail[i])), None)
     if fatal is not None:                                    # faulthandler: 가장 최근 호출이 먼저
         fr = _frames(tail[fatal:])
         site = fr[0] if fr else None
@@ -653,7 +683,7 @@ def _prev_crash():
     code = ""
     try:
         full = open(os.path.join(HERE, lg.group(1)), encoding="utf-8-sig", errors="replace").read().split("\n") if lg else []
-        i = next((k for k, x in enumerate(full) if re.match(r"\s*(Fatal Python error|Windows fatal exception)", x)), None)
+        i = next((k for k in range(len(full) - 1, -1, -1) if FATAL.match(full[k])), None)
         if i is not None:
             fr = _frames(full[i:])
             code = f" · 갑자기 죽은 자리 오류 번호 {error_code(script, *fr[0])}" if fr else " · 갑자기 죽음 (우리 코드 밖)"
@@ -759,9 +789,9 @@ def start(g):
     for x in (note, prev):
         if x:
             _raw(x + "\n")
-    try:                                                # C 코드 충돌(세그폴트·접근 위반) 때 파이썬 줄 위치를 남김
-        import faulthandler
-        faulthandler.enable(file=old_err if (child or not logrel) else files[0])
+    try:                                                # C 코드 충돌(세그폴트·접근 위반) 때 파이썬 줄 위치를 로그 파일에 남김
+        import faulthandler                             # (화면에는 내지 않음: Windows 는 라이브러리가 처리한 예외도 적을 수 있음. run_all 이 로그에서 읽음)
+        faulthandler.enable(file=files[0] if logrel else old_err)
     except Exception:
         pass
     rc, kind_end, exc, msg = 0, "정상", None, None

@@ -245,8 +245,9 @@ def run_step(s, mode=None):
         # [v6.2] 자식이 카드를 띄웠으면 그 카드를, 못 띄웠으면(그 스크립트 자체의 문법 오류, C 코드 충돌 등) 마지막 화면으로 만든 카드를 적어 오게.
         #        요약은 output/run_summary.txt, 전체 기록은 work/logs/
         code = next((re.search(r"E\w\w-[0-9A-Z?]{6}", x).group(0) for x in tail if "1 오류 번호" in x and re.search(r"E\w\w-[0-9A-Z?]{6}", x)), None)
-        if not had_card:
-            code = _RL.card_from_text(s, tail, stage, rc)
+        if not had_card:              # C 코드 충돌이면 그 단계의 로그에 faulthandler 글자가 있음
+            lg = None if any(_RL.FATAL.match(x) for x in tail) else _RL.latest_log(s, mode, t0)
+            code = _RL.card_from_text(s, tail + (_RL.fatal_lines(lg) if lg else []), stage, rc)
         STOPPED.update(step=s, mode=mode, code=code or "-", why=_RL.mask(d[0]) if d else f"알 수 없음 ({_RL.rc_text(rc)})")
         _RL.suppress_card()       # run_all 자신의 카드는 띄우지 않음 (위 카드 하나만)
         write_summary()
