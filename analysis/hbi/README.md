@@ -196,7 +196,7 @@ python 01_inspect.py
 ### 반출 전 체크리스트 (output 폴더)
 밖에서는 원자료를 다시 계산할 수 없으니, 반출 신청 전에 아래가 모두 있는지 확인하세요.
 - [ ] `summary.csv` — 목적지별 요약 (기획서 16장)
-- [ ] `grid_hbi.csv`, `grid_hbi_medical.gpkg` 등 — 격자 결과·지도 (16장, 본선 데모). [v6.2] 맨 뒤 `n_addNm`·`share_addNm` (왕복 추가 N분 이상 건물 수·비율, 문턱은 mapping 의 `extra_min_bands`)
+- [ ] `grid_hbi.csv`, `grid_hbi_medical.gpkg` 등 — 격자 결과·지도 (16장, 본선 데모). [v6.1b] `weight`(연면적) 칸은 빈 칸. [v6.2] 맨 뒤 `n_addNm`·`share_addNm` (왕복 추가 N분 이상 건물 수·비율, 문턱은 mapping 의 `extra_min_bands`)
 - [ ] `dong_hbi.csv` — 행정동 결과 (weight_all·weight_high 열 포함 → 밖에서 고령인구 추정). [v6.2] 맨 뒤 `n_addNm`·`share_addNm`·`weight_addNm`. 연면적(weight_high·weight_addNm)은 1~4채 몫이 드러나면 빈 칸, weight_addNm 은 check 가 고른 방식 폴더에만
 - [ ] `validation_sites.csv`, `validation_routes.csv`, `validation_new_candidates.csv`, `validation_ablation.csv` (17·18장)
 - [ ] `validation_measured.csv` — [v5] 실측 vs 예측 상관계수 (실측 3구간 이상일 때, 17장)

@@ -260,7 +260,7 @@ def v61_card(pg, ver="v6.1"):
     add(more[0], "09 시설 효과" + (". 봉천 건너뜀 = 좌표 오타" if ver != "v6.1" else ""), p(pg, "7"))
     k += 1
     out.append(f'<tr><td class="box">□</td><td class="n">{k}</td><td>' + "<br>".join(f"<code>{html.escape(c)}</code>" for c in more[1:])
-               + f'</td><td class="see">{"한 줄씩. 12 관악 밖·13 좌표 없는 시설 건너뜀. 14 뒤 다시는 --from 03" if ver != "v6.1" else "한 줄씩. 13 은 좌표 없는 시설 건너뜀"}</td><td class="pg">{p(pg, "7")}</td></tr>')
+               + f'</td><td class="see">{("한 줄씩. 12 관악 밖·13 좌표 없는 시설 건너뜀" + (". 14 뒤 다시는 --from 03" if ver == "v6.1a" else "")) if ver != "v6.1" else "한 줄씩. 13 은 좌표 없는 시설 건너뜀"}</td><td class="pg">{p(pg, "7")}</td></tr>')
     out.append(note_row("<code>output</code> 폴더 반출 신청 (work 는 반출 안 함), 반출 시각 메모", p(pg, "8")) + "</table>")
     folders6 = ('<h2>담당자에게 물을 것</h2><table><colgroup><col style="width:32%"><col style="width:18%"><col style="width:28%"><col style="width:22%"></colgroup>'
                 '<tr><td>박수범 폴더에 자료·번들</td><td>○ / ×</td><td>나머지 4개 구 자료</td><td>들어옴 / 아직</td></tr></table>')
@@ -305,6 +305,10 @@ def main():
     v61ab = os.path.join(ROOT, "deliverables", "hbi_code_bundle_v6.1a.txt")
     if os.path.exists(os.path.join(DOCS, "2차방문_v6.1a_안내서.pdf")) and os.path.exists(v61ab):
         jobs.append(("v6.1a", lambda pg: v61_card(pg, "v6.1a"), "2차방문_v6.1a_안내서", open(v61ab, encoding="utf-8").read(), "hbi_code_bundle_v6.1a.txt"))
+    # [v6.1b] 반입본을 v6.1b 로 바꿈 (10/9). 14 의 통계 덮어쓰기를 고쳐 "14 뒤 --from 03" 안내는 없음
+    v61bb = os.path.join(ROOT, "deliverables", "hbi_code_bundle_v6.1b.txt")
+    if os.path.exists(os.path.join(DOCS, "2차방문_v6.1b_안내서.pdf")) and os.path.exists(v61bb):
+        jobs.append(("v6.1b", lambda pg: v61_card(pg, "v6.1b"), "2차방문_v6.1b_안내서", open(v61bb, encoding="utf-8").read(), "hbi_code_bundle_v6.1b.txt"))
     if "--only" in sys.argv:                 # [v6.1] python3 tools/print_card.py --only v6.1 → 그 카드만 (동결된 1차 방문 카드는 다시 만들지 않음)
         want = sys.argv[sys.argv.index("--only") + 1]
         jobs = [j for j in jobs if j[0] == want]
