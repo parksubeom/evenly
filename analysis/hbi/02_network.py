@@ -13,6 +13,7 @@
   - "노드 고도 결측" 5% 이하         (높으면 DEM 범위가 수치지형도와 안 맞는 것 → DEM 경로·좌표계 확인)
   - "경사 중앙값" 0.01~0.08 정도      (0.3 이상이면 좌표계가 어긋났을 가능성)
 """
+import lib.runlog as _RL; _RL.start(globals())   # [v6.2] 기록·멈추면 메모 카드 (무거운 import 보다 먼저. lib/runlog.py)
 import os, sys, numpy as np
 import config as C
 from lib.qio import log, DEM

@@ -16,6 +16,7 @@
 [해석] 가설 "HBI 가 높은 동일수록 고령자 유동인구가 적다" → 상관계수가 음수(-)면 가설을 지지.
        결과가 가설과 다르게 나와도 그대로 보고하면 됩니다 (그 자체가 인사이트).
 """
+import lib.runlog as _RL; _RL.start(globals())   # [v6.2] 기록·멈추면 메모 카드 (무거운 import 보다 먼저. lib/runlog.py)
 import os, csv, numpy as np
 np.seterr(invalid="ignore", divide="ignore")
 import config as C

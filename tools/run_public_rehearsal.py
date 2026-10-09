@@ -80,6 +80,9 @@ def main():
         res["copied_to"] = os.path.relpath(dst, ROOT)
         res["complete"] = ok
         json.dump(res, open(os.path.join(dst, "run_result.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    wl = os.path.join(H, "work", "logs")              # [v6.2] 화면 기록은 work/logs 에 (안심구역에서는 반출하지 않음. 리허설은 공개 자료라 함께 보관)
+    if os.path.isdir(wl):
+        shutil.copytree(wl, os.path.join(logs, "work_logs"))
     json.dump(res, open(os.path.join(logs, "run_result.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print(json.dumps(res, ensure_ascii=False))
 

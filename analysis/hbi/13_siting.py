@@ -19,6 +19,7 @@
   - share_도로·share_공원 이 크면 공공 땅 위주 (설치 협의가 쉬운 편), share_대 가 크면 사유지 주거 땅이 많음
   - 화면의 "분류 안 된 지목" 에 ??? 같은 깨진 글자가 많으면 config.PARCEL_ENCODING 확인 (01_inspect.py 의 JIMOK 예시)
 """
+import lib.runlog as _RL; _RL.start(globals())   # [v6.2] 기록·멈추면 메모 카드 (무거운 import 보다 먼저. lib/runlog.py)
 import os, numpy as np
 from osgeo import ogr
 import config as C

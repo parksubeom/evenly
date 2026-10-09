@@ -10,6 +10,7 @@
 [결과] output/parcel_summary.csv, output/parcel_by_legal_dong.csv (법정동별 요약)
        [v5] parcel_by_legal_dong.csv 에 sgg_nm·emd_nm(시군구·법정동 이름, 필지의 SGG_NM·EMD_NM) 열 추가
 """
+import lib.runlog as _RL; _RL.start(globals())   # [v6.2] 기록·멈추면 메모 카드 (무거운 import 보다 먼저. lib/runlog.py)
 import os, numpy as np
 from osgeo import ogr
 import config as C

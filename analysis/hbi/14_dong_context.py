@@ -22,6 +22,7 @@
   - 화면의 "SKT 대조" 가 "같음" 이 아니면 10 과 읽는 규칙이 어긋난 것 → 멈추고 확인
   - 링크 밀도는 받은 지도 범위 밖으로 걸친 동에서 작게 나옴 (동 면적 전체로 나누므로)
 """
+import lib.runlog as _RL; _RL.start(globals())   # [v6.2] 기록·멈추면 메모 카드 (무거운 import 보다 먼저. lib/runlog.py)
 import os, numpy as np
 np.seterr(invalid="ignore", divide="ignore")
 from osgeo import ogr

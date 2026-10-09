@@ -24,7 +24,7 @@ import os, json, collections
 import numpy as np
 from osgeo import ogr
 import config as C
-from lib.qio import log, iter_layer, find_files, read_any
+from lib.qio import log, iter_layer, find_files, read_any, safe_head
 from lib import codebook as K
 
 BLD = "N3A_B0010000"                                    # 정의서의 건물 레이어 코드
@@ -202,8 +202,11 @@ def load_register():
     cpk, cpnu, ccd, cnm = _col(head, F["reg_pk"]), _col(head, F["reg_pnu"]), _col(head, F["reg_use_cd"]), _col(head, F["reg_use_nm"])
     cfl, car, cmain = _col(head, F["reg_floor"]), _col(head, F["reg_area"]), _col(head, F["reg_main"])
     if not (cpk or cpnu) or not (ccd or cnm):
+        shown, nohead = safe_head(head)                     # [v6.2] 머리줄 없는 파일이면 첫 행 값 대신 모양만
         raise SystemExit(f"건축물대장 칸을 찾지 못했습니다 (번호 {F['reg_pk']}/{F['reg_pnu']}, 용도 {F['reg_use_cd']}/{F['reg_use_nm']}).\n"
-                         f"  파일 칸: {head[:20]}\n  → mapping.txt 의 reg_… 줄을 위 칸 이름으로 고치세요")
+                         f"  파일 칸: {shown}\n"
+                         + ("  → 첫 줄에 칸 이름이 있는 파일로 바꾸세요 (공공데이터포털 txt 는 머리줄이 없음)" if nohead else
+                            "  → mapping.txt 의 reg_… 줄을 위 칸 이름으로 고치세요"))
     by_pk, by_pnu, R = {}, collections.defaultdict(list), []
     for i, r in enumerate(rows):
         code = reg_use_code(r.get(cnm) if cnm else "", r.get(ccd) if ccd else "")

@@ -22,6 +22,8 @@ from osgeo import gdal, ogr, osr
 
 # 오류가 나면 조용히 넘어가지 말고 예외(에러)를 던지라는 설정 (JS의 strict mode 비슷)
 gdal.UseExceptions(); ogr.UseExceptions(); osr.UseExceptions()
+import lib.runlog as _RL
+_RL.gdal_errors(gdal)      # [v6.2] GDAL 경고 글자도 값 가림·work/logs 로 (기록 장치가 켜졌을 때만. QGIS 콘솔에서는 그대로)
 import config as C
 
 
@@ -163,7 +165,10 @@ def iter_layer(key=None, files=None, fields=None, bbox=None, encoding=None):
     files = files if files is not None else layer_files(key)
     bbox = C.AREA_BBOX if bbox is None else (bbox or None)    # [v6] bbox=False 면 AREA_BBOX 도 무시하고 전부
     for f in files:
-        ds = open_vector(f, encoding)
+        try:
+            ds = open_vector(f, encoding)
+        except RuntimeError as e:                             # [v6.2] 손상된 shp 처럼 GDAL 글자가 비어 있어도 어느 파일인지 남게
+            raise RuntimeError(f"{os.path.basename(f)} 읽기 실패: {e}") from e
         if ds is None:
             continue
         lyr = ds.GetLayer(0)
@@ -351,6 +356,16 @@ def read_any(path, sep=None):
         except UnicodeDecodeError:
             continue
     raise RuntimeError(f"인코딩을 알 수 없음: {path}")
+
+
+def safe_head(head, n=20):
+    """[v6.2] 칸 이름 목록을 화면·반출본에 쓸 때: 첫 줄이 값으로 보이면(머리줄 없는 CSV) 모두 모양만.
+    (목록 글자, 머리줄 없음으로 보이는지)"""
+    from lib.runlog import looks_like_value
+    head = list(head)
+    if any(looks_like_value(h) for h in head):
+        return f"{len(head)}칸 {[value_shape(h) for h in head[:n]]} (첫 줄이 칸 이름이 아니라 값으로 보임)", True
+    return str(head[:n]), False
 
 
 def value_shape(v):

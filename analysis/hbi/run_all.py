@@ -6,15 +6,36 @@ run_all.py ─ 01~05 단계(+ 설정에 따라 06·07·08·09·10·11)를 순서
         [v6.1] config.DATA_ROOT_DEM1M 이 있으면 --dem1m·--sens 없이도 1m 비교(04·08)를 함 (config.DEM1M_AUTO)
         python run_all.py --from 03  [v6] 03 단계부터 다시 (02 결과 work/network.npz 를 그대로 씀. 멈춘 단계 번호를 넣음)
   - 한 단계에서 오류가 나면 거기서 멈추고 어느 단계인지, 알려진 원인이면 고칠 곳까지 알려 줍니다. [v6]
-  - [v6] 화면에 나온 글자는 output/runlog/ 에도 저장 (반출해서 밖에서 확인). 받은 자료의 구조는 output/schema/schema.txt
+  - [v6.2] 화면에 나온 글자는 work/logs/ 에 저장 (반출하지 않음, lib/runlog.py). 멈추면 화면에 메모 카드(손으로 적을 5줄).
+    output/run_summary.txt 에 단계별 결과·시간·경고 수 요약 한 장 (값 없음). 받은 자료의 구조는 output/schema/schema.txt
   - QGIS Python 콘솔에서는 쓸 수 없습니다 → 단계별 스크립트를 하나씩 실행하세요 (README 참고)
 """
+import lib.runlog as _RL; _RL.start(globals())   # [v6.2] 기록·멈추면 메모 카드 (무거운 import 보다 먼저. lib/runlog.py)
 import subprocess, sys, os, re, time
 if "python" not in os.path.basename(sys.executable).lower():
     raise SystemExit("QGIS Python 콘솔에서는 run_all.py 대신 단계별 스크립트를 exec로 실행하세요 (README 참고)")
 import config as C
 from lib.conout import safe_console
 safe_console()
+os.makedirs(C.OUTPUT, exist_ok=True)
+T0 = time.time()
+RECS = []                                  # [v6.2] 단계별 (단계, 방식, 종료 코드, 초, 경고 수, 최대 메모리 MB) → output/run_summary.txt
+STOPPED = {}
+MEMO = []                                  # [v6.2] 구조 메모 (02 의 코드값 분포·남긴 링크, 값 없음) → run_summary
+CUR = {}                                   # 지금 돌고 있는 자식 (Ctrl+C 때 정리)
+# [v6.2] 끝나기 전에 멈추면(안내 멈춤·Ctrl+C·오류) 지난번 요약이 반출본에 남지 않게, 먼저 '끝나지 않음' 으로 써 둠
+with open(os.path.join(C.OUTPUT, "run_summary.txt"), "w", encoding="utf-8-sig") as _fh:
+    _fh.write(f"run_all 요약 ({_RL._version()}) - 끝나지 않음 (멈췄거나 Ctrl+C) → 화면의 메모 카드\n"
+              f"시작 {time.strftime('%m-%d %H:%M', time.localtime(T0))} · 명령: run_all.py {' '.join(sys.argv[1:])}\n")
+# [v6.2] v6.1 이 output 에 남긴 화면 기록은 반출되지 않게 work/logs/v61_runlog/ 로 옮김 (지우지 않음)
+for _old in ("runlog", "diagnose.txt"):
+    _p = os.path.join(C.OUTPUT, _old)
+    if os.path.exists(_p):
+        import shutil
+        _dst = os.path.join(C.WORK, "logs", "v61_runlog")
+        os.makedirs(_dst, exist_ok=True)
+        shutil.move(_p, os.path.join(_dst, _old if not os.path.exists(os.path.join(_dst, _old)) else f"{_old}_{int(T0)}"))
+        print(f"# v6.1 이 남긴 output/{_old} → work/logs/v61_runlog/ 로 옮김 (반출하지 않음)")
 steps = ["01_inspect.py", "02_network.py", "03_hbi.py", "04_validate.py", "05_export.py"]
 if C.DATA_ROOT_PARCEL: steps.append("06_parcel.py")                                   # 필지 경로가 있으면 자동 포함
 if any(v.get("path") for v in C.JOIN_DATA.values()): steps.append("07_join_dong.py")  # SKT·KCB 경로가 있으면
@@ -106,24 +127,61 @@ def diagnose(tail, step):
     return None
 
 
-def scrub(line):
-    """반출용 진단 파일에서 값이 될 수 있는 따옴표 안 글자를 가림 (칸 이름 KeyError 는 남김)"""
-    if line.startswith("KeyError"):
-        return line
-    return re.sub(r"'[^']{12,}'|\"[^\"]{12,}\"", "'…'", line)
-
-
-os.makedirs(C.OUTPUT, exist_ok=True)
-if os.path.exists(os.path.join(C.OUTPUT, "diagnose.txt")):      # 지난번 실패 기록은 지움 (이번에 실패하면 새로 씀)
-    os.remove(os.path.join(C.OUTPUT, "diagnose.txt"))
-logdir = os.path.join(C.OUTPUT, "runlog")
-os.makedirs(logdir, exist_ok=True)
-logf = open(os.path.join(logdir, time.strftime("runlog_%Y%m%d_%H%M%S.txt")), "w", encoding="utf-8-sig")   # BOM: 메모장에서 바로 읽힘
-
-
 def out(s):
-    print(s, flush=True)
-    logf.write(s + "\n"); logf.flush()
+    print(s, flush=True)                   # [v6.2] 화면 글자는 lib/runlog 가 work/logs/ 에 기록 (output/runlog 는 쓰지 않음)
+
+
+def code_memo(line):
+    """[v6.2] 02 의 '도로구분(칸) 값: RDC014 소로 975, …' 줄 → 코드와 개수만 (코드 모양이 아닌 값은 글자 모양만, 이름표는 뺌)"""
+    head, _, rest = line.partition(" 값: ")
+    items, note = rest.split("  ← ")[0], (" ← " + rest.split("  ← ")[1]) if "  ← " in rest else ""
+    kept = []
+    for it in items.split(", "):
+        tok, n = it.split(" ")[0], it.rsplit(" ", 1)[-1]
+        if it.startswith("(빈 값)"):
+            tok = "(빈 값)"
+        elif not re.fullmatch(r"[A-Z]{2,5}\d{2,4}", tok):
+            tok = _RL.shape(tok)
+        kept.append(f"{tok} {n}")
+    return f"{head.strip()} 값: {', '.join(kept)}{note if re.fullmatch(r' ← 뺄 값 [A-Z0-9, ]*', note) else ''}"
+
+
+def write_summary(reds=None):
+    """[v6.2] output/run_summary.txt: 단계별 결과·시간·경고 수·최대 메모리, 고른 방식, 빨강 수, 구조 메모 (값 없음, 한 쪽).
+    요약을 못 써도 분석 결과와는 상관없으므로 run_all 을 멈추지 않음"""
+    try:
+        _write_summary(reds)
+    except Exception as e:
+        out(f"(요약 output/run_summary.txt 를 쓰지 못함: {type(e).__name__} → 결과 파일은 그대로)")
+
+
+def _write_summary(reds):
+    import csv
+    L = [f"run_all 요약 ({_RL._version()}) - 값 없음, 전체 기록은 work/logs/ (반출하지 않음)",
+         f"시작 {time.strftime('%m-%d %H:%M', time.localtime(T0))} · 걸린 시간 {round(time.time() - T0) // 60}분 · 명령: run_all.py {' '.join(sys.argv[1:])}",
+         f"건물 용도 방식: {','.join(MODES) if MODES else C.BUILDING_ATTR_MODE} (check 가 고른 방식: {(C.MAPPING.get('building_attr_chosen') or '-').strip()})",
+         f"대상 구: {','.join(C.TARGET_GU) or '전체'}" + (f" ({C.TARGET_NOTE})" if getattr(C, 'TARGET_NOTE', '') else ""), "",
+         "단계   방식      결과   시간(초)  경고 줄 수  최대 메모리(MB)"]
+    for st, md, rc, sec, nw, mb in RECS:
+        res = "정상" if rc == 0 else ("Ctrl+C" if rc == "Ctrl+C" else f"멈춤 {rc}")
+        L.append(f"{st[:2]:<6} {md or '-':<9} {res:<6} {sec:>7}   {nw:>5}       {mb if mb is not None else '-':>6}")
+    if STOPPED:
+        L += ["", f"멈춘 곳: {STOPPED['step']}{' [방식 ' + STOPPED['mode'] + ']' if STOPPED.get('mode') else ''} · 오류 번호 {STOPPED.get('code', '-')} "
+              f"(화면의 메모 카드) · 원인: {STOPPED.get('why', '-')}"]
+    for m in (MODES or [None]):
+        f = os.path.join(C.OUTPUT, m, "summary.csv") if m else os.path.join(C.OUTPUT, "summary.csv")
+        try:
+            n = next((r["value"] for r in csv.DictReader(open(f, encoding="utf-8-sig")) if r["target"] == "medical" and r["metric"] == "분석 건물 수"), "-")
+            if os.path.getmtime(f) < T0:
+                n = f"{n} (이번 실행 아님)"
+        except Exception:
+            n = "-"
+        r = (reds or {}).get(m)
+        L.append(f"결과 {('output/' + m + '/') if m else 'output/'}: 의료 분석 건물 {n}" + ("" if r is None else f", 결과 점검표 빨강 {len(r)}개"))
+    if MEMO:
+        L += ["", "구조 메모 (다음 번들 맞춤용, 코드값과 개수만):"] + [f"  {x}" for x in dict.fromkeys(MEMO)]
+    with open(os.path.join(C.OUTPUT, "run_summary.txt"), "w", encoding="utf-8-sig") as fh:
+        fh.write("\n".join(L) + "\n")
 
 
 out(f"# run_all.py {' '.join(sys.argv[1:])} / 단계: {', '.join(s[:2] for s in steps)} / 대상 구: {','.join(C.TARGET_GU) or '전체'} / "
@@ -139,33 +197,59 @@ except Exception as e:                     # 구조 저장이 안 돼도 분석�
     out(f"# 자료 구조 저장 실패 ({type(e).__name__}) → 분석은 계속")
 
 
+C_LEVEL = re.compile(r"(Warning|ERROR|FATAL) \d+:|proj_\w+:|PROJ: |GDAL: ")    # GDAL·PROJ 가 C 쪽에서 직접 찍는 줄 (값이 들어갈 수 있음)
+
+
 def run_step(s, mode=None):
-    env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")   # 자식 출력은 UTF-8 로 받아 그대로 화면·파일에
+    env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1", HBI_RUNLOG_CHILD="1")   # 자식 출력은 UTF-8 로 받아 그대로 화면에 (자식 로그는 work/logs/)
     if mode:
         env["HBI_SUBRUN"] = mode
     else:
         env["HBI_NOPICK"] = "1"         # 방식 없이 돌 때 지난 --modes 결과 폴더를 고르지 않게 (config.py)
     args = [sys.executable, s] + (["--dem1m"] if s == "02_network.py" and "--dem1m" in sys.argv else [])
+    stage = f"{s}{f' [방식 {mode}]' if mode else ''}"
+    again = f"python run_all.py --from {s[:2]}"     # --modes 는 기억해 두므로 다시 안 쳐도 됨
     out(f"\n########## {s}{f'  [방식 {mode}]' if mode else ''} ##########")
+    _RL.set_stage(f"{stage} 실행 중 (run_all)", f"같은 명령을 다시 ({again})")    # Ctrl+C 카드에 씀
+    t0 = time.time()
     p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
-    tail = []
-    for raw in p.stdout:
-        line = raw.decode("utf-8", "replace").rstrip("\r\n")
-        out(line)
-        tail = (tail + [line])[-60:]
-    if p.wait() != 0:        # 0 이 아니면 = 오류로 끝남
+    CUR.update(p=p, rec=(s, mode, t0))
+    tail, nwarn, had_card, peak = [], 0, False, None
+    _RL.relay(True)                 # 자식 줄 끝에 run_all 자신의 메모리를 붙이지 않음
+    try:
+        for raw in p.stdout:
+            line = raw.decode("utf-8", "replace").rstrip("\r\n")
+            if C_LEVEL.match(line):
+                line = _RL.mask(line)
+            out(line)
+            tail = (tail + [line])[-60:]
+            nwarn += bool(re.match(r"\s*(! 경고|!! )", line))
+            had_card = had_card or line.startswith(_RL.CARD_MARK)
+            m = re.match(r"# 끝: .*최대(?: 메모리)? (\d+)MB", line)
+            if m:
+                peak = int(m.group(1))
+            if s.startswith("02") and (" 값: " in line or "남긴 링크:" in line):
+                MEMO.append(code_memo(re.sub(r"^\[\d\d:\d\d:\d\d\]\s*", "", line)) if " 값: " in line else re.sub(r"^\[\d\d:\d\d:\d\d\]\s*", "", line).strip())
+        rc = p.wait()
+    finally:
+        _RL.relay(False)
+    CUR.clear()
+    RECS.append((s, mode, rc, round(time.time() - t0), nwarn, peak))
+    if rc != 0:              # 0 이 아니면 = 오류로 끝남
         out(f"!! {s} 에서 중단. 위 오류 메시지를 확인하세요.")
         d = diagnose(tail, s)
-        again = f"python run_all.py --from {s[:2]}"     # --modes 는 기억해 두므로 다시 안 쳐도 됨
         if d:
             out(f"!! 원인: {d[0]}\n!! 할 일: {d[1]}\n!! 고친 뒤: {again}")
         else:
-            out(f"!! 알려진 오류가 아닙니다 → 화면의 마지막 줄을 적어 오세요 (output/diagnose.txt 에도 저장). 고친 뒤: {again}")
-        with open(os.path.join(C.OUTPUT, "diagnose.txt"), "w", encoding="utf-8-sig") as f:
-            f.write(f"단계 {s}{f' (방식 {mode})' if mode else ''}\n원인: {d[0] if d else '알 수 없음'}\n할 일: {d[1] if d else '-'}\n\n"
-                    "마지막 화면 (값이 될 수 있는 긴 따옴표 글자는 … 로 가림)\n")
-            f.write("\n".join(scrub(x) for x in tail[-40:]) + "\n")
-        logf.close()
+            out(f"!! 알려진 오류가 아닙니다 → 위 메모 카드 다섯 줄을 적어 오세요 (반출하지 않아도 됨). 고친 뒤: {again}")
+        # [v6.2] 자식이 카드를 띄웠으면 그 카드를, 못 띄웠으면(그 스크립트 자체의 문법 오류, C 코드 충돌 등) 마지막 화면으로 만든 카드를 적어 오게.
+        #        요약은 output/run_summary.txt, 전체 기록은 work/logs/
+        code = next((re.search(r"E\w\w-[0-9A-Z?]{6}", x).group(0) for x in tail if "1 오류 번호" in x and re.search(r"E\w\w-[0-9A-Z?]{6}", x)), None)
+        if not had_card:
+            code = _RL.card_from_text(s, tail, stage, rc)
+        STOPPED.update(step=s, mode=mode, code=code or "-", why=_RL.mask(d[0]) if d else f"알 수 없음 ({_RL.rc_text(rc)})")
+        _RL.suppress_card()       # run_all 자신의 카드는 띄우지 않음 (위 카드 하나만)
+        write_summary()
         sys.exit(1)
 
 
@@ -185,18 +269,32 @@ def check_result(mode=None):
 
 common = [s for s in steps if s[:2] in ("01", "02")]
 per = [s for s in steps if s[:2] not in ("01", "02")]
-for s in common:
-    run_step(s)
 summary_reds = {}
-for m in (MODES or [None]):
-    for s in per:
-        run_step(s, m)
-    if per and any(x[:2] in ("03", "04", "05") for x in per) or not MODES:
-        summary_reds[m] = check_result(m)
+try:
+    for s in common:
+        run_step(s)
+    for m in (MODES or [None]):
+        for s in per:
+            run_step(s, m)
+        if per and any(x[:2] in ("03", "04", "05") for x in per) or not MODES:
+            summary_reds[m] = check_result(m)
+except KeyboardInterrupt:              # [v6.2] Ctrl+C: 어느 단계였는지 요약에 남기고 카드는 lib/runlog 가 (단계·할 일은 set_stage)
+    if CUR:
+        s, m, t0 = CUR["rec"]
+        RECS.append((s, m, "Ctrl+C", round(time.time() - t0), 0, None))
+        STOPPED.update(step=s, mode=m, code="Ctrl+C", why="Ctrl+C 로 멈춤")
+        try:
+            CUR["p"].wait(timeout=10)
+        except Exception:
+            CUR["p"].kill()
+    write_summary()
+    raise
+_RL.set_stage()
 if MODES:
     out("\n=== 방식별 결과 폴더 ===")
     for m in MODES:
         r = summary_reds.get(m, [])
         out(f"  output/{m}/  →  " + ("빨강 없음" if not r else f"빨강 {len(r)}개: {', '.join(dict.fromkeys(r))}"))
     out("  반출: output 폴더 하나 (방식별 결과가 output/<방식>/ 에 모두 들어 있음). 빨강이 있는 방식은 고친 뒤 다시 돌리거나, 빨강 없는 방식만 써도 됨")
-logf.close()
+write_summary(summary_reds)
+out("# 요약 → output/run_summary.txt (전체 기록은 work/logs/, 반출하지 않음)")

@@ -17,6 +17,7 @@
      데이터를 하나씩 뺐을 때 결과가 얼마나 달라지는지 (DEM 제외 / 계단 제외 / 큰 격자로 집계 / DEM 1m)
      [v6.1] 걸을 수 없는 길을 뺀 효과 (빼지 않은 v5 방식 네트워크와 HBI 비교), DEM 5m vs 1m 중앙값·고위험 비율
 """
+import lib.runlog as _RL; _RL.start(globals())   # [v6.2] 기록·멈추면 메모 카드 (무거운 import 보다 먼저. lib/runlog.py)
 import os, numpy as np
 import config as C
 from lib.qio import log, csv_points, read_csv, write_csv

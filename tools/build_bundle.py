@@ -41,6 +41,17 @@ if not V6:
     B[k] = B[k].replace('EXTERNAL = os.path.join(BASE, "external")  # 반입한 공개데이터 CSV',
                         'EXTERNAL = os.path.join(BASE, "..", "hbi", "external")  # 공개데이터는 hbi/external 공용')
 files = {**A, **B}
+_v62 = V6 and os.path.exists(os.path.join(ROOT, "analysis", "hbi", "lib", "runlog.py"))
+if _v62:                                              # [v6.2] 메모 카드에 판 이름·내용 해시가 나오게 (lib/runlog.py 가 hbi6/VERSION 을 읽음)
+    sys.path.insert(0, os.path.join(ROOT, "analysis", "hbi"))
+    import lib.runlog as _RL
+    SALT = _RL.content_hash({k.split("/", 1)[1]: v for k, v in A.items()})     # 오류 번호 소금: 판이 다르면 번호가 다름
+    files["hbi6/VERSION"] = f"hbi_code {ver} #{SALT}\n"
+    import subprocess as _sp
+    _dirty = _sp.run(["git", "-C", ROOT, "status", "--porcelain", "--", "analysis/hbi"], capture_output=True, text=True).stdout.strip()
+    if _dirty:
+        print(f"!! analysis/hbi 에 커밋하지 않은 변경이 있음 ({len(_dirty.splitlines())}개 파일) → 번들의 판(#{SALT})과 git 판이 다를 수 있음. "
+              "밖에서는 이 번들 파일로 찾기 (lookup_error.py --bundle)")
 name = f"hbi_code_bundle_{ver}.txt"
 # [v6.2] 풀린 뒤 안내: v6 부터는 hbi6/ 하나 (v6.1a 까지는 v5 때 글이 그대로 남아 있었음)
 UNPACK = ("#   → 같은 폴더에 hbi6/ 폴더가 생깁니다 (1차 때의 hbi/ 는 그대로 둠).\n"
@@ -82,3 +93,29 @@ print("다음: cd hbi6  →  python setup.py   (README.md 참고)" if "hbi6/setu
 dst = os.path.join(ROOT, "deliverables", name)
 open(dst, "w", encoding="utf-8").write(hdr + body + tail)
 print(f"{len(files)}개 파일 → {dst} ({os.path.getsize(dst)//1024} KB)")
+
+# [v6.2] 오류 번호표: 안내 멈춤(SystemExit·check 의 stop·'→' 안내가 든 raise) 자리마다 번호 뒤 6자 → docs/오류번호표_<판>.md (반입하지 않음, 밖에서 씀)
+if _v62:
+    rows = []
+    for k, v in sorted(A.items()):
+        rel = k.split("/", 1)[1]
+        if not k.endswith(".py") or rel == "lib/runlog.py" or rel.startswith("tools/"):
+            continue
+        for i, ln in enumerate(v.split("\n"), 1):
+            s_ = ln.strip()
+            if s_.startswith(("#", "def ")) or re.search(r"SystemExit\(0\)|sys\.exit\((\d*|rc|code)\)", s_):
+                continue                                   # 카드가 나오지 않는 자리 (정상 끝, 글자 없는 끝)
+            if (re.search(r"raise SystemExit\(|(?<![\w.])stop\(", ln)
+                    or (re.search(r"raise (RuntimeError|FileNotFoundError|ValueError)\(", ln) and re.search(r"→|확인", ln))):
+                lit = re.search(r"f?([\"'])(.+?)\1", ln)
+                txt = (lit.group(2) if lit else s_)[:70].replace("|", "/")
+                rows.append(f"| {_RL.site_code(rel, i, SALT)} | {rel}:{i} | {txt} |")
+    tbl = os.path.join(ROOT, "docs", f"오류번호표_{ver}.md")
+    with open(tbl, "w", encoding="utf-8") as fh:
+        fh.write(f"# 오류 번호표 ({name}, hbi_code {ver} #{SALT})\n\n"
+                 "메모 카드의 오류 번호 `E<단계>-<6자>` 중 **뒤 6자**로 찾는다 (앞 두 글자는 단계: 01~14, SU=setup, CK=check, RA=run_all).\n"
+                 "이 표는 안내 멈춤 자리만 적음. 그 밖의 번호(처리되지 않은 오류)는 "
+                 f"`python3 tools/lookup_error.py <번호> --bundle deliverables/{name}` 로 파일·줄·주변 코드를 찾는다 (한 글자 틀림도 후보를 찾음). "
+                 f"번호는 파일·줄과 판의 내용 해시(#{SALT})로 만들므로 판이 다르면 맞지 않음.\n\n| 번호 뒤 6자 | 파일:줄 | 안내 글자 (앞부분) |\n|---|---|---|\n")
+        fh.write("\n".join(rows) + "\n")
+    print(f"오류 번호표 {len(rows)}줄 → {os.path.relpath(tbl, ROOT)}")

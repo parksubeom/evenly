@@ -24,7 +24,7 @@ python run_all.py                ← 분석. 멈추면 고친 뒤 python run_all
 
 - **건물 용도 방식** (`building_attr_mode`): `layer` 건물 레이어 칸(v5 와 같음) / `register` 건물 → 필지 → 건축물대장(`external/building_register.csv`, 번들과 따로 반입) / `all` 모든 건물을 집(용도 미구분) / `stop`
 - **대상 구** (`target_gu`): 출발점(집)은 대상 구 안 건물만. 옆 구(`neighbor_gu`)는 길·목적지로만 씀. 비우면 v5 와 같이 자료 전체
-- `run_all.py` 는 화면 글자를 `output/runlog/` 에, 자료 구조를 `output/schema/schema.txt` 에 함께 저장하고, 멈추면 원인·할 일을 보여 줌 (`output/diagnose.txt`)
+- [v6.2] 모든 명령(setup·check·run_all·01~14)은 화면 글자를 `work/logs/` 에 저장 (**반출하지 않음**, `lib/runlog.py`. 가장 최근 것은 `notepad work\logs\마지막.log`). `run_all.py` 는 단계별 요약 한 장을 `output/run_summary.txt` 에(값 없음), 자료 구조를 `output/schema/schema.txt` 에 저장. 멈추면 화면에 **메모 카드 다섯 줄**(오류 번호·단계·오류 종류·내용·할 일)이 나옴 → 그 다섯 줄만 손으로 적어 오면 됨 (반출하지 않아도 됨). 카드·오류 글자의 값은 모양만 (`<한글 3자>`)
 - `output/run_meta.csv`: 대상 구, 건물 용도 방식, 건축물대장 연결률, AREA_BBOX 와 이유
 
 아래 v5 설명(단계별 파일)은 그대로 유효합니다.
@@ -246,13 +246,15 @@ CSV는 메모장으로 열어 쉼표로 구분해서 입력하면 됩니다. 좌
 
 ## 7. 자주 나는 오류
 
+[v6.2] 멈추면 화면에 **메모 카드**가 나옵니다. 다섯 줄(특히 `1 오류 번호`)을 적어 오면 밖에서 `tools/lookup_error.py` 로 정확한 코드 줄을 찾습니다. 카드의 `5 할 일` 이 아래 표보다 먼저입니다.
+
 | 오류 메시지 (마지막 줄) | 원인과 해결 |
 |---|---|
 | `No module named 'osgeo'` | 일반 Python으로 실행함 → OSGeo4W Shell 또는 QGIS 콘솔 사용 |
 | `No module named 'config'` | 폴더 위치가 틀림 → `cd` 로 `hbi` 폴더 안에 들어가서 실행 (콘솔은 `sys.path.insert` 줄 먼저) |
 | `FileNotFoundError: ... network.npz` | 앞 단계를 안 돌림 → 02 → 03 순서대로 |
 | `07_join_dong` 에서 "결합된 동이 너무 적습니다" | `JOIN_DATA` 의 `code_col` 이 실제 코드 열 이름인지, 파일을 열어 확인 |
-| `SyntaxError` 또는 `IndentationError` | config.py 를 고치다 따옴표·쉼표를 지웠거나 들여쓰기가 바뀜 → 해당 줄 확인 |
+| `SyntaxError` 또는 `IndentationError` | config.py 를 고치다 따옴표·쉼표를 지웠거나 들여쓰기가 바뀜 → 해당 줄 확인. 안 되면 `config.py.bak` 을 `config.py` 로 복사 → `python setup.py` (번들을 다시 풀면 setup 이 채운 경로가 사라짐) |
 | `보도중심선/도로중심선이 없습니다` | 3-3 표의 `[없음]` 해결 방법 참고 |
 | `목적지가 없습니다` | 건물 용도 코드가 다름 → 01_inspect 의 BPRP_SE 분포 확인 후 `MEDICAL_USE` 수정 |
 | `MemoryError` 또는 너무 느림 | `AREA_BBOX` 로 구 하나씩 나눠서 실행 |

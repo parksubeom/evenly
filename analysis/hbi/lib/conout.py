@@ -60,4 +60,5 @@ def ask(prompt, default=""):
         v = input(prompt)
     except EOFError:
         v = ""
+    getattr(sys.stdout, "note_input", lambda x: None)(v)     # [v6.2] 질문과 친 답을 work/logs 에 한 줄로 (lib/runlog)
     return v.strip() or default

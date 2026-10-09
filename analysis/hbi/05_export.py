@@ -11,7 +11,7 @@
                              [v6.2] + 왕복 추가 3·5·10분 이상 건물 비율·수·연면적 (문턱은 mapping.txt 의 extra_min_bands).
                              연면적은 행정동 표와 같은 목적지(의료)·대표 방식만, 빼기로 5채 미만 몫이 드러나면 빈 칸
   grid_hbi.csv             : 250m 격자별 표 (격자 중심 좌표, 건물 수, 평균 HBI ...)
-                             [v6.2] 맨 뒤에 문턱마다 n_add3m(왕복 추가 3분 이상 건물 수)·share_add3m(비율). 격자에는 연면적을 내지 않음
+                             [v6.2] 맨 뒤에 문턱마다 n_add3m(왕복 추가 3분 이상 건물 수)·share_add3m(비율). 격자에는 연면적을 내지 않음 (weight 칸도 빈 칸)
   grid_hbi_<종류>.gpkg     : 같은 내용을 지도 파일로 → QGIS에서 색칠해서 결과 지도 제작
   map_<종류>.png           : matplotlib 이 있으면 자동으로 그린 지도 이미지
   dong_hbi.csv             : 행정동별 표 → 07_join_dong.py 가 SKT·KCB 와 결합. weight_all·weight_high 로 밖에서 고령인구 추정 가능
@@ -25,6 +25,7 @@
   3. 색상표를 초록→노랑→주황→빨강으로, 분류 = 1.0 / 1.3 / 1.8 / 2.2
   4. 프로젝트 → 가져오기/내보내기 → "지도를 이미지로 내보내기" → PNG
 """
+import lib.runlog as _RL; _RL.start(globals())   # [v6.2] 기록·멈추면 메모 카드 (무거운 import 보다 먼저. lib/runlog.py)
 import os, numpy as np
 import config as C
 from lib.deps import HAS_MPL
@@ -135,8 +136,8 @@ for T in targets(b):                              # 목적지 종류마다 반�
             n_ = int(bn[mb][k])
             extra += [n_, round(n_ / cnt[k], 3)]
         grid_rows.append([T, (u[k] // 10**7 + 0.5) * C.GRID, (u[k] % 10**7 + 0.5) * C.GRID, int(cnt[k]),
-                          round(wt[k]) if REP else "", round(mean[k], 3), round(med[k], 3), round(high[k], 3), round(el[k], 1), round(fl[k], 1)] + extra)
-        # [v6.2] 격자 연면적(weight)도 대표 방식만: layer·all 을 함께 내면 같은 칸 weight 차가 비주거 몇 채 연면적이 됨 (v6.1a 리허설 280칸)
+                          "", round(mean[k], 3), round(med[k], 3), round(high[k], 3), round(el[k], 1), round(fl[k], 1)] + extra)
+        # [v6.2] 격자 연면적(weight)은 빈 칸 (v6.1b 와 같음): layer·all 을 함께 내면 같은 칸 weight 차가 비주거 몇 채 연면적이 됨 (v6.1a 리허설 280칸)
     cells = [(int(a // 10**7), int(a % 10**7)) for a in u[keep]]
     write_grid_gpkg(os.path.join(C.OUTPUT, f"grid_hbi_{T}.gpkg"), f"grid_{T}", cells, C.GRID,
                     {"n_bld": cnt[keep], "hbi_mean": mean[keep], "hbi_median": med[keep],

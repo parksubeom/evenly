@@ -16,6 +16,7 @@ check.py ─ [v6] 분석 출발 전 점검 (python setup.py 다음, python run_a
 [멈춤]  말이 안 되면 "!! 멈춤" 과 원인·고칠 mapping 키를 보여 주고 끝냄 (종료 코드 1). 경고(!)는 진행해도 됨
 [결과]  화면 + output/check_report.txt (구조·비율·개수만, 값 없음)
 """
+import lib.runlog as _RL; _RL.start(globals())   # [v6.2] 기록·멈추면 메모 카드 (무거운 import 보다 먼저. lib/runlog.py)
 import os, re, sys, collections
 import numpy as np
 import config as C
@@ -27,6 +28,20 @@ from lib.qgraph import NearestIndex
 from osgeo import gdal, ogr
 gdal.UseExceptions(); ogr.UseExceptions()
 safe_console()
+
+
+def precompile():
+    """[v6.2] 진입점 스크립트의 문법을 미리 점검: 단계 하나를 따로 돌리다 문법 오류가 나면 카드도 로그도 없이 끝나므로,
+    여기서 걸리면 그 파일·줄로 메모 카드가 나옴 (lib/runlog)"""
+    here = os.path.dirname(os.path.abspath(__file__))
+    for fn in sorted(os.listdir(here)):
+        if fn.endswith(".py") and (fn[:2].isdigit() or fn in ("run_all.py", "setup.py")):
+            p = os.path.join(here, fn)
+            with open(p, encoding="utf-8-sig") as fh:
+                compile(fh.read(), p, "exec")
+
+
+precompile()
 
 # [v6.1] 1차 방문(10/2) 안심구역 PC 실측: 관악 11도엽(1:5,000, 약 68㎢)에서 01~05 약 1분, 06 약 30초 (runlog 시각)
 MEASURED_KM2, MEASURED_MIN_0105, MEASURED_MIN_06 = 68.0, 1.0, 0.5
@@ -55,7 +70,8 @@ WIN = 1000              # 표본 창 한 변 (m)
 STOP, WARN = [], []
 
 
-def stop(why, todo):
+def stop(why, todo, exc=None):
+    _RL.note_stop(why, todo, exc)                    # [v6.2] 첫 멈춤의 자리(exc 가 있으면 그 예외가 난 곳)·글자를 메모 카드에
     STOP.append((why, todo)); print(f"  !! 멈춤: {why}\n     → {todo}")
 
 
@@ -161,7 +177,7 @@ def choose_mode(wins, have, reg_ok):
                 else:                  # register·gisbld: 대장·GIS 건물이 붙은 건물 비율
                     n += battr.LAST_STATS.get("n_bld", 0); k += battr.LAST_STATS.get("linked", 0)
         except SystemExit as e:
-            print(f"    {m:<9} 못 씀 ({e})"); n = 0
+            print(f"    {m:<9} 못 씀 ({_RL.mask(str(e).splitlines()[0] if str(e) else '')})"); n = 0   # [v6.2] 첫 줄만, 값 가림
         finally:
             C.AREA_BBOX = old
         rate = k / n if n else 0.0
@@ -401,7 +417,9 @@ def main():
                     if p is not None and len(rx) < 300:
                         rx.append(p.GetX()); ry.append(p.GetY())
         except SystemExit as e:
-            stop(f"건물 용도를 붙이지 못함: {e}", "위 안내대로 mapping.txt 고치기")
+            arrow = next((x for x in str(e).split("\n") if "→" in x), "")      # [v6.2] 원래 안내의 → 뒤를 할 일로 (카드 5)
+            stop(f"건물 용도를 붙이지 못함: {_RL.mask(str(e).splitlines()[0] if str(e) else '')}",
+                 _RL.mask(arrow.split("→", 1)[1].strip()) if arrow else "위 안내대로 mapping.txt 고치기", e)
             break
         st = battr.LAST_STATS
         # 길 연결: 표본 집에서 ORIGIN_SNAP_MAX 안에 보도·도로 선(15m 간격 점)이 있나

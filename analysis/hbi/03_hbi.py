@@ -25,6 +25,7 @@
   medical_t_elder      : 고령자 왕복 시간(초), medical_t_flat : 평지 가정 왕복 시간(초)
   medical_wheel_ratio  : 휠체어 기준 배수 (계단 회피 포함)
 """
+import lib.runlog as _RL; _RL.start(globals())   # [v6.2] 기록·멈추면 메모 카드 (무거운 import 보다 먼저. lib/runlog.py)
 import os, csv, numpy as np
 np.seterr(invalid="ignore", divide="ignore")    # 0÷0 같은 계산 경고 메시지 숨김 (결과는 NaN 으로 처리됨)
 import config as C

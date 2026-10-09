@@ -19,6 +19,7 @@
   legal_summary.csv   : 전체 행 → 조건 통과 → 법정동 이름 있음 → 붙은 법정동 건수 합계, 상관계수
 [해석] 상관이지 인과가 아님. 교통사고는 2020~2024 5년치 합이라 동별 "5년 누적 건수" 입니다.
 """
+import lib.runlog as _RL; _RL.start(globals())   # [v6.2] 기록·멈추면 메모 카드 (무거운 import 보다 먼저. lib/runlog.py)
 import os, re, numpy as np
 np.seterr(invalid="ignore", divide="ignore")
 import config as C

@@ -11,6 +11,7 @@
 [결과] output/sensitivity.csv
 [참고] 보행속도를 바꾸면 시간은 달라지지만 HBI(비율)는 거의 그대로입니다 → "지표가 속도 가정에 강건하다"
 """
+import lib.runlog as _RL; _RL.start(globals())   # [v6.2] 기록·멈추면 메모 카드 (무거운 import 보다 먼저. lib/runlog.py)
 import os, numpy as np
 np.seterr(invalid="ignore", divide="ignore")
 import config as C

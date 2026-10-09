@@ -25,6 +25,7 @@
   - 화면에 "!! 검사" 가 나오면 계산이 이상한 것 (경사 반영 범위가 평지보다 넓거나, 경사가 있는데 면적이 평지와 같음)
   - 휠체어는 계단을 못 지나가서 모양 자체가 달라질 수 있음
 """
+import lib.runlog as _RL; _RL.start(globals())   # [v6.2] 기록·멈추면 메모 카드 (무거운 import 보다 먼저. lib/runlog.py)
 import os, re, numpy as np
 np.seterr(invalid="ignore", divide="ignore")
 from osgeo import ogr

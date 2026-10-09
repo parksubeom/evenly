@@ -21,10 +21,11 @@
   points_summary.csv       : 이름별 행 수 흐름(전체 → 조건 통과 → 좌표 있음 → 범위 안 → 동·격자 합계)과 상관계수
 [해석] 상관이 있어도 인과는 아님 (예: 언덕 동네는 원래 길이 좁을 수도 있음). 기획서에는 "보조 근거"로만 씁니다.
 """
+import lib.runlog as _RL; _RL.start(globals())   # [v6.2] 기록·멈추면 메모 카드 (무거운 import 보다 먼저. lib/runlog.py)
 import os, csv, numpy as np
 np.seterr(invalid="ignore", divide="ignore")
 import config as C
-from lib.qio import log, write_csv, transform_xy, transformer, find_files, iter_layer, read_any as read_table
+from lib.qio import log, write_csv, transform_xy, transformer, find_files, iter_layer, read_any as read_table, safe_head
 from lib.qgraph import spearman
 from lib.bload import load_buildings, usable
 
@@ -77,7 +78,7 @@ for name, cfg in todo.items():
     if summing:
         miss = [c for c in vcols if rows and c not in rows[0]]
         if miss:
-            raise SystemExit(f"{name}: 값 열 {miss} 가 파일에 없습니다. 열: {list(rows[0])[:20]}")
+            raise SystemExit(f"{name}: 값 열 {miss} 가 파일에 없습니다. 열: {safe_head(rows[0])[0]}")   # [v6.2] 머리줄 없으면 모양만
         val = np.array([np.nansum([fnum(r.get(c)) for c in vcols]) for r in rows], float)
         pc = cfg.get("period_col")
         nper = len({r.get(pc) for r in rows}) if pc else 1          # 기간(예: 12개월) 수 → 합 ÷ 기간 = 기간 평균

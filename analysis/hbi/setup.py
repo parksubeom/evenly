@@ -18,6 +18,7 @@ setup.py ─ [v6] 대화형 준비 도우미: 자료 최상위 폴더 하나만 
   8. mapping.txt 저장, config.py 의 경로·AREA_BBOX·인코딩 줄 채움 (처음 원본은 config.py.bak)
 [다음]  python check.py → python run_all.py
 """
+import lib.runlog as _RL; _RL.start(globals())   # [v6.2] 기록·멈추면 메모 카드 (무거운 import 보다 먼저. lib/runlog.py)
 import os, re, sys, glob, zipfile, collections, shutil
 import config as C
 from lib.conout import Tee, safe_console, ask

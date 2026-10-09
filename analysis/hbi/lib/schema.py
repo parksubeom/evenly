@@ -8,7 +8,7 @@ lib/schema.py ─ [v6] 받은 자료의 "구조" 만 기록 → output/schema/sc
 """
 import os, glob
 import config as C
-from lib.qio import find_files, open_vector, layer_srs, in_map_folders
+from lib.qio import find_files, open_vector, layer_srs, in_map_folders, safe_head
 from osgeo import gdal, ogr
 
 TYPES = {ogr.OFTString: "문자", ogr.OFTInteger: "정수", ogr.OFTInteger64: "정수", ogr.OFTReal: "실수", ogr.OFTDate: "날짜"}
@@ -89,7 +89,8 @@ def dump(path=None):
         for k, p in csvs:
             try:
                 head, n, enc, sep = csv_head(p)
-                L.append(f"  {k}: {os.path.basename(p)}, 약 {n:,}행, 인코딩 {enc}, 구분자 {sep!r}, 칸 {head}")
+                shown, nohead = safe_head(head, 400)          # [v6.2] 머리줄 없는 CSV 면 첫 행 값 대신 모양만
+                L.append(f"  {k}: {os.path.basename(p)}, 약 {n:,}행, 인코딩 {enc}, 구분자 {sep!r}, " + (shown if nohead else f"칸 {shown}"))
             except Exception as e:
                 L.append(f"  {k}: {os.path.basename(p) if p else ''} 읽기 실패 {type(e).__name__}")
     os.makedirs(os.path.dirname(path), exist_ok=True)

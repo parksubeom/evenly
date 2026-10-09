@@ -17,6 +17,7 @@
   BPRP_SE 분포에 BDU001 없음 → config.py 의 RESIDENTIAL_USE 를 실제 코드로
   shp 파일 총 0개            → config.py 의 DATA_ROOT_MAP 경로가 틀림
 """
+import lib.runlog as _RL; _RL.start(globals())   # [v6.2] 기록·멈추면 메모 카드 (무거운 import 보다 먼저. lib/runlog.py)
 import os, re, collections, sys
 import config as C
 from lib.deps import HAS_SCIPY, HAS_MPL
