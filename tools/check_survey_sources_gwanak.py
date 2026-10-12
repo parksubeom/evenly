@@ -159,6 +159,11 @@ for rr in od:
     rp = byname.get(rr[0])
     if rp is None or rp[1:5] != rr[1:5] or rp[5] != "":
         bad.append(f"analysis/hbi/external/od_pairs.csv 의 '{rr[0]}' 줄: {rp}")
+# [v6.2, 10/12] 다음 번들의 interventions.csv 봉천 줄 = 기록지 2쪽 interventions 예시와 같은 이름·종류·좌표·상태
+IVR = {r[0]: r for r in list(csv.reader(open(os.path.join(R, "analysis", "hbi", "external", "interventions.csv"), encoding="utf-8-sig")))[1:] if r}
+rp = IVR.get(iv[0])
+if rp is None or rp[1:6] != iv[1:6] or rp[8] != iv[8]:
+    bad.append(f"analysis/hbi/external/interventions.csv 의 '{iv[0]}' 줄: {rp}")
 if TOPO[0] < 3 or TOPO[1] != ["A0020000000DKRE3H", "A0020000000DKRNXK"]:
     bad.append(f"① 계단 길 끝: a 에 닿는 선 {TOPO[0]}개 (3개 이상이어야 갈림길), b 에 닿는 선 {TOPO[1]}")
 # 2쪽 '둘째 값(직선 m)' 안내: 봉천·① 약 31 · ② 약 437 · ③ 약 375 · ④ 약 219 (5자리 좌표 EPSG:5186 직선, ±1m)

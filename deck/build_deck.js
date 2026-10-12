@@ -881,7 +881,7 @@ B.CROSS();
   card(s, 5.3, 1.4, 4.2, 2.55, C.dark);
   T(s, iv ? `${V('ONE.facility')} 설치 후` : '가장 가파른 150m 구간에 경사형 엘리베이터 1기', { x:5.55, y:1.55, w:3.8, h:0.3, fontSize:11, bold:true, color:'CFE0D4' });
   T(s, iv ? `HBI ${V('ONE.hbi_after')}` : '약 10분', { x:5.55, y:1.9, w:3.7, h:0.7, fontSize:iv?32:36, bold:true, color:C.white });
-  T(s, iv ? `왕복 평균 ${V('ONE.saved')}분 단축 (최대 ${V('ONE.saved_max')}분)\n수혜 주거 건물 ${V('ONE.n_benefit')}동` : '배수 약 1.0 · 평지와 같은 부담\n쉬지 않고 집에 도착',
+  T(s, iv ? `왕복 평균 ${V('ONE.saved')}분 단축 (상위 5% ${V('ONE.saved_max')}분)\n수혜 주거 건물 ${V('ONE.n_benefit')}동` : '배수 약 1.0 · 평지와 같은 부담\n쉬지 않고 집에 도착',
     { x:5.55, y:2.7, w:3.7, h:0.9, fontSize:11, color:C.white, lineSpacingMultiple:1.2 });
   card(s, 0.5, 4.15, 9, 0.9, C.paleO);
   T(s, [

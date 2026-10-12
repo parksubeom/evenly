@@ -23,7 +23,8 @@ import config as C
 from lib.qio import log, csv_points, read_csv, write_csv
 from lib.qgraph import NearestIndex, spearman
 from lib.netload import load
-from lib.bload import load_buildings, targets, usable
+from lib.bload import load_buildings, targets, usable, rep_mode
+REP4 = rep_mode() == C.BUILDING_ATTR_MODE   # [10/12] 격자 HBI 는 대표 방식만 (방식끼리 빼면 몇 채 몫이 드러남)
 from lib.model import route
 
 os.makedirs(C.OUTPUT, exist_ok=True)
@@ -98,7 +99,7 @@ else:
         sel = np.where((cmean > thr) & (d > 500))[0]
         sel = sel[np.argsort(-cmean[sel])][:30]                   # HBI 높은 순 상위 30개
         write_csv(os.path.join(C.OUTPUT, "validation_new_candidates.csv"), ["cell_x", "cell_y", "hbi_mean", "n_bld"],
-                  [[cx[i], cy[i], round(cmean[i], 3), int(ccnt[i])] for i in sel])
+                  [[cx[i], cy[i], round(cmean[i], 3) if REP4 else "", int(ccnt[i])] for i in sel])   # [10/12] 격자 HBI 는 대표 방식만 (05 와 같음)
         log(f"선정지 최저 HBI({thr:.2f})보다 높은 비선정 격자: {int(((cmean > thr) & (d > 500)).sum())}개")
 
 # ── 2) 구간 재현 / 실측 비교 ───────────────────────────────

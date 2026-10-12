@@ -263,13 +263,14 @@ def main():
                 wbn = rnd.randint(10, 90) if T == "station_ev" else rnd.randint(0, 30)
                 one = fx is not None
                 vert = one and "봉천" in fname
-                isum.append([fname, T, nb, round(sum(r["wt"] for r in ben)), round(sum(v * r["c"]["n"] for v, r in zip(sv, ben)) / nb, 1), round(max(sv), 1),
+                isum.append([fname, T, nb, round(sum(r["wt"] for r in ben)), round(sum(v * r["c"]["n"] for v, r in zip(sv, ben)) / nb, 1), round(sorted(sv)[int(0.95 * (len(sv) - 1))], 1) if nb >= 100 else "",
                              round(sum(v * r["c"]["n"] for v, r in zip(sv, ben))), round(hb, 3), round(1 + (hb - 1) * rnd.uniform(0.3, 0.45), 3),
                              rnd.randint(0, 40) if T == "station_ev" else 0, wbn,
                              # [v6.2] n_exit_high·weight_exit_high·n_exit_mid, n_saved_30s·60s, wheel_cut_n·p25·p50·p75, rise_m·pass_s
                              rnd.randint(0, nb // 6), "", rnd.randint(0, nb // 4), round(nb * 1.2), nb, wbn,
                              *( [rnd.randint(150, 260), rnd.randint(260, 380), rnd.randint(380, 520)] if wbn >= 100 else ["", "", ""] ),
-                             (5.1 if vert else round(rnd.uniform(8, 30), 1)) if one else "", (51.7 if vert else round(rnd.uniform(80, 200), 1)) if one else ""])
+                             (5.1 if vert else round(rnd.uniform(8, 30), 1)) if one else "", (51.7 if vert else round(rnd.uniform(80, 200), 1)) if one else "",
+                             round(nb * 1.2) + wbn // 2])                 # [10/12] n_benefit_any (고령자 30초 이상 또는 휠체어 1분 이상)
                 if one and T == "medical":
                     for w_ in (30, 60, 90):
                         iwait.append([fname, T, w_, round((51.7 if vert else 120.0) - (45 if vert else 60) + w_, 1), max(0, round(nb * (1.2 - w_ / 150))), round(nb * (1.4 - w_ / 200)), max(0, wbn - w_ // 30)])
@@ -278,9 +279,10 @@ def main():
                     g = idong.setdefault(k, [0, 0.0, 0.0])
                     g[0] += r["c"]["n"]; g[1] += r["wt"]; g[2] += r["wt"] * v
                     igrid.append([fname, T, r["c"]["x"], r["c"]["y"], r["c"]["n"], round(v, 1)])
-        write_csv(P("intervention_summary.csv"), ["facility", "target", "n_benefit", "weight_benefit", "mean_saved_min", "max_saved_min", "sum_saved_bld_min",
+        write_csv(P("intervention_summary.csv"), ["facility", "target", "n_benefit", "weight_benefit", "mean_saved_min", "saved_p95_min", "sum_saved_bld_min",
                                                   "hbi_before", "hbi_after", "wheel_newly_reachable", "wheel_benefit", "n_exit_high", "weight_exit_high", "n_exit_mid",
-                                                  "n_saved_30s", "n_saved_60s", "wheel_cut_n", "wheel_cut_p25_m", "wheel_cut_p50_m", "wheel_cut_p75_m", "rise_m", "pass_s"], isum)
+                                                  "n_saved_30s", "n_saved_60s", "wheel_cut_n", "wheel_cut_p25_m", "wheel_cut_p50_m", "wheel_cut_p75_m", "rise_m", "pass_s",
+                                                  "n_benefit_any"], isum)
         write_csv(P("intervention_wait.csv"), ["facility", "target", "wait_s", "pass_s", "n_benefit", "n_saved_30s", "wheel_benefit"], iwait)
         write_csv(P("intervention_dong.csv"), ["facility", "target", "adm_cd", "n_benefit", "weight_benefit", "weight_all", "weight_x_saved_min"],
                   [[f, t, cd, g[0], round(g[1]), wall.get(cd, round(g[1] * 3)), round(g[2])] for (f, t, cd), g in idong.items()])

@@ -19,14 +19,18 @@
      [v6.2] 함께 셈: 고령자 30초·60초 이상 단축(SAVED_BANDS_S), 휠체어 왕복 시간이 준 건물의 휠체어 길 길이 감소(m) 분위수
   JS로 치면: 지도 앱 길찾기 그래프에 "지름길 간선" 하나를 추가(push)하고 모든 집의 길찾기를 다시 돌려 before/after 를 비교하는 것
 [결과] (output/ → 반출 대상. 기획서 22·23장)
-  intervention_summary.csv : 시설·목적지별 수혜 건물 수, 평균·최대 단축(분), 설치 전후 HBI(수혜 건물 평균, 분모는 설치 전 평지 시간),
+  intervention_summary.csv : 시설·목적지별 수혜 건물 수, 평균 단축(분)·[10/12] 95% 분위 단축(saved_p95_min, 수혜 100채 미만이면 빈 칸.
+                             v6.2 앞판까지는 최대 단축 max_saved_min = 늘 한 건물 값), 설치 전후 HBI(수혜 건물 평균, 분모는 설치 전 평지 시간),
                              휠체어로 새로 갈 수 있게 된 건물 수(wheel_newly_reachable), 휠체어 1분 이상 단축 건물 수(wheel_benefit),
                              [v5 추가, 맨 뒤 열] 고립 위험 탈출 n_exit_high(설치 전 HBI ≥ 1.8 → 후 < 1.8 건물 수),
                              weight_exit_high(그 건물 연면적 합, MIN_COUNT 개 미만이면 빈 칸), n_exit_mid(≥ 1.3 → < 1.3 건물 수)
                              [v6.2 추가, 맨 뒤 열] n_saved_30s·n_saved_60s(고령자 왕복 30초·60초 이상 준 건물 수), wheel_cut_n(휠체어 왕복
                              시간이 준 건물 수), wheel_cut_p25_m·p50_m·p75_m(그 건물들의 휠체어 길 길이 감소 m 분위수. 길 길이 = 휠체어가 고르는
                              시간 최소 길, 가는 길·오는 길 평균. 음수 = 설치 후 길이 더 김(설치 전 길이 짧지만 가파른 길). wheel_cut_n 이 WHEEL_CUT_MIN(100) 미만이면 빈 칸), rise_m(시설 a·b 높이 차 m, DEM 5m),
-                             pass_s(시설 통과 시간 초). ALL 행의 rise_m·pass_s 는 빈 칸
+                             pass_s(시설 통과 시간 초). ALL 행의 rise_m·pass_s 는 빈 칸.
+                             [10/12] n_benefit_any = 고령자 왕복 30초 이상 단축 또는 휠체어 왕복 1분 이상 단축(새로 도달 포함) 건물 수 (기획서 20장 '1억 원당 수혜')
+                             [10/12] 시간 값(평균·95% 분위 단축, 단축 분 합, 설치 전후 HBI, 격자 평균 단축)도 대표 방식에서만 내고, 수혜 1~4채이거나
+                             같은 목적지에서 낸 다른 시간 값(05 격자·동 HBI 평균 포함)과 빼서 1~4채가 남으면 빈 칸 (연면적과 같은 검사)
   [v6.2] intervention_wait.csv  : 시설 하나씩 대기시간을 config.WAIT_SENS_S(30·60·90초)로 바꿨을 때 수혜 건물 수 (05 와 같은 기준 목적지만,
                              건물 수만): facility, target, wait_s, pass_s, n_benefit, n_saved_30s, wheel_benefit
                              [v6.2] 연면적 칸(weight_benefit·weight_exit_high, 동 표의 weight_benefit·weight_all·weight_x_saved_min·weight_exit_high)은
@@ -223,6 +227,7 @@ for si, (name, extra) in enumerate(scen):
         ex_mid = ok & (h0 >= C.HBI_BANDS[0]) & (h1 < C.HBI_BANDS[0])
         # [v6.2] 고령자 단축 문턱별 건물 수
         nsv = [int((ok & (saved >= k)).sum()) for k in C.SAVED_BANDS_S]
+        n_any = int(((ok & (saved >= C.ANY_ELDER_S)) | wben).sum())   # [10/12] 고령자 30초 이상 또는 휠체어 1분 이상(새 도달 포함)
         # [v6.2] 휠체어 길 길이 감소: 휠체어 왕복 시간이 준 건물의 (설치 전 길 길이 − 설치 후), 가는 길·오는 길 평균 (m)
         if T not in pre_w:
             r0 = run_with_extra(N, e, s, dest[T], [], wheel_dist=True, modes=("wheel",))
@@ -236,20 +241,22 @@ for si, (name, extra) in enumerate(scen):
         info = fac[si][3] if si < n_single else {"rise": "", "pass": ""}
         R.append(dict(si=si, name=name, T=T, ben=ben, ex_hi=ex_hi, saved=saved, nb=nb, n_hi=int(ex_hi.sum()),
                       row=[name, T, nb, None, f(float(np.mean(saved[ben])) / 60 if nb else np.nan, 2),
-                           f(float(np.max(saved[ben])) / 60 if nb else np.nan, 2), round(float(saved[ben].sum()) / 60, 1),
+                           f(float(np.percentile(saved[ben], 95)) / 60 if nb >= C.QUANT_MIN else np.nan, 2), round(float(saved[ben].sum()) / 60, 1),
                            f(hb), f(ha), int(newly.sum()), int(wben.sum()), int(ex_hi.sum()), None, int(ex_mid.sum())]
-                          + nsv + [ncut] + cq + [info["rise"], info["pass"]]))
+                          + nsv + [ncut] + cq + [info["rise"], info["pass"], n_any]))
         log(f"  {name} · {T}: 수혜 건물 {nb:,}동, 평균 {np.mean(saved[ben]) / 60 if nb else 0:.1f}분 단축, 휠체어 새로 도달 {int(newly.sum())}동"
             f" · 고령자 {'·'.join(f'{k:g}' for k in C.SAVED_BANDS_S)}초 이상 {'·'.join(str(x) for x in nsv)}동"
-            f" · 휠체어 시간이 준 건물 {ncut}동" + (f" (길 길이 감소 중앙값 {cq[len(cq) // 2]}m)" if ncut >= C.WHEEL_CUT_MIN else ""))
-        # 격자별 (수혜 건물 MIN_COUNT 이상, 연면적 없음)
+            f" · 휠체어 시간이 준 건물 {ncut}동" + (f" (길 길이 감소 중앙값 {cq[len(cq) // 2]}m)" if ncut >= C.WHEEL_CUT_MIN else "")
+            + f" · 고령자 {C.ANY_ELDER_S:g}초 또는 휠체어 1분 이상 {n_any}동")
+        # 격자별 (수혜 건물 MIN_COUNT 이상, 연면적 없음). [10/12] 평균 단축은 아래 5 에서 가림을 정한 뒤 씀
         if nb:
-            key = gx[ben] * 10**7 + gy[ben]
+            bi = np.flatnonzero(ben)
+            key = gx[bi] * 10**7 + gy[bi]
             u, inv = np.unique(key, return_inverse=True)
             cnt = np.bincount(inv)
-            ms = np.bincount(inv, saved[ben]) / cnt / 60
-            for k in np.where(cnt >= C.MIN_COUNT)[0]:
-                grows.append([name, T, (u[k] // 10**7 + 0.5) * C.GRID, (u[k] % 10**7 + 0.5) * C.GRID, int(cnt[k]), round(float(ms[k]), 2)])
+            ms = np.bincount(inv, saved[bi]) / cnt / 60
+            R[-1]["cells"] = [((u[k] // 10**7 + 0.5) * C.GRID, (u[k] % 10**7 + 0.5) * C.GRID, int(cnt[k]), round(float(ms[k]), 2), bi[inv == k])
+                              for k in np.where(cnt >= C.MIN_COUNT)[0]]
 
 # ── 3-1. [v6.2] 대기시간 비교: 시설 하나씩, 기준 목적지(DT)만, 대기 = WAIT_SENS_S 로 바꿔 수혜 건물 수 ─
 wrows = []
@@ -317,14 +324,16 @@ def leak_big(nB, subs):
     return removal_leak(nB, subs, MC)
 
 
-def publishable(S):
+def publishable(S, pool=None):
+    """S 의 값을 내도 되는가: 0채면 됨, 1~4채면 안 됨, pool(기본 = 연면적 POOL)의 공개 집합과 빼서 1~4채가 남으면 안 됨"""
+    pool = POOL if pool is None else pool
     n = len(S)
     if n == 0:
         return True
     if n < MC:
         return False
     Sm, subs, sups = mask_of(S), [], []
-    for q in POOL:
+    for q in pool:
         k = int(Sm[q].sum())
         if k == len(q) and len(q) < n:
             subs.append(q)
@@ -334,7 +343,7 @@ def publishable(S):
         return False
     for P in sups:
         Pm = mask_of(P)
-        if leak_big(len(P), [q for q in POOL if len(q) < len(P) and int(Pm[q].sum()) == len(q)] + [S]):
+        if leak_big(len(P), [q for q in pool if len(q) < len(P) and int(Pm[q].sum()) == len(q)] + [S]):
             return False
     return True
 
@@ -374,6 +383,40 @@ for it in R:                                                     # scen 순서 =
     it["row"][3] = wsum(ben) if okw else ""
     it["row"][12] = wsum(ex_hi) if okx else ""
     summ.append(it["row"])
+# ── 5. [10/12] 시간 값 가림 ─────────────────────────────────
+#  시간 값(평균·95% 분위 단축, 단축 분 합, 설치 전후 HBI, 격자 평균 단축)은 대표 방식에서만 냄 (방식끼리 수혜 집합 차가 몇 채일 수 있어서,
+#  연면적과 같은 이유). 목적지마다 POOL_T 에 이미 낸 시간 값의 건물 집합을 모으고 (HBI 는 05 격자·행정동 HBI 평균 집합도),
+#  줄마다 수혜 집합 S 를 연면적과 같은 검사(publishable)로 봄. 시설 하나씩 → ALL 순서, 줄마다 summary → 격자
+T_COLS = (4, 5, 6, 7, 8)                                         # mean_saved_min, saved_p95_min, sum_saved_bld_min, hbi_before, hbi_after
+POOL_T = {}
+for T in tg:
+    pt = []
+    if REP:
+        vT = U & np.isfinite(b[f"{T}_hbi"])                      # 05 격자 집합 (경계 제외 + HBI 있음, 건물 MIN_COUNT 이상 칸)
+        ia = np.flatnonzero(vT)
+        ku, kinv = np.unique(gx[ia] * 10**7 + gy[ia], return_inverse=True)
+        pt += [ia[kinv == k] for k in np.where(np.bincount(kinv) >= MC)[0]]
+        if T == DT and which is not None:                        # 05 행정동 HBI 평균 집합
+            pt += [q for q in (np.flatnonzero(vT & (which == k)) for k in range(len(dcode))) if len(q) >= MC]
+    POOL_T[T] = pt
+tblank = 0
+for it in R:
+    T, S = it["T"], np.flatnonzero(it["ben"])
+    ok_t = REP and publishable(S, POOL_T[T])
+    if ok_t and len(S):
+        POOL_T[T].append(S)
+    if not ok_t:
+        tblank += any(it["row"][c] not in ("", None) for c in T_COLS)
+        for c in T_COLS:
+            it["row"][c] = ""
+    for cx, cy, cn, cm, cS in it.get("cells", []):              # 격자 평균 단축: summary 를 낸 뒤 칸마다 (큰 칸부터가 아니라 순서대로, 보수적)
+        okc = REP and publishable(cS, POOL_T[T])
+        if okc:
+            POOL_T[T].append(cS)
+        grows.append([it["name"], T, cx, cy, cn, cm if okc else ""])
+if tblank:
+    log(f"  시간 값 가림: summary {tblank}줄의 평균·분위 단축·HBI 칸을 비움 "
+        + ("(수혜 1~4채이거나 다른 시간 값과 빼면 1~4채 몫이 남음)" if REP else f"(대표 방식 {rep_mode()} 에서만 냄)"))
 np.savez_compressed(os.path.join(C.WORK, "intervention_sets.npz"), x=X, y=Y, names=np.array([n for n, _ in scen]),   # [v6.2] 노출 검사용 (work, 반출 안 함)
                     rowkey=np.array([f"{it['si']}|{it['T']}" for it in R]),                                           # summary 줄 순서
                     drowkey=np.array([f"{it['si']}|{it['T']}|{k}" for it in R for k in it.get("dkeys", [])]),         # 동 표 줄 순서 (k = 동 번호)
@@ -381,11 +424,11 @@ np.savez_compressed(os.path.join(C.WORK, "intervention_sets.npz"), x=X, y=Y, nam
                     **{f"s{it['si']}_{it['T']}_{k}": it[k] for it in R for k in ("ben", "ex_hi")})
 
 write_csv(os.path.join(C.OUTPUT, "intervention_summary.csv"),
-          ["facility", "target", "n_benefit", "weight_benefit", "mean_saved_min", "max_saved_min", "sum_saved_bld_min",
+          ["facility", "target", "n_benefit", "weight_benefit", "mean_saved_min", "saved_p95_min", "sum_saved_bld_min",
            "hbi_before", "hbi_after", "wheel_newly_reachable", "wheel_benefit",
            "n_exit_high", "weight_exit_high", "n_exit_mid"]
           + [f"n_saved_{k:g}s" for k in C.SAVED_BANDS_S] + ["wheel_cut_n"] + [f"wheel_cut_p{q:g}_m" for q in C.WHEEL_CUT_Q]
-          + ["rise_m", "pass_s"], summ)
+          + ["rise_m", "pass_s", "n_benefit_any"], summ)
 write_csv(os.path.join(C.OUTPUT, "intervention_wait.csv"), ["facility", "target", "wait_s", "pass_s", "n_benefit", "n_saved_30s", "wheel_benefit"], wrows)
 write_csv(os.path.join(C.OUTPUT, "intervention_grid.csv"), ["facility", "target", "cell_x", "cell_y", "n_benefit", "mean_saved_min"], grows)
 write_csv(os.path.join(C.OUTPUT, "intervention_dong.csv"),

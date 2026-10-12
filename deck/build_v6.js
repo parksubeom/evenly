@@ -404,9 +404,9 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
   box(s, 5.25, 1.45, 4.2, 2.55, C.ink);
   T(s, `계단 양 끝에 수직 엘리베이터 1기 (높이 차 ${V('V6.20.rise')}, 통과 ${V('V6.20.pass')})`, { x:5.5, y:1.6, w:3.8, h:0.45, fontSize:12, bold:true, color:C.white });
   T(s, V('V6.20.after'), { x:5.5, y:2.2, w:3.8, h:0.95, fontSize:44, bold:true, color:C.white });
-  T(s, `휠체어 1분 이상 단축 ${V('V6.20.wheel_n')} (${Q('V6.20.tgt', '지하철역')})\n고령자 30초 이상 단축 ${V('V6.20.elder30')} · 1억 원당 수혜 고령자 ${V('V6.20.per100m')}`, { x:5.5, y:3.2, w:3.8, h:0.75, fontSize:12, color:C.onDark, lineSpacingMultiple:1.12 });
+  T(s, `휠체어 1분 이상 단축 ${V('V6.20.wheel_n')} (${Q('V6.20.tgt', '지하철역')})\n고령자 30초 이상 단축 ${V('V6.20.elder30')} · 1억 원당 수혜 ${V('V6.20.per100m')}`, { x:5.5, y:3.2, w:3.8, h:0.75, fontSize:12, color:C.onDark, lineSpacingMultiple:1.12 });
   takeaway(s, '이 계산을 집집마다 하면 "엘리베이터 한 대가 몇 명의 하루에서 몇 분을 돌려주는지" 설치 전에 알 수 있습니다.', 4.35);
-  src(s, '모델 산출: validation_routes(봉천 선정지 계단 줄, 휠체어 경로)·intervention_summary(v6.2: 대기 + 높이 차 ÷ 속도) / 설치 후 길이 = 계단 양 끝 직선 / 1억 원당 = 수혜 고령자(1분 이상 단축, 의료) ÷ 40억 원'
+  src(s, '모델 산출: validation_routes(봉천 선정지 계단 줄, 휠체어 경로)·intervention_summary(v6.2: 대기 + 높이 차 ÷ 속도) / 설치 후 길이 = 계단 양 끝 직선 / ' + Q('V6.20.any_def', '1억 원당 수혜 = 고령자 왕복 30초 이상 또는 휠체어 왕복 1분 이상(새로 도달 포함) 줄어드는 건물 수 ÷ 40 (1곳 40억 원 가정)')
     + (has('V6.16.wheel_note') ? ' / 설치 전 경로 1,000m 초과: 공개 대역 계단 면 왜곡일 수 있음' : ''));
 } else {
   const s = base('한 사람에게 돌아가는 변화', '엘리베이터 한 대가 바꾸는 김순자 할머니의 귀갓길', { tsize:21 });

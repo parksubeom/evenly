@@ -518,7 +518,7 @@ def main():
             B.put("ONE.hbi_before", "설치 전 HBI(수혜 건물 평균)", need22, f"{hb:.2f}")
             B.put("ONE.hbi_after", "설치 후 HBI(수혜 건물 평균)", need22, f"{ha:.2f}")
             B.put("ONE.saved", "수혜 건물 평균 왕복 단축(분)", need22, f_num(num(pr.get("mean_saved_min")), 1))
-            B.put("ONE.saved_max", "최대 왕복 단축(분)", need22, f_num(num(pr.get("max_saved_min")), 1))
+            B.put("ONE.saved_max", "95% 분위 왕복 단축(분, 수혜 100채 이상)", need22, f_num(num(pr.get("saved_p95_min")), 1))   # [10/12] max_saved_min(한 건물 값) 대신
             B.put("ONE.n_benefit", "수혜 주거 건물 수", need22, f_int(num(pr.get("n_benefit"))))
             B.put("ONE.route", "실측 구간 이름", need22, route[0])
             B.put("ONE.route_model", "실측 구간 모델 예측(성인, 분)", need22, f"{route[2]:.1f}분")
@@ -913,22 +913,15 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         P("V6.20.wheel_n", "휠체어 1분 이상 단축 건물", need20, f"{f_int(num(pick.get('wheel_benefit')))}동")
         P("V6.20.elder30", "고령자 30초 이상 단축 건물", need20, f"{f_int(num(pick.get('n_saved_30s')))}동" if num(pick.get("n_saved_30s")) is not None else None)
         P("V6.20.tgt", "기준 목적지", [], TARGET_LABEL.get(pick["target"], pick["target"]), optional=True)
-        # 1억 원당 수혜 고령자 (시뮬레이션한 시설만, 1곳 40억 원 가정): Σ 동 pop65 × 수혜 연면적 ÷ 동 주거 연면적 ÷ 40
-        p65 = {r["adm_cd"]: num(r.get("pop65")) for r in (ew or [])}
+        # [10/12] 1억 원당 수혜 (시뮬레이션한 시설만, 1곳 40억 원 가정) = n_benefit_any ÷ 40
+        #   n_benefit_any = 고령자 왕복 30초 이상 단축 또는 휠체어 왕복 1분 이상 단축(새로 도달 포함) 건물 수 (09, 기준 = 위 pick 의 목적지)
+        na = num(pick.get("n_benefit_any"))
+        P("V6.20.per100m", "1억 원당 수혜 건물 (1곳 40억 원 가정)", ["intervention_summary.csv n_benefit_any (10/12)"],
+          f"{na / 40:.1f}동" if na is not None else None)
+        P("V6.20.any_def", "1억 원당 수혜 정의", [], f"1억 원당 수혜 = 고령자 왕복 30초 이상 또는 휠체어 왕복 1분 이상(새로 도달 포함) 줄어드는 건물 수 ÷ 40 "
+          f"(1곳 40억 원 가정, 기준 목적지 {TARGET_LABEL.get(pick['target'], pick['target'])}, 이 시설 하나만 놓았을 때)", optional=True)
         prow = next((r for r in isum if r.get("facility") == pick["facility"] and r.get("target") == T0), None)
-        drw = [r for r in (R("intervention_dong.csv") or []) if r.get("facility") == pick["facility"] and r.get("target") == T0]
-        ppl, msk = 0.0, 0
-        for r in drw:
-            wb, wa = num(r.get("weight_benefit")), num(r.get("weight_all"))
-            if wb is None or not wa or not p65.get(r["adm_cd"]):
-                msk += 1
-                continue
-            ppl += p65[r["adm_cd"]] * wb / wa
         nb0 = num(prow.get("n_benefit")) if prow else None
-        val = None
-        if prow and p65 and not msk and (drw or nb0 == 0):
-            val = f"{ppl / 40:.1f}명"
-        P("V6.20.per100m", "1억 원당 수혜 고령자 (1곳 40억 원 가정)", ["intervention_dong.csv", "dong_hbi_with_elderly.csv (pop65)"], val)
         P("V6.20.n_benefit", "고령자 1분 이상 단축 건물 (기준 목적지)", ["intervention_summary.csv"], f"{f_int(nb0)}동" if nb0 is not None else None, optional=True)
 
     # ── 21 방문돌봄 (동 단위, 상위 25% 겹침) ──

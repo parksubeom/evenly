@@ -124,18 +124,28 @@ for T in targets(b):                              # 목적지 종류마다 반�
             extra += [n_, round(n_ / cnt[k], 3)]
         if C.MIN_BANDS:
             extra.append(round(float(amed[k]), 1))
-        grid_rows.append([T, (u[k] // 10**7 + 0.5) * C.GRID, (u[k] % 10**7 + 0.5) * C.GRID, int(cnt[k]),
-                          "", round(mean[k], 3), round(med[k], 3), round(high[k], 3), round(el[k], 1), round(fl[k], 1)] + extra)
+        row = [T, (u[k] // 10**7 + 0.5) * C.GRID, (u[k] % 10**7 + 0.5) * C.GRID, int(cnt[k]),
+               "", round(mean[k], 3), round(med[k], 3), round(high[k], 3), round(el[k], 1), round(fl[k], 1)] + extra
+        if not REP:                                # [10/12] 대표 방식이 아니면 격자는 건물 수만: 방식끼리 같은 칸의 평균·비율을 빼면
+            row = row[:4] + [""] * (len(row) - 4)  #   몇 채(비주거 1~4채)의 HBI 가 드러남 (관악 리허설 223칸, tools/check_time_exposure.py)
+        grid_rows.append(row)
         # [v6.2] 격자 연면적(weight)은 빈 칸 (v6.1b 와 같음): layer·all 을 함께 내면 같은 칸 weight 차가 비주거 몇 채 연면적이 됨 (v6.1a 리허설 280칸)
     cells = [(int(a // 10**7), int(a % 10**7)) for a in u[keep]]
     write_grid_gpkg(os.path.join(C.OUTPUT, f"grid_hbi_{T}.gpkg"), f"grid_{T}", cells, C.GRID,
                     {"n_bld": cnt[keep], "hbi_mean": mean[keep], "hbi_median": med[keep],
                      "share_high": high[keep], "elder_min": el[keep], "flat_min": fl[keep],
-                     **{f"share_{band_tag(mb)}": bn[mb][keep] / cnt[keep] for mb in C.MIN_BANDS}})   # [v6.2] 지도용은 비율만
+                     **{f"share_{band_tag(mb)}": bn[mb][keep] / cnt[keep] for mb in C.MIN_BANDS}}   # [v6.2] 지도용은 비율만
+                    if REP else {"n_bld": cnt[keep]})            # [10/12] 대표 방식이 아니면 건물 수만 (위 grid_hbi.csv 와 같은 이유)
+    if not REP:
+        old_png = os.path.join(C.OUTPUT, f"map_{T}.png")
+        if os.path.exists(old_png):                # 지난 실행이 남긴 그림은 값이 든 채로 반출되지 않게 지움 (이 폴더의 우리 결과물)
+            os.remove(old_png)
+        if HAS_MPL and cells:
+            log(f"  {T}: 대표 방식({rep_mode()})이 아니라 격자 값을 건물 수만 냄 → map_{T}.png 는 그리지 않음")
     # ── 지도 이미지 (matplotlib 이 있을 때만) ──
     if HAS_MPL and not cells:                      # [v6] 비식별 기준을 넘는 격자가 하나도 없으면 그림만 건너뜀 (v5 는 min() 오류로 멈췄음)
         log(f"  {T}: 건물 {C.MIN_COUNT}개 이상인 격자가 없어 map_{T}.png 는 건너뜀")
-    if HAS_MPL and cells:
+    if HAS_MPL and cells and REP:
         import matplotlib
         matplotlib.use("Agg")                      # 화면 없이 파일로만 그리기
         import matplotlib.pyplot as plt
