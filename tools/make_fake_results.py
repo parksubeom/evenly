@@ -279,6 +279,15 @@ def main():
                     g = idong.setdefault(k, [0, 0.0, 0.0])
                     g[0] += r["c"]["n"]; g[1] += r["wt"]; g[2] += r["wt"] * v
                     igrid.append([fname, T, r["c"]["x"], r["c"]["y"], r["c"]["n"], round(v, 1)])
+        # [10/12 판정] 09 와 같이 시설 단위 건물 수 1~4 → "5채 미만" (0 은 그대로)
+        _sm = lambda v: "5채 미만" if isinstance(v, int) and 0 < v < 5 else v
+        for r_ in isum:
+            for c_ in (2, 9, 10, 11, 13, 14, 15, 16, 22):
+                if c_ < len(r_):
+                    r_[c_] = _sm(r_[c_])
+        for r_ in iwait:
+            for c_ in (4, 5, 6):
+                r_[c_] = _sm(r_[c_])
         write_csv(P("intervention_summary.csv"), ["facility", "target", "n_benefit", "weight_benefit", "mean_saved_min", "saved_p95_min", "sum_saved_bld_min",
                                                   "hbi_before", "hbi_after", "wheel_newly_reachable", "wheel_benefit", "n_exit_high", "weight_exit_high", "n_exit_mid",
                                                   "n_saved_30s", "n_saved_60s", "wheel_cut_n", "wheel_cut_p25_m", "wheel_cut_p50_m", "wheel_cut_p75_m", "rise_m", "pass_s",

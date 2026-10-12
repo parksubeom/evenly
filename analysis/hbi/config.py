@@ -180,6 +180,7 @@ INTERVENTION_TARGETS = ["medical", "station", "bus", "market"]   # 설치 효과
 BENEFIT_MIN_S = 60        # 설치 후 왕복이 이 초 이상 줄어든 건물을 "수혜 건물"로 셈 (1분)
 SAVED_BANDS_S = [30, 60]  # [v6.2] 09 결과에 함께 내는 고령자 왕복 단축 문턱(초): n_saved_30s·n_saved_60s (수혜 건물 수 n_benefit 은 그대로)
 WHEEL_CUT_Q = [25, 50, 75]   # [v6.2] 휠체어 길 길이 감소(m) 분위수(%): wheel_cut_p25_m … (음수 = 설치 후 길이 더 김)
+SMALL_LABEL = "5채 미만"   # [10/12 판정] 시설 단위 건물·필지 수가 1~4 이면 이 글자로 (0 은 그대로)
 ANY_ELDER_S = 30          # [10/12] n_benefit_any: 고령자 왕복이 이 초 이상 줄거나 휠체어 왕복이 BENEFIT_MIN_S 이상 준(새 도달 포함) 건물 수 (기획서 20장)
 WAIT_SENS_S = [30, 60, 90]   # [v6.2] 09 대기시간 비교(초): 시설 하나씩 이 대기로 바꿔 수혜 건물 수를 다시 셈 → intervention_wait.csv (의료 목적지만)
 WHEEL_CUT_MIN = 100      # [v6.2] 휠체어 시간이 준 건물이 이보다 적으면 분위수를 빈 칸으로 (QUANT_MIN 과 같음: 몇 채면 분위수가 한 건물 값과 같아짐)

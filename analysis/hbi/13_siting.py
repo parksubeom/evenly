@@ -96,7 +96,8 @@ for name, status, buf in fac:
         continue
     tot = sum(area.values())
     share = [round(area[k] / tot, 4) if n >= C.MIN_COUNT else "" for k in ORDER]
-    rows.append([name, status, BUFFER_M, n, round(tot, 1)] + share)
+    rows.append([name, status, BUFFER_M, n if n >= C.MIN_COUNT else C.SMALL_LABEL.replace("채", "개"),   # [10/12 판정] 필지 1~4개면 "5개 미만"·면적 빈 칸
+                 round(tot, 1) if n >= C.MIN_COUNT else ""] + share)
     log(f"  {name}: 필지 {n}개, {tot:,.0f}㎡ → " + ", ".join(f"{k} {area[k] / tot:.0%}" for k in ORDER if area[k] > 0)
         + ("" if n >= C.MIN_COUNT else f"  (필지 {C.MIN_COUNT}개 미만이라 비율은 빈 칸)"))
 if unknown:

@@ -177,6 +177,35 @@ for m in MODES:
                 CNT["값 다름"] += 1
             chk(f"09 grid mean_saved_min|{T}", m, Sc, rr.get("mean_saved_min"), None, "add", fam)   # 단축 값 (목적지 합친 양)
 
+# [10/12 판정] 개수: 09 summary·wait, 13 siting 의 시설 단위 건물·필지 수가 1~4 그대로 나가는지, ALL − 시설들로 가린 수가 되살아나는지
+CC = {"intervention_summary.csv": ["n_benefit", "wheel_newly_reachable", "wheel_benefit", "n_exit_high", "n_exit_mid", "n_saved_30s", "n_saved_60s",
+                                   "wheel_cut_n", "n_benefit_any"],
+      "intervention_wait.csv": ["n_benefit", "n_saved_30s", "wheel_benefit"], "siting_summary.csv": ["n_parcels"]}
+cnt_small, cnt_rec, cnt_masked, cnt_n = [], [], 0, 0
+for m in MODES:
+    for fn, cols in CC.items():
+        rows_ = rd(f"{H6}/output/{m}/{fn}")
+        for r in rows_:
+            for c in cols:
+                v = (r.get(c) or "").strip()
+                if v in ("",):
+                    continue
+                cnt_n += 1
+                if v.endswith("미만"):
+                    cnt_masked += 1
+                elif 0 < float(v) < MINC:
+                    cnt_small.append((m, fn, r.get("facility"), r.get("target"), c, v))
+                if fn == "siting_summary.csv" and v.endswith("미만") and (r.get("area_m2") or "") != "":
+                    cnt_small.append((m, fn, r.get("facility"), "area_m2", r.get("area_m2")))
+        if fn == "intervention_summary.csv":
+            for c in cols:
+                for T in {r["target"] for r in rows_}:
+                    sing = [r for r in rows_ if r["target"] == T and not r["facility"].startswith("ALL")]
+                    al = [r for r in rows_ if r["target"] == T and r["facility"].startswith("ALL")]
+                    if any((r.get(c) or "").endswith("미만") for r in sing) and al and (al[0].get(c) or "").replace(".", "").isdigit() and float(al[0][c]) > 0:
+                        cnt_rec.append((m, T, c, al[0][c]))
+print(f"[개수] 시설 단위 건물·필지 수 칸 {cnt_n}개, '5채 미만'으로 가린 칸 {cnt_masked}, 1~4 그대로 {len(cnt_small)}건 {cnt_small[:4]}, "
+      f"ALL 로 되살아남 {len(cnt_rec)}건 {cnt_rec[:4]}")
 print(f"방식 {MODES}: 공개 시간 값 {CNT['값']}개, 다시 계산한 값과 다름 {CNT['값 다름']}")
 print(f"② 1~4채 값 그대로: {len(CNT['단독'])}건 {CNT['단독'][:6]}")
 print(f"③ 최대 칸: {len(CNT['최대'])}건 {CNT['최대'][:4]}")

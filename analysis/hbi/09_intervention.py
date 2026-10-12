@@ -429,6 +429,32 @@ for it in R:
 if tblank:
     log(f"  시간 값 가림: summary {tblank}줄의 평균·분위 단축·HBI 칸을 비움 "
         + ("(수혜 1~4채이거나 다른 시간 값과 빼면 1~4채 몫이 남음)" if REP else f"(대표 방식 {rep_mode() or '(정할 수 없음)'} 에서만 냄)"))
+# ── 6. [10/12 판정] 시설 단위 건물 수 1~4 → "5채 미만" (0 은 그대로). ALL 줄은 시설 하나 줄을 가린 칸이면 빈 칸
+#  (ALL − 다른 시설들로 가린 수가 되살아나지 않게. ALL 도 1~4 면 "5채 미만")
+CNT_COLS = (2, 9, 10, 11, 13, 14, 15, 16, 22)                   # n_benefit, wheel_newly_reachable, wheel_benefit, n_exit_high, n_exit_mid,
+                                                                 # n_saved_30s, n_saved_60s, wheel_cut_n, n_benefit_any
+small = lambda v: isinstance(v, (int, np.integer)) and 0 < int(v) < MC
+masked_single = set()                                            # (목적지, 칸) 시설 하나 줄에서 가린 것
+cblank = 0
+for it in R:
+    is_all = it["si"] >= n_single
+    for c in CNT_COLS:
+        v = it["row"][c]
+        if small(v):
+            it["row"][c] = C.SMALL_LABEL
+            cblank += 1
+            if not is_all and in_all[it["si"]]:
+                masked_single.add((it["T"], c))
+        elif is_all and (it["T"], c) in masked_single and v not in ("", None, 0):
+            it["row"][c] = ""
+            cblank += 1
+for w_ in wrows:                                                 # 대기시간 비교 (시설 하나씩): n_benefit, n_saved_30s, wheel_benefit
+    for c in (4, 5, 6):
+        if small(w_[c]):
+            w_[c] = C.SMALL_LABEL
+            cblank += 1
+if cblank:
+    log(f"  건물 수 가림: {cblank}칸을 '{C.SMALL_LABEL}' 또는 빈 칸으로 (시설 단위 건물 수 1~4)")
 np.savez_compressed(os.path.join(C.WORK, "intervention_sets.npz"), x=X, y=Y, names=np.array([n for n, _ in scen]),   # [v6.2] 노출 검사용 (work, 반출 안 함)
                     rowkey=np.array([f"{it['si']}|{it['T']}" for it in R]),                                           # summary 줄 순서
                     drowkey=np.array([f"{it['si']}|{it['T']}|{k}" for it in R for k in it.get("dkeys", [])]),         # 동 표 줄 순서 (k = 동 번호)

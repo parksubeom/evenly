@@ -908,7 +908,14 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
 
     # ── 20 한 사람(봉천) ──
     frow = [r for r in isum if "봉천" in r.get("facility", "") and not r.get("facility", "").startswith("ALL")]
-    pick = max(frow, key=lambda r: num(r.get("wheel_benefit")) or 0) if frow else None
+    SMALL = "5채 미만"                                    # [10/12 판정] 09 의 시설 단위 건물 수 1~4 → "5채 미만" (0 으로 세지 않음)
+    small = lambda v: (v or "").strip() == SMALL
+    cnt_key = lambda v: num(v) if num(v) is not None else (2.5 if small(v) else 0)   # 고르기용: 가린 칸은 0 과 5 사이
+    def cnt_txt(v, unit="동"):
+        if small(v):
+            return f"5{unit} 미만"
+        return f"{f_int(num(v))}{unit}" if num(v) is not None else None
+    pick = max(frow, key=lambda r: cnt_key(r.get("wheel_benefit"))) if frow else None
     iv = bool(bc and pick and num(pick.get("pass_s")) is not None)
     P("V6.20.mode", "20장 계산 근거", [], "wheel" if iv else "example", optional=True)
     if iv:
@@ -917,19 +924,19 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         P("V6.20.after", "설치 후 (계단 양 끝 직선)", need20, f"{round(num(bc['straight_m'])):,}m" if num(bc.get("straight_m")) else None)
         P("V6.20.rise", "높이 차", need20, f"{num(pick['rise_m']):.1f}m" if num(pick.get("rise_m")) is not None else None)
         P("V6.20.pass", "통과 시간", need20, f"{num(pick['pass_s']):.0f}초")
-        P("V6.20.wheel_n", "휠체어 1분 이상 단축 건물", need20, f"{f_int(num(pick.get('wheel_benefit')))}동")
-        P("V6.20.elder30", "고령자 30초 이상 단축 건물", need20, f"{f_int(num(pick.get('n_saved_30s')))}동" if num(pick.get("n_saved_30s")) is not None else None)
+        P("V6.20.wheel_n", "휠체어 1분 이상 단축 건물", need20, cnt_txt(pick.get("wheel_benefit")))
+        P("V6.20.elder30", "고령자 30초 이상 단축 건물", need20, cnt_txt(pick.get("n_saved_30s")))
         P("V6.20.tgt", "기준 목적지", [], TARGET_LABEL.get(pick["target"], pick["target"]), optional=True)
         # [10/12] 1억 원당 수혜 (시뮬레이션한 시설만, 1곳 40억 원 가정) = n_benefit_any ÷ 40
         #   n_benefit_any = 고령자 왕복 30초 이상 단축 또는 휠체어 왕복 1분 이상 단축(새로 도달 포함) 건물 수 (09, 기준 = 위 pick 의 목적지)
         na = num(pick.get("n_benefit_any"))
         P("V6.20.per100m", "1억 원당 수혜 건물 (1곳 40억 원 가정)", ["intervention_summary.csv n_benefit_any (10/12)"],
-          f"{na / 40:.1f}동" if na is not None else None)
+          f"{na / 40:.1f}동" if na is not None else ("0.13동 미만" if small(pick.get("n_benefit_any")) else None))   # 5채 미만 ÷ 40
         P("V6.20.any_def", "1억 원당 수혜 정의", [], f"1억 원당 수혜 = 고령자 왕복 30초 이상 또는 휠체어 왕복 1분 이상(새로 도달 포함) 줄어드는 건물 수 ÷ 40 "
           f"(1곳 40억 원 가정, 기준 목적지 {TARGET_LABEL.get(pick['target'], pick['target'])}, 이 시설 하나만 놓았을 때)", optional=True)
         prow = next((r for r in isum if r.get("facility") == pick["facility"] and r.get("target") == T0), None)
         nb0 = num(prow.get("n_benefit")) if prow else None
-        P("V6.20.n_benefit", "고령자 1분 이상 단축 건물 (기준 목적지)", ["intervention_summary.csv"], f"{f_int(nb0)}동" if nb0 is not None else None, optional=True)
+        P("V6.20.n_benefit", "고령자 1분 이상 단축 건물 (기준 목적지)", ["intervention_summary.csv"], cnt_txt(prow.get("n_benefit")) if prow else None, optional=True)
 
     # ── 21 방문돌봄 (동 단위, 상위 25% 겹침) ──
     def q75(vs):
@@ -1005,7 +1012,14 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         P(f"V6.29.{key}", f"민감도 순위상관: {lab}", ["sensitivity.csv (08)"], f"{v:.2f}" if v is not None else None)
     wr = R("intervention_wait.csv") or []
     ws_ = sorted({num(r["wait_s"]) for r in wr if num(r.get("wait_s")) is not None})
-    agg = lambda col: "·".join(f_int(sum(num(r.get(col)) or 0 for r in wr if num(r.get("wait_s")) == w)) for w in ws_)
+    def agg(col):
+        """[10/12 판정] 대기마다 시설 합. '5채 미만'(1~4) 칸은 0 으로 세지 않음: 가린 칸이 있으면 범위로 (예: 3~7, 하나뿐이고 나머지가 0 이면 '5 미만')"""
+        out = []
+        for w in ws_:
+            rs = [r for r in wr if num(r.get("wait_s")) == w]
+            s_, k = sum(num(r.get(col)) or 0 for r in rs), sum(1 for r in rs if (r.get(col) or "").strip() == "5채 미만")
+            out.append(f_int(s_) if not k else ("5 미만" if s_ == 0 and k == 1 else f"{f_int(s_ + k)}~{f_int(s_ + 4 * k)}"))
+        return "·".join(out)
     P("V6.29.facility", "대기시간 비교: 수혜 건물 (고령자·휠체어)", ["intervention_wait.csv (09, v6.2)"],
       f"시설 효과만: 고령자 {agg('n_benefit')} · 휠체어 {agg('wheel_benefit')}동" if wr else None, later="실제 결과 후")
     P("V6.29.facility_w", "대기시간 비교 문턱", [], "·".join(f"{w:g}" for w in ws_) + "초" if ws_ else None, optional=True)
