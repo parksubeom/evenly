@@ -167,15 +167,20 @@ JOIN_DATA = {
 #  external/interventions.csv 의 시설(경사형 엘리베이터·모노레일 등)을 "양 끝을 잇는 지름길"로 그래프에 넣고,
 #  설치 전후 왕복 시간을 비교합니다. 프론트엔드로 치면 라우팅 테이블에 새 경로 하나를 추가해 보는 것과 같습니다.
 #  시설 통과 시간 = 대기 wait_s(초) + 직선거리 ÷ speed(m/초) + 끝점까지 걸어가는 거리 ÷ ELDER_SPEED
-#  (interventions.csv 에 wait_s·speed 를 적으면 그 값이 우선, 비우면 아래 종류별 기본값)
+#  [v6.2] 수직 엘리베이터(vertical)만: 대기 wait_s + a·b 높이 차 ÷ speed(오르내리는 속도 m/초) + 끝점까지 걷는 거리 ÷ ELDER_SPEED
+#         높이 차는 09 가 DEM(DATA_ROOT_DEM) 에서 a·b 두 점을 재서 씀 (사람이 적지 않음). a·b 사이를 수평으로 걷는 데크 시간은 넣지 않음
+#  (interventions.csv 에 wait_s·speed 를 적으면 그 값이 우선, 비우면 아래 종류별 기본값. vertical 의 speed 는 오르내리는 속도)
 FACILITY = {
     "elevator": {"wait_s": 60, "speed": 1.0},   # 경사형 엘리베이터
     "monorail": {"wait_s": 60, "speed": 0.6},   # 모노레일. 근거: 대현산 110m ≈ 4분 (서울시 발표 3~4분)
-    "vertical": {"wait_s": 45, "speed": 1.0},   # 수직 엘리베이터 (+ 보행데크)
+    "vertical": {"wait_s": 45, "speed": 1.0},   # 수직 엘리베이터 (+ 보행데크). [v6.2] speed = 오르내리는 속도
     "ramp":     {"wait_s": 0,  "speed": 0.8},   # 경사로
 }
-INTERVENTION_TARGETS = ["medical", "station", "bus"]   # 설치 효과를 볼 목적지 (결과에 있는 것만 사용)
+INTERVENTION_TARGETS = ["medical", "station", "bus", "market"]   # 설치 효과를 볼 목적지 (결과에 있는 것만 사용). [v6.2] market = 전통시장
 BENEFIT_MIN_S = 60        # 설치 후 왕복이 이 초 이상 줄어든 건물을 "수혜 건물"로 셈 (1분)
+SAVED_BANDS_S = [30, 60]  # [v6.2] 09 결과에 함께 내는 고령자 왕복 단축 문턱(초): n_saved_30s·n_saved_60s (수혜 건물 수 n_benefit 은 그대로)
+WHEEL_CUT_Q = [25, 50, 75]   # [v6.2] 휠체어 길 길이 감소(m) 분위수(%): wheel_cut_p25_m … (음수 = 설치 후 길이 더 김)
+WHEEL_CUT_MIN = 100      # [v6.2] 휠체어 시간이 준 건물이 이보다 적으면 분위수를 빈 칸으로 (QUANT_MIN 과 같음: 몇 채면 분위수가 한 건물 값과 같아짐)
 INTERVENTION_SNAP_WARN = 50   # 시설 끝점이 길에서 이 거리(m) 넘게 떨어져 있으면 경고 (좌표 확인)
 OUT_OF_DATA_M = 500          # [v6.1a] 시설 끝(09)·구간 끝(04)·등시선 점(12)이 가장 가까운 길에서 이보다 멀면 길 자료 범위 밖으로 보고 그 줄은 건너뜀
                              #   (자료 가장자리 노드에 붙여 0분 같은 값을 만들지 않게. scipy 없는 대체 구현은 5km 넘으면 거리를 inf 로 줌)

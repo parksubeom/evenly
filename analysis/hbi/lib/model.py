@@ -94,24 +94,37 @@ def run_scenario(n, e, s, dests, stairs_passable_wheel=False):
 
 
 
-def run_with_extra(n, e, s, dests, extra):
+def run_with_extra(n, e, s, dests, extra, wheel_dist=False, modes=("elder", "wheel")):
     """[v5] 이동편의시설(엘리베이터 등)을 설치했다고 치고 다시 계산 (09_intervention.py 가 사용).
 
     extra: [(노드a, 노드b, 고정시간초), ...]  ← 시설 하나 = a↔b 를 잇는 지름길 간선 (양방향)
       JS로 치면 기존 간선 배열에 [...edges, {u:a, v:b, w:t}, {u:b, v:a, w:t}] 를 덧붙이는 것과 같습니다.
       시설 시간은 경사와 무관한 고정값이라 고령자·휠체어 그래프 모두에 같은 시간으로 넣습니다 (휠체어도 이용 가능).
+      [v6.2] 넷째 값으로 시설 길이(m)를 주면 wheel_dist 계산에 씀 (없으면 0)
     반환 (각 값은 길이 n 배열, 초): t_elder, t_wheel (왕복), t_elder_back (귀갓길 편도)
       평지 가정 시간(t_flat)은 설치 전 값을 그대로 분모로 씁니다 → HBI 설치 후 = t_elder(후) ÷ t_flat(전)
+      [v6.2] wheel_dist=True 면 d_wheel = 휠체어가 고르는 (시간 최소) 길의 길이, 가는 길·오는 길 평균 (m, 못 가면 inf)
+      modes = 계산할 방식 ("wheel" 만 주면 설치 전 휠체어 길이만 빠르게)
     """
     u, v, L, ss, st = directed(e, s)
-    xa = np.array([a for a, b, t in extra] + [b for a, b, t in extra], np.int64)   # 정방향 + 역방향
-    xb = np.array([b for a, b, t in extra] + [a for a, b, t in extra], np.int64)
-    xt = np.array([t for a, b, t in extra] * 2, float)
+    ex = [tuple(x) + (0.0,) * (4 - len(x)) for x in extra]                          # (a, b, 시간, 길이)
+    xa = np.array([a for a, b, t, l in ex] + [b for a, b, t, l in ex], np.int64)   # 정방향 + 역방향
+    xb = np.array([b for a, b, t, l in ex] + [a for a, b, t, l in ex], np.int64)
+    xt = np.array([t for a, b, t, l in ex] * 2, float)
+    xl = np.array([l for a, b, t, l in ex] * 2, float)
     res = {}
     for name, w in [("elder", elder_time(L, ss, st)), ("wheel", wheel_time(L, ss, st))]:
-        G = Graph(np.concatenate([u, xa]), np.concatenate([v, xb]), np.concatenate([w, xt]), n)
-        go = G.dijkstra(dests, reverse=True)       # 집 → 가장 가까운 목적지
-        back = G.dijkstra(dests)                   # 목적지 → 집 (귀갓길)
+        if name not in modes:
+            continue
+        if name == "wheel" and wheel_dist:
+            G = Graph(np.concatenate([u, xa]), np.concatenate([v, xb]), np.concatenate([w, xt]), n, aux=np.concatenate([L, xl]))
+            go, lgo = G.dijkstra_aux(dests, reverse=True)
+            back, lback = G.dijkstra_aux(dests)
+            res["d_wheel"] = (lgo + lback) / 2
+        else:
+            G = Graph(np.concatenate([u, xa]), np.concatenate([v, xb]), np.concatenate([w, xt]), n)
+            go = G.dijkstra(dests, reverse=True)       # 집 → 가장 가까운 목적지
+            back = G.dijkstra(dests)                   # 목적지 → 집 (귀갓길)
         res[f"t_{name}"] = go + back
         if name == "elder":
             res["t_elder_back"] = back

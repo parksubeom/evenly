@@ -96,14 +96,17 @@ class Graph:
     같은 u→v 간선이 여러 개면 비용이 가장 작은 것 하나만 남깁니다.
     w 가 무한대(np.inf)인 간선은 "지나갈 수 없음"으로 보고 버립니다 (예: 휠체어의 계단).
     """
-    def __init__(self, u, v, w, n):
+    def __init__(self, u, v, w, n, aux=None):
+        """aux: [v6.2] 간선마다 함께 들고 다닐 값 (예: 길이 m). dijkstra_aux 가 최단시간 경로를 따라 이 값을 더함"""
         ok = np.isfinite(w)                               # 무한대가 아닌 간선만
         u, v, w = u[ok], v[ok], np.maximum(w[ok], 1e-6)   # 비용 0 은 계산에 문제가 있어 아주 작은 값으로
+        aux = None if aux is None else np.asarray(aux, float)[ok]
         key = u.astype(np.int64) * n + v                  # (u,v) 쌍을 숫자 하나로 표현
         order = np.lexsort((w, key))                      # key 순 → 같은 key 안에서는 w 작은 순으로 정렬
         key, u, v, w = key[order], u[order], v[order], w[order]
         first = np.r_[True, key[1:] != key[:-1]]          # 같은 key 중 첫 번째(=가장 작은 w)만 True
         self.u, self.v, self.w, self.n = u[first], v[first], w[first], n
+        self.aux = None if aux is None else aux[order][first]   # 남긴 간선(가장 작은 w)의 aux
 
     def _csr(self, rev=False):
         """"노드별로 나가는 간선 목록"을 빠르게 꺼낼 수 있는 압축 형태(CSR)로 변환.
@@ -149,6 +152,56 @@ class Graph:
                     dist[y] = nd
                     heapq.heappush(h, (nd, int(y)))
         return dist
+
+    def dijkstra_aux(self, sources, reverse=False):
+        """[v6.2] dijkstra 와 같은 최소 비용(dist)에 더해, 그 최단(시간) 경로를 따라 간선 aux 를 더한 값.
+        예) w = 휠체어 시간, aux = 길이(m) → 휠체어가 실제로 고르는 길의 길이. 못 가면 둘 다 inf. 반환: (dist, aux 합)
+        경로 나무(각 노드의 바로 앞 노드)를 만든 뒤, 앞 노드를 두 칸·네 칸… 씩 건너뛰며 더함 (반복 log₂(깊이) 번)"""
+        assert self.aux is not None, "Graph(..., aux=길이) 로 만들어야 함"
+        n = self.n
+        sources = np.unique(np.asarray(sources, np.int64))
+        a, b = (self.v, self.u) if reverse else (self.u, self.v)    # 계산 방향의 간선 a → b
+        if HAS_SCIPY:
+            from scipy.sparse import csr_matrix
+            from scipy.sparse.csgraph import dijkstra
+            M = csr_matrix((self.w, (a, b)), shape=(n, n))
+            dist, pred, _ = dijkstra(M, directed=True, indices=sources, min_only=True, return_predecessors=True)
+            pred = np.where(pred < 0, -1, pred).astype(np.int64)
+        else:
+            ptr, nb, wt = self._csr(reverse)
+            dist = np.full(n, np.inf)
+            pred = np.full(n, -1, np.int64)     # pred[y] = y 에 오기 직전 노드 (출발점·못 간 노드는 -1)
+            dist[sources] = 0.0
+            h = [(0.0, int(s)) for s in sources]
+            heapq.heapify(h)
+            while h:
+                d, x = heapq.heappop(h)
+                if d > dist[x]:
+                    continue
+                for k in range(ptr[x], ptr[x + 1]):
+                    y = nb[k]
+                    nd = d + wt[k]
+                    if nd < dist[y]:
+                        dist[y] = nd
+                        pred[y] = x
+                        heapq.heappush(h, (nd, int(y)))
+        key = a.astype(np.int64) * n + b
+        o = np.argsort(key)
+        has = pred >= 0
+        j = np.searchsorted(key[o], pred[has] * n + np.nonzero(has)[0])
+        acc = np.zeros(n)
+        acc[has] = self.aux[o][j]               # 앞 노드 → 이 노드 간선의 aux
+        anc = pred.copy()
+        while True:                             # acc[x] = x 에서 anc[x] 까지 aux 합. anc 를 두 배씩 올림
+            m = anc >= 0
+            if not m.any():
+                break
+            acc2, anc2 = acc.copy(), anc.copy()
+            acc2[m] = acc[m] + acc[anc[m]]
+            anc2[m] = anc[anc[m]]
+            acc, anc = acc2, anc2
+        acc[~np.isfinite(dist)] = np.inf
+        return dist, acc
 
     def path(self, o, d):
         """노드 o → 노드 d 최단경로. (지나가는 노드 번호 목록, 총 비용). 못 가면 ([], inf)"""

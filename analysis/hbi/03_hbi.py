@@ -15,11 +15,12 @@
      [v6.1] 정거장은 종류 칸(PTWFCKD_SE)이 없어도 모두 씀 (1:5,000 정거장 칸은 명칭·UFID 뿐)
      [v5] external/subway_elevators.csv (name, lon, lat) = "엘리베이터가 있는 역 출입구" 목적지 station_ev
           휠체어 결과는 이 목적지 기준으로 봅니다 (계단만 있는 출입구는 휠체어로 쓸 수 없으니까)
+     [v6.2] external/markets.csv (name, lon, lat) = 전통시장 목적지 market (비어 있으면 건너뜀)
   2-1. 데이터 경계 근처 건물 표시 (edge 열 = 1). 04·05·06 은 이 건물들을 통계에서 뺍니다
   3. 각 건물을 가장 가까운 길 노드에 연결 (60m 넘으면 제외)
   4. 목적지 종류마다: 모든 집 → 가장 가까운 목적지 왕복 시간을 고령자/평지/휠체어로 계산
 [결과] work/buildings_hbi.csv, work/buildings_hbi.gpkg  ← 건물 단위라 반출하지 않음 (QGIS에서 열어 확인만)
-[결과 열 이름 읽는 법]  (medical 자리에 bus, elderly, station, station_ev, pharmacy 가 올 수 있음)
+[결과 열 이름 읽는 법]  (medical 자리에 bus, elderly, station, station_ev, pharmacy, market 이 올 수 있음)
   medical_hbi          : 의료시설 기준 HBI (왕복)
   medical_home_ratio   : 귀갓길(의료시설→집) 편도만의 배수
   medical_t_elder      : 고령자 왕복 시간(초), medical_t_flat : 평지 가정 왕복 시간(초)
@@ -113,8 +114,11 @@ PH = list(zip(px, py))
 # [v5] 엘리베이터 있는 지하철역 출입구 (external/subway_elevators.csv, 비어 있으면 건너뜀)
 _, ex, ey = csv_points(os.path.join(C.EXTERNAL, "subway_elevators.csv"))
 EV = list(zip(ex, ey))
+# [v6.2] 전통시장 (external/markets.csv, 비어 있으면 건너뜀)
+_, mx, my = csv_points(os.path.join(C.EXTERNAL, "markets.csv"))
+MK = list(zip(mx, my))
 dest, dest_pts = {}, {}                             # {"medical": 노드번호배열, ...}, {"medical": 좌표배열} [v6.1]
-for name, pts in [("medical", MED + PH), ("pharmacy", PH), ("bus", bus), ("elderly", ELD), ("station", STA), ("station_ev", EV)]:
+for name, pts in [("medical", MED + PH), ("pharmacy", PH), ("bus", bus), ("elderly", ELD), ("station", STA), ("station_ev", EV), ("market", MK)]:
     if not pts:
         log(f"  목적지 없음: {name} (건너뜀)")
         continue

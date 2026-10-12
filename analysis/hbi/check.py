@@ -475,6 +475,7 @@ def main():
             "버스정류소(external, 정류장 레이어가 없을 때)": len(read_csv(os.path.join(C.EXTERNAL, "bus_stops.csv"))),
             "약국(external)": len(read_csv(os.path.join(C.EXTERNAL, "pharmacy.csv"))),
             "엘리베이터 역 출입구(external)": len(read_csv(os.path.join(C.EXTERNAL, "subway_elevators.csv"))),
+            "전통시장(external)": len(read_csv(os.path.join(C.EXTERNAL, "markets.csv"))),    # [v6.2]
             "의료·노유자 건물(표본 창)": tot["med"] + tot["eld"]}
     print("  목적지: " + ", ".join(f"{k} {v:,}" for k, v in dest.items()))
     if sum(dest.values()) == 0:

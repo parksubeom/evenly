@@ -200,7 +200,7 @@ python 01_inspect.py
 - [ ] `dong_hbi.csv` — 행정동 결과 (weight_all·weight_high 열 포함 → 밖에서 고령인구 추정). [v6.2] 맨 뒤 `n_addNm`·`share_addNm`·`weight_addNm`. 연면적(weight_high·weight_addNm)은 1~4채 몫이 드러나면 빈 칸, weight_addNm 은 check 가 고른 방식 폴더에만
 - [ ] `validation_sites.csv`, `validation_routes.csv`, `validation_new_candidates.csv`, `validation_ablation.csv` (17·18장)
 - [ ] `validation_measured.csv` — [v5] 실측 vs 예측 상관계수 (실측 3구간 이상일 때, 17장)
-- [ ] `intervention_summary.csv`, `intervention_grid.csv`, `intervention_dong.csv` — [v5] 시설 설치 효과 (22·23장). 맨 뒤 열 n_exit_high·weight_exit_high·n_exit_mid (summary), weight_exit_high (dong) = 설치 후 HBI 1.8(1.3) 아래로 내려온 주거 건물 (연면적은 MIN_COUNT 개 미만이면 빈 칸)
+- [ ] `intervention_summary.csv`, `intervention_grid.csv`, `intervention_dong.csv` — [v5] 시설 설치 효과 (22·23장). 맨 뒤 열 n_exit_high·weight_exit_high·n_exit_mid (summary), weight_exit_high (dong) = 설치 후 HBI 1.8(1.3) 아래로 내려온 주거 건물 (연면적은 MIN_COUNT 개 미만이면 빈 칸). [v6.2] summary 맨 뒤에 n_saved_30s·n_saved_60s(고령자 왕복 30초·60초 이상 단축), wheel_cut_n·wheel_cut_p25_m·p50_m·p75_m(휠체어 시간이 준 건물의 휠체어 길 길이 감소 m. 음수 = 설치 후 길이 더 김(설치 전 길이 짧지만 가파른 길). 100채(`WHEEL_CUT_MIN`) 미만이면 빈 칸), rise_m·pass_s(시설 높이 차·통과 초). 연면적 칸은 의료·대표 방식만, 1~4채이거나 05·09 의 다른 연면적과 빼서(겹치지 않는 여럿의 합 포함) 1~4채가 남으면 빈 칸
 - [ ] `points_summary.csv`, `points_*_dong.csv`, `points_*_grid.csv` — [v5] 점 자료 결합 (개수·값 합계만, 좌표 없음)
 - [ ] `legal_summary.csv`, `legal_*.csv` — [v5] 법정동별 교통사고 건수 (행 단위 사고 없음)
 - [ ] `parcel_summary.csv`, `parcel_by_legal_dong.csv` (필지 결합)
@@ -223,13 +223,14 @@ python 01_inspect.py
 | 파일 | 내용 | 상태 |
 |---|---|---|
 | `sites.csv` | 서울시 2025 선정지 5곳 좌표 (lon=경도, lat=위도) | 입력됨 (근사 좌표, note 열 참고. 화곡동은 수정 권장) |
-| `od_pairs.csv` | 검증 구간 출발·도착 좌표, `measured_min` = 실측 분 | 대현산배수지공원 입력됨. 현장실측 ①②③⑤ 네 줄(구역 B 관악·D 강서, 10/3~4)은 좌표·measured_min 을 직접 입력 |
+| `od_pairs.csv` | 검증 구간 출발·도착 좌표, `measured_min` = 실측 분 | 대현산배수지공원(서울시 발표 휠체어 약 770m 우회)과 [v6.2] 봉천 선정지 계단(서울시 발표 계단을 피해 200m 이상 우회) 입력됨. [v6.2] 관악 현장실측 ①~④ 는 좌표 입력됨(관악 실측 기록지와 같은 값), measured_min 은 실측 뒤 직접 입력. ⑤(강서)는 좌표 비어 있음 |
 | `dong_boundary.geojson` | 서울 행정동 경계 426개 (ADM_CD = 행안부 10자리, ADM_CD_STAT = 통계청 8자리) | 입력됨 |
 | `pharmacy.csv` | 약국 `name, lon, lat` | 비어 있음 (없어도 의료시설 기준으로 분석됨) |
 | `elderly_pop.csv` | 행정동 코드 `adm_cd`, 65세 이상 인구 `pop65` | 비어 있음 → 반출 후 밖에서 `tools/outside_elderly.py` 로 추정 |
 | `pharmacy.csv` 만들기 | 공개 약국 파일 → `python tools/prep_public.py pharmacy 원본.csv [EPSG:5174]` (반입 전, 밖에서) | [v5] 서울·영업 중만 남김 |
 | `subway_elevators.csv` | [v5] 엘리베이터 있는 지하철역 출입구 `name, lon, lat` → 목적지 `station_ev` (휠체어 결과 기준). `python tools/prep_public.py elevator 원본.csv` 로 만듦 | 머리 줄만 (반입 전 채우기) |
-| `interventions.csv` | [v5] 설치 효과를 볼 시설: `name, type(elevator/monorail/vertical/ramp), a_lon, a_lat(아래), b_lon, b_lat(위), wait_s, speed, status(planned/existing), note`. wait_s·speed 를 비우면 `config.FACILITY` 기본값 | 대현산 모노레일 + 2025 선정지 5곳 입력됨. 양 끝 좌표는 현장실측 후 입력 (봉천동·화곡동은 현장실측 10/3~4 에서 입력 예정). 13_siting.py 도 이 좌표를 씀 |
+| `interventions.csv` | [v5] 설치 효과를 볼 시설: `name, type(elevator/monorail/vertical/ramp), a_lon, a_lat(아래), b_lon, b_lat(위), wait_s, speed, status(planned/existing), note`. wait_s·speed 를 비우면 `config.FACILITY` 기본값. [v6.2] 수직 엘리베이터(vertical) 시간 = 대기 + a·b 높이 차 ÷ speed(오르내리는 속도, 기본 1m/s) + 끝점 걷기. 높이 차는 09 가 DEM 에서 재므로 적지 않음 (v6.1 까지는 직선거리 ÷ speed) | 대현산 모노레일 + 2025 선정지 5곳 입력됨. 양 끝 좌표는 현장실측 후 입력 (봉천동·화곡동은 현장실측 10/3~4 에서 입력 예정). 13_siting.py 도 이 좌표를 씀 |
+| `markets.csv` | [v6.2] 전통시장 `name, lon, lat` (경위도) → 목적지 `market` (03·05·09, 결과 열 market_*) | 머리 줄만 (받은 파일로 반입 전 채우기, 비어 있으면 건너뜀) |
 | `iso_points.csv` | [v5] 12_isochrone.py 의 등시선 점: `name, lon, lat, minutes("5;10;15"), note` | 창신역 1번출구, 대현산배수지공원 모노레일 하부, 신당동 청구동 마을마당, 봉천동 비안어린이공원, 중곡동 용곡중 5곳 (근사 좌표, 현장실측 후 수정 가능) |
 
 CSV는 메모장으로 열어 쉼표로 구분해서 입력하면 됩니다. 좌표는 네이버·카카오 지도에서 위치를 우클릭하면 나오는 **경위도**(예: 127.0215, 37.5569)를 쓰세요. 엑셀로 저장할 때는 "CSV UTF-8" 형식으로 저장하세요.

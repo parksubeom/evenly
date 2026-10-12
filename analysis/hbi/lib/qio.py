@@ -231,7 +231,8 @@ class DEM:
         z = dem.sample(xs, ys)               # 좌표 배열을 주면 각 위치의 높이 배열을 돌려줌
     [class 문법] JS의 class 와 같습니다. __init__ 은 constructor, self 는 this 입니다.
     """
-    def __init__(self, root, bbox=None):
+    def __init__(self, root, bbox=None, quiet=False):
+        """quiet=True 면 'DEM: 파일 …' 줄을 찍지 않음 ([v6.2] 09 가 시설마다 작은 창으로 읽을 때)"""
         files = []
         for e in (".img", ".tif", ".tiff", ".asc"):
             files += find_files(root, [""], e)
@@ -263,7 +264,8 @@ class DEM:
             self.arr[self.arr == nod] = np.nan       # 값 없음 → NaN (JS의 NaN 과 같음)
         self.arr[(self.arr < -100) | (self.arr > 3000)] = np.nan   # 말도 안 되는 높이도 NaN
         self.gt = (gt[0] + x0 * gt[1], gt[1], 0, gt[3] + y0 * gt[5], 0, gt[5])
-        log(f"  DEM: 파일 {len(files)}개, 격자 {self.arr.shape}, 해상도 {gt[1]:.2f}m")
+        if not quiet:
+            log(f"  DEM: 파일 {len(files)}개, 격자 {self.arr.shape}, 해상도 {gt[1]:.2f}m")
         vrt = None
         gdal.Unlink("/vsimem/dem.vrt")
 

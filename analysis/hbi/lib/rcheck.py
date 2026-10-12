@@ -129,7 +129,10 @@ def report(out=None, work=None, net_work=None):
             reds.append(name)
     # 목적지: 의료(medical) 결과가 있어야 핵심 결과가 나옴. 나머지는 없으면 노랑
     have = [t for t in tg if t != "meta"]
-    for t in ("medical", "bus", "station", "station_ev", "pharmacy", "elderly"):
+    for t in ("medical", "bus", "station", "station_ev", "pharmacy", "elderly", "market"):
+        if t == "market" and t not in have and not _csv(os.path.join(C.EXTERNAL, "markets.csv")):
+            L.append("  · 목적지 market: external/markets.csv 가 비어 있음 (전통시장 파일을 넣지 않았으면 정상, 판정 없음)")   # [v6.2]
+            continue
         if t in have:
             L.append(f"  {G} 목적지 {t}: 분석 건물 {int(_num(tg[t].get('분석 건물 수')) or 0):,}")
         else:

@@ -30,7 +30,7 @@ import os, numpy as np
 import config as C
 from lib.deps import HAS_MPL
 from lib.qio import log, write_csv, write_grid_gpkg, find_files, read_csv, iter_layer
-from lib.bload import load_buildings, targets, usable
+from lib.bload import load_buildings, targets, usable, rep_mode   # [v6.2] rep_mode 는 09 도 씀
 from lib.mapping import band_tag
 
 
@@ -49,20 +49,6 @@ def band_weights(n_base, ns, ws, force=()):
         if ok:
             prev = n_
     return out
-
-
-def rep_mode():
-    """[v6.2] 연면적 칸(왕복 추가 문턱)을 낼 방식 하나. --modes 로 여러 방식을 함께 내면 방식끼리 빼서 몇 채 몫이 드러날 수 있어서
-    check 가 고른 방식(없으면 --modes 의 첫 방식)에만 냄. 방식 하나로 돌렸으면 그 방식"""
-    if os.path.normpath(C.OUTPUT) == os.path.normpath(os.path.join(C.BASE, "output")):
-        return C.BUILDING_ATTR_MODE
-    try:
-        modes = [m.strip().lower() for m in open(os.path.join(C.WORK_NET, "last_modes.txt"), encoding="utf-8").read().split(",") if m.strip()]
-    except OSError:
-        modes = []
-    ch = (C.MAPPING.get("building_attr_chosen") or "").strip().lower()
-    modes = [ch if m == "auto" else m for m in modes]
-    return ch if ch in modes else (modes[0] if modes else C.BUILDING_ATTR_MODE)
 
 
 REP = rep_mode() == C.BUILDING_ATTR_MODE

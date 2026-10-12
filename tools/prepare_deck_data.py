@@ -532,15 +532,22 @@ def main():
     if all_name and idong and popd:
         rows = [r for r in idong if r.get("facility") == all_name and r.get("target") == T0]
         acc_p = acc_m = 0.0
-        used = 0
+        used = masked = 0
         for r in rows:
             p65, wa = popd.get(r["adm_cd"]), num(r.get("weight_all"))
+            wb, wx = num(r.get("weight_benefit")), num(r.get("weight_x_saved_min"))
+            if p65 and wa and (wb is None or wx is None):   # [v6.2] 09 가 1~4채 몫이 드러날까 봐 가린 동: 0 으로 세지 않고 뺌
+                masked += 1
+                continue
             if p65 and wa:
-                acc_p += p65 * (num(r.get("weight_benefit")) or 0) / wa
-                acc_m += p65 * (num(r.get("weight_x_saved_min")) or 0) / wa
+                acc_p += p65 * wb / wa
+                acc_m += p65 * wx / wa
                 used += 1
         if used:
             people, minutes = acc_p, acc_m
+        if masked:
+            B.fields["IMPACT.masked"] = {"value": f"연면적을 가린 동 {masked}곳은 합계에서 뺌 (그만큼 적게 잡힘)", "label": "공익효과 가린 동",
+                                         "need": [], "optional": True}
     n_fac = len({r["facility"] for r in isum if r.get("target") == T0 and not r.get("facility", "").startswith("ALL")})
     need_i = ["intervention_summary.csv (v5)", "intervention_dong.csv (v5)", "dong_hbi_with_elderly.csv (tools/outside_elderly.py)"]
     B.put("IMPACT.n_sites", "개입 후보지 수", ["intervention_summary.csv (v5)"], f"{n_fac}곳" if n_fac else None)

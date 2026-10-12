@@ -19,3 +19,17 @@ def usable(b):
 def targets(b):
     """결과에 들어 있는 목적지 종류 목록. 예) ["medical", "bus", "elderly"]  ("medical_hbi" 열 → "medical")"""
     return [k[:-4] for k in b if k.endswith("_hbi")]
+
+
+def rep_mode():
+    """[v6.2] 연면적 칸(05 의 왕복 추가 문턱·격자, 09 의 수혜 연면적)을 낼 방식 하나. --modes 로 여러 방식을 함께 내면 방식끼리 빼서 몇 채 몫이 드러날 수 있어서
+    check 가 고른 방식(없으면 --modes 의 첫 방식)에만 냄. 방식 하나로 돌렸으면 그 방식"""
+    if os.path.normpath(C.OUTPUT) == os.path.normpath(os.path.join(C.BASE, "output")):
+        return C.BUILDING_ATTR_MODE
+    try:
+        modes = [m.strip().lower() for m in open(os.path.join(C.WORK_NET, "last_modes.txt"), encoding="utf-8").read().split(",") if m.strip()]
+    except OSError:
+        modes = []
+    ch = (C.MAPPING.get("building_attr_chosen") or "").strip().lower()
+    modes = [ch if m == "auto" else m for m in modes]
+    return ch if ch in modes else (modes[0] if modes else C.BUILDING_ATTR_MODE)
