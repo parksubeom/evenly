@@ -102,9 +102,9 @@ function tag(s, x, y, text, w, color) {
 }
 function reviewTag(s, dark) {
   if (!FAKE && !REH) return;
-  const col = FAKE ? 'C0392B' : C.reh, txt = FAKE ? '가상 수치 · 검토용' : '공개 대역 · 제출 금지';
-  s.addShape(pres.shapes.RECTANGLE, { x:7.85, y:0.16, w:1.65, h:0.25, fill:{color: dark ? C.ink : C.white}, line:{color:col, width:1} });
-  T(s, txt, { x:7.85, y:0.16, w:1.65, h:0.25, fontSize:9, bold:true, color: dark ? (FAKE ? 'F0A08A' : '9DC1EC') : col, align:'center', valign:'middle' });
+  const col = 'C0392B', txt = FAKE ? '가상 수치 · 검토용' : '공개 대역 · 제출 금지';   // [10/12 판정] 두 표시 모두 빨강 테두리 (청사진)
+  s.addShape(pres.shapes.RECTANGLE, { x:7.90, y:0.16, w:1.60, h:0.25, fill:{color: dark ? C.ink : C.white}, line:{color:col, width:1} });
+  T(s, txt, { x:7.90, y:0.16, w:1.60, h:0.25, fontSize:9, bold:true, color:col, align:'center', valign:'middle' });
 }
 const tsize = t => t.length > 34 ? 19 : t.length > 27 ? 21 : 24;
 const SCOPE = REH ? `${Q('V6.scope', '관악구')}(공개 대역)` : '5개 구';      // 14·17 장의 범위 표현 (공개 대역 판에서만 바뀜)
@@ -149,7 +149,7 @@ function etable(s, rows, o, explicit) {
   s.addTable(body, Object.assign({}, opt, t ? { objectName:t } : {}));
 }
 const B = (t, o={}) => ({ text:t, options:Object.assign({ bold:true }, o) });
-const team = () => V('team_name', '○○○');
+const team = () => has('team_display') ? String(R.fields['team_display'].value) : V('team_name', '○○○');   // [10/12 판정] 1·26장은 표시 이름 (inputs.json team_display, 없으면 team_name)
 
 // ── 1 표지 ──
 { const s = pres.addSlide(); page++; s.background = { color:C.ink };
@@ -436,9 +436,9 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
   T(s, '언덕 부담(HBI) →', { x:2.75, y:4.43, w:2.1, h:0.25, fontSize:10, color:C.muted, align:'right' });
   const sk21 = V('V6.21.skt'), kc21 = V('V6.21.kcb');      // 10/12 청사진: 외출(SKT)·소득(KCB)을 한 칸에 (둘 다 같은 대체 문구면 하나만)
   const rk21 = has('V6.21.risk_dongs') ? R.fields['V6.21.risk_dongs'].value + '곳' : '-';   // 선택 키 (고위험 동 = 값이 0 보다 큰 동 중 상위 25%)
-  [[`고립 위험(왕복 +${RMIN()}분) 건물이 많은 동`, rk21],['고립 위험 × 독거노인이 겹치는 동', V('V6.21.alone')],['외출(SKT)·소득(KCB)과 겹치는 동', sk21 === kc21 ? sk21 : `${sk21} · ${kc21}`]].forEach((r, i) => { if (i) hr(s, 5.3, 1.45+i*0.88-0.08, 4.1); stat(s, 5.3, 1.45+i*0.88, 4.1, r[0], r[1], { size:18, laterInk:true }); });
+  [[`고립 위험(왕복 +${RMIN()}분) 건물이 많은 동`, rk21],['고립 위험 상위 3개 동의 독거노인 수 (합, 공개 통계)', V('V6.21.alone_top3')],['외출(SKT)·소득(KCB)과 겹치는 동', sk21 === kc21 ? sk21 : `${sk21} · ${kc21}`]].forEach((r, i) => { if (i) hr(s, 5.3, 1.45+i*0.88-0.08, 4.1); stat(s, 5.3, 1.45+i*0.88, 4.1, r[0], r[1], { size:18, laterInk:true }); });
   bar(s, 5.3, 4.2, 0.55); T(s, '보건소 방문건강관리, 돌봄SOS, 방문 약료의 대상 선정에 씁니다', { x:5.52, y:4.2, w:3.9, h:0.55, fontSize:12, bold:true, color:C.ink, valign:'middle' });
-  src(s, '외출·소득은 행정동 단위 보조 지표이며 상관 관찰입니다 / SKT는 60세 이상 기준'); }
+  src(s, (has('V6.21.alone_top3_dongs') ? `고립 위험 상위 3개 동: ${R.fields['V6.21.alone_top3_dongs'].value} (독거노인: 서울시 동별 통계) / ` : '') + '외출·소득은 행정동 단위 보조 지표이며 상관 관찰입니다 / SKT는 60세 이상 기준'); }
 
 // ── 22 활용 ③ 교통·보행 ──
 { const s = base('활용 · 교통·보행', '정류장과 계단, 어디부터 손볼지 정합니다', { tsize:22 });

@@ -1,5 +1,12 @@
 {
- "_설명": "실제 기획서(build:real)에 들어갈 값 중 반출 파일에 없는 것. 비워 두면(null) 빈칸 그대로 두고 missing.txt 에 적힘",
- "team_name": null,
- "visit_dates": [null, null, null, null, null]
+ "_설명": "실제 기획서(build:real)에 들어갈 값 중 반출 파일에 없는 것. 비워 두면(null) 빈칸 그대로 두고 missing.txt 에 적힘 / team_display = 1·26장에 보이는 팀 표시 (없으면 team_name)",
+ "team_name": "서울평평단",
+ "team_display": "서울평평단 (박수범)",
+ "visit_dates": [
+  null,
+  null,
+  null,
+  null,
+  null
+ ]
 }

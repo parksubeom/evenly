@@ -245,7 +245,42 @@ def read_buildings(bb, style, meta):
 
 
 # ── 계단 (오픈스트리트맵) ─────────────────────────────────────────
-def read_stairs(bb, meta, refresh=False):
+CROSS_DEG = 45     # [10/12 판정] 계단 방향과 이보다 크게 다른 길 조각은 계단 면이 덮지 않게 (아래 _uncover_crossing)
+CROSS_CUT_M = 0.5  # 그 길 선 둘레 이만큼을 계단 면에서 뺌 → 분석(링크 중간점이 계단 면 안이면 계단)이 가로지르는 길 조각을 계단으로 보지 않음
+
+
+def _bearing(x0, y0, x1, y1):
+    import math
+    return math.degrees(math.atan2(y1 - y0, x1 - x0)) % 180
+
+
+def _uncover_crossing(poly, ls, roads):
+    """[10/12 판정] OSM 계단 선은 공개 연속수치지형도 길과 몇 m 어긋나 있어(봉천 선정지 계단 way 195921558 은 14~19m 북서쪽),
+    넓힌 계단 면이 계단을 가로지르는 짧은 길 조각(봉천: 대각선 길 1.4m, UFID A0020000000DKRL3O)을 통째로 덮으면 분석이 그 조각을
+    계단으로 봐 휠체어가 크게 돌아감 (리허설 1,454m, 그 조각을 풀면 약 238m). 수치지형도 계단 면도 가로지르는 길은 덮지 않으므로,
+    계단 방향과 CROSS_DEG 넘게 다른 길 선분 둘레 CROSS_CUT_M 을 면에서 뺌. 계단 방향과 나란한 길(계단 길 자체)은 그대로 덮음"""
+    n = ls.GetPointCount()
+    sb = _bearing(ls.GetX(0), ls.GetY(0), ls.GetX(n - 1), ls.GetY(n - 1))
+    e = poly.GetEnvelope()
+    cut, k = None, 0
+    for g, _ in roads:
+        ge = g.GetEnvelope()
+        if ge[1] < e[0] or ge[0] > e[1] or ge[3] < e[2] or ge[2] > e[3] or not g.Intersects(poly):
+            continue
+        for i in range(g.GetPointCount() - 1):
+            seg = ogr.Geometry(ogr.wkbLineString)
+            seg.AddPoint_2D(g.GetX(i), g.GetY(i)); seg.AddPoint_2D(g.GetX(i + 1), g.GetY(i + 1))
+            if not seg.Intersects(poly):
+                continue
+            d = abs(_bearing(g.GetX(i), g.GetY(i), g.GetX(i + 1), g.GetY(i + 1)) - sb)
+            if min(d, 180 - d) > CROSS_DEG:
+                b = seg.Buffer(CROSS_CUT_M, 2)
+                cut = b if cut is None else cut.Union(b)
+                k += 1
+    return (poly.Difference(cut) if cut is not None else poly), k
+
+
+def read_stairs(bb, meta, refresh=False, roads=None):
     cache = os.path.join(RAW, "osm_steps_gwanak.json")
     lat0, lat1, lon0, lon1 = sheet_lonlat()            # 도엽 경위도 그대로 (5179 네모의 두 모서리만 바꾸면 서쪽 가장자리 약 18m 가 빠짐)
     lat0, lon0, lat1, lon1 = lat0 - 0.0005, lon0 - 0.0005, lat1 + 0.0005, lon1 + 0.0005
@@ -258,7 +293,7 @@ def read_stairs(bb, meta, refresh=False):
         data["_query_bbox"] = [lat0, lon0, lat1, lon1]
         json.dump(data, open(cache, "w", encoding="utf-8"), ensure_ascii=False)
     data = json.load(open(cache, encoding="utf-8"))
-    feats, widths = [], 0
+    feats, widths, ncut, nseg = [], 0, 0, 0
     for e in data.get("elements", []):
         pts = e.get("geometry") or []
         if e.get("type") != "way" or len(pts) < 2:
@@ -274,8 +309,15 @@ def read_stairs(bb, meta, refresh=False):
         except ValueError:
             w = None
         poly = ls.Buffer((w or 3.0) / 2, 4)            # 선 → 면 (폭이 없으면 3m 로 봄, 수치지형도 계단은 면)
+        if roads:
+            poly, kc = _uncover_crossing(poly, ls, roads)
+            ncut += kc > 0
+            nseg += kc
+        if poly is None or poly.IsEmpty():
+            continue
         feats.append((poly, {"구조": STAIR, "폭": w}))
     meta["stairs"] = {"osm_ways": len(feats), "with_width": widths, "osm_timestamp": data.get("osm3s", {}).get("timestamp_osm_base"),
+                      "uncovered_crossing": {"stairs": ncut, "road_segments": nseg, "deg": CROSS_DEG, "cut_m": CROSS_CUT_M},   # [10/12 판정]
                       "source": "© OpenStreetMap contributors (ODbL)"}
     return feats
 
@@ -449,10 +491,11 @@ def main():
     env = [g.GetEnvelope() for g in sheets.values()]
     bb = (min(e[0] for e in env), min(e[2] for e in env), max(e[1] for e in env), max(e[3] for e in env))
     meta = {"style": a.style, "sheets": list(sheets), "bbox_5179": [round(v) for v in bb]}
-    layers = [("N3L_A0020000.shp", ogr.wkbLineString, ROAD_F, read_roads(bb, a.style, meta)),
+    roads = read_roads(bb, a.style, meta)
+    layers = [("N3L_A0020000.shp", ogr.wkbLineString, ROAD_F, roads),
               ("N3A_B0010000.shp", ogr.wkbPolygon, BLD_F, read_buildings(bb, a.style, meta)),
               ("N3A_C0390000.shp", ogr.wkbPolygon, [("명칭", ogr.OFTString, 100), ("구조", ogr.OFTString, 20), ("폭", ogr.OFTReal, 7), ("UFID", ogr.OFTString, 34)],
-               [(g, {"구조": name_style("N3A_C0390000", "ARSFCKD_SE", at["구조"], a.style), "폭": at["폭"]}) for g, at in read_stairs(bb, meta, a.refresh_osm)]),
+               [(g, {"구조": name_style("N3A_C0390000", "ARSFCKD_SE", at["구조"], a.style), "폭": at["폭"]}) for g, at in read_stairs(bb, meta, a.refresh_osm, roads=roads)]),
               ("N3P_A0131122.shp", ogr.wkbPoint, [("명칭", ogr.OFTString, 100), ("UFID", ogr.OFTString, 34)], read_stations(meta))]
     written, wc = {}, {}
     for fname, gt, fields, feats in layers:

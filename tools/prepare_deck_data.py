@@ -238,6 +238,7 @@ def main():
     inp = json.load(open(inp_path, encoding="utf-8")) if os.path.exists(inp_path) else {}
     inp_rel = os.path.relpath(inp_path, ROOT)
     B.put("team_name", "팀명", [inp_rel], inp.get("team_name") or None)
+    B.put("team_display", "팀 표시 (1·26장, 없으면 팀명)", [inp_rel], inp.get("team_display") or inp.get("team_name") or None)   # [10/12 판정]
     dates = (inp.get("visit_dates") or []) + [None] * 5
     for i in range(5):
         d = dates[i]
@@ -955,7 +956,7 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     P("V6.21.risk_dongs", "고위험 동 수 (값이 0 보다 큰 동 중 상위 25%)", ["dong_hbi.csv"], f"{len(hi_d)}" if rk else None, optional=True)
     dj = opt_file("dong_joined.csv")
     jr = read_csv(dj) if dj else None
-    alone = None
+    alone, col = None, None
     if jr:
         col = next((c for c in jr[0] if c.startswith(("alone65_", "독거노인_", "alone_")) and not c.endswith("_in_high")), None)
         pop = {r["adm_cd"]: num(r.get("pop65")) for r in (ew or [])}
@@ -964,7 +965,18 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         if aq is not None:
             alone = sum(1 for c in hi_d if c in rate and rate[c] >= aq)
     P("V6.21.alone", "고립 위험 × 독거노인 비율이 함께 상위 25% 인 동", ["dong_joined.csv (tools/outside_join_dong.py, 독거노인)", "dong_hbi_with_elderly.csv (pop65)"],
-      f"{alone}곳" if alone is not None else None)
+      f"{alone}곳" if alone is not None else None, optional=True)   # [10/12 판정] 장에는 안 씀 (0 이 나오기 쉬움) → 아래 alone_top3
+    # [10/12 판정] 21장 둘째 지표: 고립 위험 상위 3개 동(동별 고립 위험 집 비율 순, 0 보다 큰 동)의 독거노인 수 합. 행정동 공개 통계라 노출 문제 없음
+    top3 = [c for c, v in sorted(rk.items(), key=lambda x: -(x[1] or 0)) if v is not None and v > 0][:3]
+    a3 = None
+    if jr and col and top3:
+        am = {r["adm_cd"]: num(r.get(col)) for r in jr}
+        v3 = [am.get(c) for c in top3]
+        a3 = sum(v3) if all(v is not None for v in v3) else None
+    nm3 = {r["adm_cd"]: r["adm_nm"].split()[-1] for r in rows_d}
+    P("V6.21.alone_top3", "고립 위험 상위 3개 동의 독거노인 수 (합, 공개 통계)", ["dong_joined.csv (tools/outside_join_dong.py, 독거노인)", "dong_hbi.csv"],
+      f"{a3:,.0f}명" if a3 is not None else None)
+    P("V6.21.alone_top3_dongs", "고립 위험 상위 3개 동", [], "·".join(nm3.get(c, c) for c in top3) if top3 else None, optional=True)
     sk = extra.get("skt_by_code") or {}
     sq = sorted(sk.values())
     low = {c for c, v in sk.items() if len(sq) >= 4 and v <= sq[int(len(sq) * 0.25)]}
