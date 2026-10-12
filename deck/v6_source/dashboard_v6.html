@@ -1,0 +1,144 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<style>
+:root{--ink:#1C2321;--text:#2B2F2E;--muted:#6B7370;--line:#DADFDC;--paper:#FFFFFF;--wash:#F3F4F3;
+--b1:#8CB8A0;--b2:#F2B134;--b3:#E4572E;--b4:#9E2A2B;--accent:#E4572E}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1800px;height:760px;font-family:'Noto Sans CJK KR',sans-serif;color:var(--text);background:var(--paper);display:grid;grid-template-columns:250px 1fr 430px;grid-template-rows:56px 1fr}
+header{grid-column:1/4;display:flex;align-items:center;gap:22px;padding:0 24px;border-bottom:1px solid var(--line)}
+.logo{font-weight:900;font-size:24px;color:var(--ink);letter-spacing:-.5px}
+.logo span{color:var(--accent)}
+.crumb{font-size:15px;color:var(--muted)}
+.crumb b{color:var(--text);font-weight:700}
+.tag{margin-left:auto;font-size:12px;color:#9E2A2B;border:1px solid #9E2A2B;border-radius:4px;padding:3px 10px}
+aside{padding:18px 20px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:20px;font-size:14px}
+aside h3{font-size:13px;color:var(--muted);font-weight:700;margin-bottom:8px}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg div{flex:1;text-align:center;padding:7px 0;font-weight:700;color:var(--muted)}
+.seg .on{background:var(--ink);color:#fff}
+.opt{display:flex;align-items:center;gap:8px;padding:4px 0}
+.box{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--ink)}
+.box.on{background:var(--ink);box-shadow:inset 0 0 0 3px #fff}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:4px 10px;border-radius:4px;border:1px solid var(--line);font-size:13px}
+.chip.on{border-color:var(--ink);color:var(--ink);font-weight:700;background:var(--wash)}
+.leg{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:13px}
+.sw{width:22px;height:14px;border-radius:3px}
+main{position:relative;overflow:hidden;background:#FFFFFF}
+main svg{position:absolute;inset:0}
+.mlabel{position:absolute;font-size:13px;font-weight:700;color:var(--ink);background:rgba(255,255,255,.9);padding:2px 8px;border-radius:6px;border:1px solid var(--line)}
+.scale{position:absolute;left:18px;bottom:16px;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.scale i{display:block;width:88px;height:6px;border:1.5px solid var(--muted);border-top:none}
+.toggle{position:absolute;right:16px;top:14px;display:flex;background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:13px;font-weight:700}
+.toggle div{padding:6px 14px;color:var(--muted)}
+.toggle .on{background:var(--accent);color:#fff}
+section{border-left:1px solid var(--line);padding:18px 22px;display:flex;flex-direction:column;gap:14px}
+.place{display:flex;align-items:baseline;gap:10px}
+.place h2{font-size:26px;color:var(--ink);font-weight:900}
+.place small{font-size:14px;color:var(--muted)}
+.hbi{display:flex;align-items:center;gap:12px}
+.hbi .v{font-size:40px;font-weight:900;color:var(--b4);line-height:1}
+.hbi .k{font-size:13px;color:var(--muted);line-height:1.35}
+.pill{background:var(--b4);color:#fff;font-size:12px;font-weight:700;padding:3px 9px;border-radius:4px}
+.stats{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.stats div{padding:9px 0}
+.stats div+div{border-left:1px solid var(--line);padding-left:12px}
+.stats b{display:block;font-size:20px;color:var(--text)}
+.stats span{font-size:12px;color:var(--muted)}
+.cand h3{font-size:14px;font-weight:700;margin-bottom:6px}
+.row{display:grid;grid-template-columns:26px 1fr auto;gap:8px;align-items:center;padding:6px 0;font-size:14px}
+.row+.row{border-top:1px dashed var(--line)}
+.num{width:24px;height:24px;border-radius:50%;background:var(--ink);color:#fff;font-size:13px;font-weight:700;display:grid;place-items:center}
+.row.sel .num{background:var(--accent)}
+.row em{font-style:normal;font-size:12px;color:var(--muted)}
+.btn{background:var(--accent);color:#fff;text-align:center;font-weight:700;font-size:15px;padding:10px;border-radius:9px}
+.result{background:#fff;border:1.5px solid #E4572E;border-radius:8px;padding:12px 14px}
+.result h4{font-size:13px;color:#B8401F;margin-bottom:6px}
+.rgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.rgrid b{display:block;font-size:22px;color:#B8401F;line-height:1.15}
+.rgrid span{font-size:12px;color:var(--muted)}
+.foot{font-size:12px;color:var(--muted);margin-top:auto}
+</style></head><body>
+<header>
+  <div class="logo">even<span>ly</span></div>
+  <div class="crumb">언덕 부담 지도 &nbsp;/&nbsp; <b>고지대 이동편의시설 후보 검토</b></div>
+  <div class="tag">화면 예시 · 가상 수치</div>
+</header>
+<aside>
+  <div><h3>누구 기준으로 볼까요</h3><div class="seg"><div class="on">고령자</div><div>휠체어</div></div></div>
+  <div><h3>어디까지 가는 길</h3>
+    <div class="opt"><div class="box on"></div>병원·약국</div>
+    <div class="opt"><div class="box on"></div>지하철 엘리베이터</div>
+    <div class="opt"><div class="box"></div>버스정류장</div></div>
+  <div><h3>지역</h3><div class="chips"><div class="chip on">종로구</div><div class="chip">중구</div><div class="chip">관악구</div><div class="chip">광진구</div><div class="chip">강서구</div></div></div>
+  <div><h3>언덕 부담 지수</h3>
+    <div class="leg"><div class="sw" style="background:var(--b1)"></div>1.0~1.3 평지 수준</div>
+    <div class="leg"><div class="sw" style="background:var(--b2)"></div>1.3~1.8 체감 부담</div>
+    <div class="leg"><div class="sw" style="background:var(--b3)"></div>1.8~2.2 고립 위험</div>
+    <div class="leg"><div class="sw" style="background:var(--b4)"></div>2.2 이상</div></div>
+  <div><h3>함께 보기</h3>
+    <div class="opt"><div class="box on"></div>기존 이동편의시설</div>
+    <div class="opt"><div class="box on"></div>우선 후보</div>
+    <div class="opt"><div class="box on"></div>10분 도달 범위</div></div>
+</aside>
+<main id="map">
+  <div class="toggle"><div>설치 전</div><div class="on">설치 후</div></div>
+  <div class="scale"><i></i>250m 격자</div>
+</main>
+<section>
+  <div class="place"><h2>창신3동</h2><small>종로구</small></div>
+  <div class="hbi"><div class="v">2.14</div><div class="k">언덕 부담 지수<br>평지보다 2.14배 걸려요</div><div class="pill">고립 위험</div></div>
+  <div class="stats">
+    <div><b>380</b><span>고립 위험 가구</span></div>
+    <div><b>약 610명</b><span>65세 이상 (추정)</span></div>
+    <div><b>1.2km</b><span>가까운 기존 시설</span></div>
+  </div>
+  <div class="cand"><h3>우선 후보</h3>
+    <div class="row sel"><div class="num">1</div><div>창신동 ○○계단 <em>115m · 경사 31%</em></div><em>설치 여지 46%</em></div>
+    <div class="row"><div class="num">2</div><div>낙산 ○○비탈길 <em>180m · 경사 17%</em></div><em>설치 여지 38%</em></div>
+    <div class="row"><div class="num">3</div><div>창신 ○○골목 계단 <em>60m · 경사 26%</em></div><em>설치 여지 21%</em></div>
+  </div>
+  <div class="btn">후보 1에 경사형 엘리베이터 놓아 보기</div>
+  <div class="result"><h4>설치하면 (후보 1)</h4>
+    <div class="rgrid">
+      <div><b>410가구</b><span>부담이 줄어드는 집</span></div>
+      <div><b>6.2분</b><span>왕복 평균 단축</span></div>
+      <div><b>95가구</b><span>휠체어 새로 도달</span></div>
+    </div></div>
+  <div class="foot">언덕 부담 지수 2.14 → 1.42 · 1억 원당 수혜 어르신 15명 (1곳 40억 원 가정)</div>
+</section>
+<script>
+let seed=7;function rnd(){seed=(seed*16807)%2147483647;return (seed-1)/2147483646}
+const W=1120,H=704,map=document.getElementById('map');
+const hills=[{x:640,y:250,a:300,b:220,h:1.35},{x:250,y:180,a:230,b:170,h:0.85},{x:900,y:560,a:200,b:150,h:0.6}];
+function field(x,y){let v=1.0;for(const k of hills){const d=((x-k.x)/k.a)**2+((y-k.y)/k.b)**2;v+=k.h*Math.exp(-d*1.6)}return v}
+const cand={x:560,y:330};
+function after(x,y,v){const d=Math.hypot(x-cand.x,y-cand.y);if(d<170){return 1+(v-1)*(0.55+0.45*(d/170))}return v}
+function col(v){return v<1.3?'#8CB8A0':v<1.8?'#F2B134':v<2.2?'#E4572E':'#9E2A2B'}
+let svg=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+for(const k of hills){for(let r=0.25;r<=2.4;r+=0.22){svg+=`<ellipse cx="${k.x}" cy="${k.y}" rx="${k.a*r*0.62}" ry="${k.b*r*0.62}" fill="none" stroke="#DADFDC" stroke-width="1"/>`}}
+// 도로
+svg+=`<path d="M0 470 C200 430 360 520 560 470 S900 380 1120 420" stroke="#ECEEED" stroke-width="10" fill="none"/>`;
+svg+=`<path d="M420 0 C440 200 380 380 470 704" stroke="#ECEEED" stroke-width="8" fill="none"/>`;
+const cs=26;
+for(let y=6;y<H-6;y+=cs){for(let x=6;x<W-6;x+=cs){
+  const v0=field(x,y)+ (rnd()-0.5)*0.18; if(rnd()<0.18) continue;
+  const v=after(x,y,v0); const changed=Math.abs(v-v0)>0.15&&col(v)!==col(v0);
+  svg+=`<rect x="${x}" y="${y}" width="${cs-4}" height="${cs-4}" rx="3" fill="${col(v)}" opacity="${0.86}" ${changed?'stroke="#1C2321" stroke-width="2"':''}/>`;
+}}
+// 동 경계
+svg+=`<path d="M430 150 L760 120 L820 300 L760 470 L520 500 L410 360 Z" fill="none" stroke="#1C2321" stroke-width="2.5" stroke-dasharray="7 5"/>`;
+// 10분 도달 범위 (평지 vs 경사)
+svg+=`<circle cx="${cand.x}" cy="${cand.y+90}" r="170" fill="none" stroke="#6B7370" stroke-width="2" stroke-dasharray="4 6"/>`;
+svg+=`<path d="M ${cand.x-150} ${cand.y+130} C ${cand.x-170} ${cand.y-10}, ${cand.x-40} ${cand.y-70}, ${cand.x+40} ${cand.y-30} C ${cand.x+120} ${cand.y+10}, ${cand.x+90} ${cand.y+200}, ${cand.x-30} ${cand.y+240} C ${cand.x-110} ${cand.y+250}, ${cand.x-140} ${cand.y+200}, ${cand.x-150} ${cand.y+130} Z" fill="rgba(228,87,46,.10)" stroke="#E4572E" stroke-width="2.5"/>`;
+// 엘리베이터 선
+svg+=`<line x1="${cand.x}" y1="${cand.y}" x2="${cand.x+70}" y2="${cand.y-85}" stroke="#1C2321" stroke-width="5" stroke-linecap="round"/>`;
+// 후보 마커
+[[cand.x,cand.y,1,'#E4572E'],[690,230,2,'#1C2321'],[470,250,3,'#1C2321']].forEach(([x,y,n,c])=>{svg+=`<circle cx="${x}" cy="${y}" r="15" fill="${c}" stroke="#fff" stroke-width="3"/><text x="${x}" y="${y+5}" text-anchor="middle" font-size="15" font-weight="700" fill="#fff" font-family="Noto Sans CJK KR">${n}</text>`});
+// 기존 시설
+[[250,560],[960,300]].forEach(([x,y])=>{svg+=`<rect x="${x-11}" y="${y-11}" width="22" height="22" rx="5" fill="#fff" stroke="#1C2321" stroke-width="2.5"/><path d="M${x-5} ${y+5} L${x} ${y-6} L${x+5} ${y+5}" stroke="#1C2321" stroke-width="2.5" fill="none"/>`});
+// 목적지 (병원·약국, 지하철)
+[[180,470,'약국'],[860,440,'의원'],[330,630,'지하철']].forEach(([x,y,t])=>{svg+=`<path d="M${x-8} ${y} h16 M${x} ${y-8} v16" stroke="#1C2321" stroke-width="4"/>`});
+svg+='</svg>';
+map.insertAdjacentHTML('afterbegin',svg);
+[['창신3동',600,128],['기존 시설',272,548],['10분 도달 범위 (경사 반영)',612,606],['평지 가정 10분',748,476]].forEach(([t,x,y])=>{const d=document.createElement('div');d.className='mlabel';d.textContent=t;d.style.left=x+'px';d.style.top=y+'px';map.appendChild(d)});
+</script></body></html>

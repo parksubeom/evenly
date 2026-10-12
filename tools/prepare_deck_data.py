@@ -19,7 +19,7 @@ tools/prepare_deck_data.py ─ 반출 결과 파일 → 기획서에 넣을 값(
 import argparse, datetime, json, math, os, re, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from evenly_common import (ROOT, TARGET_GU, TARGET_LABEL, FAKE_MARKER, RAW_EXPORT, is_fake_dir, source_of, PUBLIC_REHEARSAL, load_dongs, dong_of, read_csv, num, truthy)
+from evenly_common import (ROOT, TARGET_GU, TARGET_LABEL, FAKE_MARKER, RAW_EXPORT, is_fake_dir, source_of, PUBLIC_REHEARSAL, load_dongs, dong_of, read_csv, num, truthy, to5186)
 
 HI, LO = 1.8, 1.3
 # 19장 KCB 중첩 방향. v5 기본 KCB 값 "KCB_60세이상_월200만원이하비율" = C1~C3 인원 ÷ C1~C22 인원
@@ -159,6 +159,8 @@ def main():
     ap.add_argument("--src", default=os.path.join(ROOT, "results", "raw_export"))
     ap.add_argument("--expect", choices=["real", "fake", "rehearsal"], help="build:real 은 real: 가짜·공개 대역 표지가 있으면 멈춤. build:rehearsal 은 rehearsal")
     ap.add_argument("--mode", help="v6 run_all --modes 로 나뉜 결과에서 쓸 방식 폴더 (layer / register / gisbld / all)")
+    ap.add_argument("--bands", choices=["hbi", "min"], default="hbi",
+                    help="[v6 기획서] 14·17·21·22 장의 구간 기준: hbi = HBI 1.3·1.8 (기본) / min = 왕복 추가 5분·10분")
     a = ap.parse_args()
     src = os.path.abspath(a.src)
     if not os.path.isdir(src):
@@ -564,14 +566,26 @@ def main():
             [[r["scenario"], f_num(num(r["hbi_median"])), f_pct(num(r.get(sh_col))) if sh_col else None,
               f_num(num(r["rank_corr_vs_base"])), f_pct(num(r["top10_overlap"]), 0)] for r in sens])
 
+    # ── [v6 기획서] deck/build_v6.js 의 결과 키 (V6.장.이름). 정의는 docs/기획서_v6_결과키.md ──
+    skt_by_code = {}
+    for code, h, v in skt_rows or []:
+        if v is not None and skt_mode == "sum" and pop60.get(code):
+            skt_by_code[code] = v / pop60[code]
+        elif v is not None and skt_mode == "join":
+            skt_by_code[code] = v
+    kcb_by_code = {r["adm_cd"]: num(r.get(kcb_key)) for r in (kcb_rows or []) if num(r.get(kcb_key)) is not None} if (kcb_rows and KCB_EXPECT in (kcb_key or "")) else {}
+    v6_keys(B, S, R, sm, grid, T0, source, a.bands, routes, site_rows, ew, isum, opt_file,
+            {"skt_by_code": skt_by_code, "kcb_by_code": kcb_by_code, "inputs": inp, "abl": abl})
+
     # ── 그림 ──
     plots = make_plots(B, grid, targets, T0, vs, site_rows, skt_plot, rho, p_rho)
+    v6_plots(B, grid, T0, a.bands, R)
     if not plots:
         for k, lab, need in [("map", "결과 지도", ["grid_hbi.csv", "matplotlib"]), ("ranks", "순위 역전 산점도", ["grid_hbi.csv", "matplotlib"]),
                              ("sites", "선정지 백분위 막대", ["validation_sites.csv", "matplotlib"]), ("skt", "외출 지수 산점도", ["points_SKT_*_dong.csv", "pop60.csv", "matplotlib"])]:
             B.img(k, lab, need, None)
 
-    data = {"source": source, "src": os.path.relpath(src, ROOT), "attr_mode": attr_mode, "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
+    data = {"source": source, "src": os.path.relpath(src, ROOT), "attr_mode": attr_mode, "bands": a.bands, "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
             "targets": targets, "base_target": T0, "fields": B.fields, "images": B.images, "tables": B.tables, "missing": B.missing()}
     os.makedirs(os.path.dirname(OUT_JSON), exist_ok=True)
     with open(OUT_JSON, "w", encoding="utf-8") as f:
@@ -733,6 +747,265 @@ def make_plots(B, grid, targets, T0, vs, site_rows, skt_plot, skt_rho, skt_p):
     else:
         B.img("skt", "외출 지수 산점도", need, None)
     return True
+
+
+# ════════════════════ [v6 기획서] 결과 키 (deck/build_v6.js) ════════════════════
+#  키 이름: V6.<장>.<이름>. 값이 없으면 None → 생성기가 ___ 로 두고 누락으로 적음.
+#  later = 공개 대역 판(source=rehearsal)에서 원래 채울 수 없는 칸에 보일 말 ("실제 결과 후" 등). 실제 판에서는 ___ 그대로(누락)
+#  구간 기준 bands: hbi = HBI 1.3(부담)·1.8(고립 위험) / min = 왕복 추가 5분(부담)·10분(고립 위험)
+#  정의 표: docs/기획서_v6_결과키.md
+def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, opt_file, extra):
+    def P(key, label, need, value, later=None, optional=False):
+        B.fields[key] = {"value": value, "label": label, "need": need}
+        if later:
+            B.fields[key]["later"] = later
+        if optional:
+            B.fields[key]["optional"] = True
+    M = bands == "min"
+    rows_d = R("dong_hbi.csv") or []
+    gus = sorted({(r.get("adm_nm") or "").split()[1] for r in rows_d if len((r.get("adm_nm") or "").split()) >= 3})
+    P("V6.scope", "분석 범위(구)", ["dong_hbi.csv"], (gus[0] if len(gus) == 1 else ("5개 구" if len(gus) >= 5 else "·".join(gus))) if gus else None, optional=True)
+    P("V6.bands", "구간 기준", [], "왕복 추가 5분·10분" if M else "HBI 1.3·1.8", optional=True)
+    cv = lambda g, k: num(g.get(k))
+    gT = [g for g in grid if g["target"] == T0]
+    has_min = bool(gT) and "share_add5m" in gT[0] and "share_add10m" in gT[0]
+    ok_grid = bool(gT) and (has_min or not M)
+    if M:
+        burden = lambda g: (cv(g, "share_add5m") or 0) >= 0.5
+        risk = lambda g: (cv(g, "share_add10m") or 0) >= 0.5
+        metric = lambda g: cv(g, "share_add10m")
+        need_g = ["grid_hbi.csv (share_add5m·share_add10m, v6.2)"]
+    else:
+        burden = lambda g: (cv(g, "hbi_mean") or 0) >= LO
+        risk = lambda g: (cv(g, "hbi_mean") or 0) >= HI
+        metric = lambda g: cv(g, "hbi_mean")
+        need_g = ["grid_hbi.csv"]
+    P("V6.burden_def", "부담 구간 정의", [], "격자 집 절반 이상이 왕복 5분 이상 더" if M else "격자 평균 HBI 1.3 이상", optional=True)
+    P("V6.risk_def", "고립 위험 정의", [], "격자 집 절반 이상이 왕복 10분 이상 더" if M else "격자 평균 HBI 1.8 이상", optional=True)
+
+    # ── 14 사각지대 ──
+    pct = None
+    if ok_grid:
+        fl = sorted(cv(g, "flat_min") for g in gT if cv(g, "flat_min") is not None)
+        if fl:
+            med = fl[len(fl) // 2]
+            near = [g for g in gT if cv(g, "flat_min") is not None and cv(g, "flat_min") <= med]
+            pct = sum(1 for g in near if burden(g)) / len(near) if near else None
+    P("V6.14.near_burden", '평지 기준 "가까운"(평지 왕복 중앙값 이하) 격자 중 부담 구간 비율', need_g, f"{pct * 100:.0f}" if pct is not None else None)
+    m0 = sm.get(T0, {})
+    n_, sh_ = (m0.get("왕복 추가 10분 이상 건물 수"), m0.get("왕복 추가 10분 이상 비율")) if M else (m0.get(f"HBI {HI} 이상 건물 수"), m0.get(f"HBI {HI} 이상 비율"))
+    P("V6.14.risk_bld", "고립 위험 건물 수·주거 비율", ["summary.csv"], f"{f_int(n_)}채 · 주거의 {sh_ * 100:.1f}%" if n_ is not None and sh_ is not None else None)
+    P("V6.14.risk_label", "고립 위험 이름", [], "고립 위험(왕복 10분 이상 더) 건물" if M else f"고립 위험(HBI {HI} 이상) 건물", optional=True)
+    est, masked = None, 0
+    for r in ew or []:
+        p65, wa = num(r.get("pop65")), num(r.get("weight_all"))
+        wx = num(r.get("weight_add10m")) if M else num(r.get("weight_high"))
+        if not (p65 and wa):
+            continue
+        if wx is None:                       # 05 가 1~4채 몫이 드러날까 봐 가린 동: 빼고 셈
+            masked += 1
+            continue
+        est = (est or 0) + p65 * wx / wa
+    P("V6.14.elderly", "고립 위험 건물 거주 고령인구 추정", ["dong_hbi_with_elderly.csv (tools/outside_elderly.py)"], f"약 {f_about(est)}명" if est is not None else None)
+    P("V6.14.elderly_note", "고령인구 추정에서 뺀 동", [], f"연면적을 가린 동 {masked}곳은 뺀 값" if masked else None, optional=True)
+    best = None
+    for r in rows_d:
+        v = num(r.get("share_add10m")) if M else num(r.get("hbi_mean"))
+        if v is not None and (best is None or v > best[0]):
+            best = (v, r)
+    P("V6.14.top_dong", "부담이 가장 큰 동", ["dong_hbi.csv"] + (["(share_add10m, v6.2)"] if M else []),
+      (f"{best[1]['adm_nm'].split()[-1]} (왕복 10분 이상 {best[0] * 100:.0f}%)" if M else f"{best[1]['adm_nm'].split()[-1]} (HBI {best[0]:.2f})") if best else None)
+
+    # ── 16 신뢰 ──
+    done = [x for x in site_rows if x["percentile"] is not None]
+    if len(done) >= 5:
+        lab, val = "서울시 2025 선정지 5곳 중 상위 10%", f"{sum(1 for x in done if x['top10'] == '포함')}곳"
+    elif done:
+        lab, val = "서울시 2025 선정지 " + "·".join(x["name"].split()[-1] for x in done) + " 백분위 (같은 구 격자 중)", " · ".join(x["top_text"] for x in done)
+    else:
+        lab, val = "서울시 2025 선정지 5곳 중 상위 10%", None
+    P("V6.16.site_label", "선정지 줄 이름", [], lab, optional=True)
+    P("V6.16.site", "선정지 백분위", ["validation_sites.csv"], val, later="5개 구 결과 후")
+    dh = next((r for r in routes if "대현산" in r.get("name", "") and num(r.get("wheel_path_m"))), None)
+    bc = next((r for r in routes if "봉천 선정지" in r.get("name", "") and num(r.get("wheel_path_m"))), None)
+    if dh:
+        lab, m = "대현산 휠체어 우회 (서울시 약 770m)", num(dh["wheel_path_m"])
+    elif bc:
+        lab, m = "봉천 선정지 계단 휠체어 우회 (서울시 200m 이상)", num(bc["wheel_path_m"])
+    else:
+        lab, m = "대현산 휠체어 우회 (서울시 약 770m)", None
+    P("V6.16.wheel_label", "휠체어 우회 줄 이름", [], lab, optional=True)
+    P("V6.16.wheel", "휠체어 우회 모델 길이", ["validation_routes.csv (wheel_path_m)"], f"모델 {round(m):,}m" if m else None, later="5개 구 결과 후")
+    P("V6.16.wheel_note", "휠체어 우회 확인", [], "1,000m 초과: 경로를 지도에서 확인 (공개 대역 계단 면 왜곡일 수 있음)" if m and m > 1000 else None, optional=True)
+    P("V6.16.daehyun_note", "대현산 줄", [], "대현산(서울시 약 770m)은 5개 구 결과 후" if bc and not dh else None, optional=True)
+    gv = lambda k: (B.fields.get(k) or {}).get("value")
+    P("V6.16.meas_r", "현장실측 예측 vs 실측 r", ["validation_routes.csv (measured_min 3개 이상)"], f"r = {gv('VALID.meas_r')}" if gv("VALID.meas_r") else None, later="실제 결과 후")
+    P("V6.16.pub_miss", "공개데이터만 쓰면 놓치는 부담 구간", ["results/public_baseline/compare_station.csv (실제 LX 결과와 비교)"], gv("ABL.pub_miss"), later="실제 결과 후")
+    P("V6.16.dem_top10", "높이(DEM)를 빼면 바뀌는 상위 10%", ["validation_ablation.csv"], gv("ABL.dem_top10"))
+    st_ = (extra.get("abl") or {}).get(("계단 레이어 제외", "계단을 통행가능으로 잘못 가정할 때 휠체어 시간 과소추정 비율(평균)"))
+    P("V6.16.stairs", "계단을 빼면 휠체어 시간 과소 계산", ["validation_ablation.csv"], f"평균 {f_pct(st_, 1)}" if st_ is not None else None)
+
+    # ── 17·19 후보 ──
+    cand = [g for g in gT if risk(g)] if ok_grid else []
+    P("V6.17.n_cand", "우선 검토 후보 격자 수 (고립 위험 정의)", need_g, f"{len(cand)}" if ok_grid else None)
+    top = sorted([g for g in gT if metric(g) is not None], key=lambda g: (-metric(g), -(cv(g, "hbi_mean") or 0)))[:5] if ok_grid else []
+    rows = []
+    if top:
+        dongs = load_dongs(None)
+        fac = []
+        for r in read_csv(os.path.join(ROOT, "data_public", "existing_facilities.csv")) or []:
+            if num(r.get("lon")) is not None and num(r.get("lat")) is not None:
+                fx, fy = to5186(num(r["lon"]), num(r["lat"]))
+                fac.append((r["name"].split()[-1] + (" (계획)" if "planned" in (r.get("status") or "") else ""), fx, fy))
+        for g in top:
+            x, y = cv(g, "cell_x"), cv(g, "cell_y")
+            d = dong_of(x, y, dongs)
+            near = [n for n, fx, fy in fac if math.hypot(fx - x, fy - y) <= 500]
+            rows.append({"loc": (f"{d['gu']} {d['adm_nm'].split()[-1]}" if d else "-") + " 격자", "val": f"{metric(g) * 100:.0f}%" if M else f"{metric(g):.2f}",
+                         "fac": ", ".join(near) or "없음", "meets": bool(risk(g))})
+    B.table("V6.17.rows", "후보 격자 상위 5칸 (위치·지표·500m 시설)", need_g + ["data_public/existing_facilities.csv"], rows)
+    P("V6.17.val_head", "후보 표 지표 이름", [], "왕복 10분+" if M else "HBI", optional=True)
+    P("V6.17.cost", "1억 원당 수혜 고령자", ["후보별 시설 시뮬레이션 (09 를 후보마다)"], None, later="후보별 분석 필요")
+    P("V6.17.cell_later", "후보 표 고령자·설치 여지·예상 효과·처방", ["후보별 고령인구·필지 지목(13)·시설 시뮬레이션(09)"], None, later="후보별 분석")
+    iso = sorted(f for f in (os.listdir(S("")) if os.path.isdir(S("")) else []) if f.startswith("map_isochrone_") and f.endswith(".png"))
+    iso = next((f for f in iso if "봉천" in f), iso[0] if iso else None)
+    B.img("V6.iso", "선정지 등시선 그림", ["map_isochrone_*.png (12_isochrone.py)"], S(iso) if iso else None)
+
+    # ── 20 한 사람(봉천) ──
+    frow = [r for r in isum if "봉천" in r.get("facility", "") and not r.get("facility", "").startswith("ALL")]
+    pick = max(frow, key=lambda r: num(r.get("wheel_benefit")) or 0) if frow else None
+    iv = bool(bc and pick and num(pick.get("pass_s")) is not None)
+    P("V6.20.mode", "20장 계산 근거", [], "wheel" if iv else "example", optional=True)
+    if iv:
+        need20 = ["validation_routes.csv (봉천 선정지 계단)", "intervention_summary.csv (v6.2)"]
+        P("V6.20.before", "설치 전 휠체어 경로", need20, f"{round(num(bc['wheel_path_m'])):,}m")
+        P("V6.20.after", "설치 후 (계단 양 끝 직선)", need20, f"{round(num(bc['straight_m'])):,}m" if num(bc.get("straight_m")) else None)
+        P("V6.20.rise", "높이 차", need20, f"{num(pick['rise_m']):.1f}m" if num(pick.get("rise_m")) is not None else None)
+        P("V6.20.pass", "통과 시간", need20, f"{num(pick['pass_s']):.0f}초")
+        P("V6.20.wheel_n", "휠체어 1분 이상 단축 건물", need20, f"{f_int(num(pick.get('wheel_benefit')))}동")
+        P("V6.20.elder30", "고령자 30초 이상 단축 건물", need20, f"{f_int(num(pick.get('n_saved_30s')))}동" if num(pick.get("n_saved_30s")) is not None else None)
+        P("V6.20.tgt", "기준 목적지", [], TARGET_LABEL.get(pick["target"], pick["target"]), optional=True)
+
+    # ── 21 방문돌봄 (동 단위, 상위 25% 겹침) ──
+    def q75(vs):
+        vs = sorted(v for v in vs if v is not None)
+        return vs[int(len(vs) * 0.75)] if len(vs) >= 4 else None
+    rk = {r["adm_cd"]: (num(r.get("share_add10m")) if M else num(r.get("share_high"))) for r in rows_d}
+    pr = [v for v in rk.values() if v is not None and v > 0]
+    rq = q75(pr)
+    hi_d = {c for c, v in rk.items() if v is not None and v > 0 and rq is not None and v >= rq}
+    P("V6.21.risk_dongs", "고위험 동 수 (값이 0 보다 큰 동 중 상위 25%)", ["dong_hbi.csv"], f"{len(hi_d)}" if rk else None, optional=True)
+    dj = opt_file("dong_joined.csv")
+    jr = read_csv(dj) if dj else None
+    alone = None
+    if jr:
+        col = next((c for c in jr[0] if c.startswith(("alone65_", "독거노인_", "alone_")) and not c.endswith("_in_high")), None)
+        pop = {r["adm_cd"]: num(r.get("pop65")) for r in (ew or [])}
+        rate = {r["adm_cd"]: num(r.get(col)) / pop[r["adm_cd"]] for r in jr if col and num(r.get(col)) is not None and pop.get(r["adm_cd"])}
+        aq = q75(rate.values())
+        if aq is not None:
+            alone = sum(1 for c in hi_d if c in rate and rate[c] >= aq)
+    P("V6.21.alone", "고립 위험 × 독거노인 비율이 함께 상위 25% 인 동", ["dong_joined.csv (tools/outside_join_dong.py, 독거노인)", "dong_hbi_with_elderly.csv (pop65)"],
+      f"{alone}곳" if alone is not None else None)
+    sk = extra.get("skt_by_code") or {}
+    sq = sorted(sk.values())
+    low = {c for c, v in sk.items() if len(sq) >= 4 and v <= sq[int(len(sq) * 0.25)]}
+    P("V6.21.skt", "외출이 적은(SKT) 고위험 동", ["points_SKT_*_dong.csv (10)", "pop60.csv"],
+      (f"{len(hi_d & low)}곳" + (f" (ρ = {gv('CROSS.skt_rho')})" if gv("CROSS.skt_rho") else "")) if sk else None, later="실제 결과 후")
+    kc = extra.get("kcb_by_code") or {}
+    kq = sorted(kc.values())
+    poor = {c for c, v in kc.items() if len(kq) >= 4 and v >= kq[int(len(kq) * 0.75)]} if KCB_HIGH_IS_POOR else set()
+    P("V6.21.kcb", "저소득(KCB)과 겹치는 고위험 동", ["join_KCB_*.csv (07)"], f"{len(hi_d & poor)}곳" if kc else None, later="실제 결과 후")
+
+    # ── 22 교통·보행 ──
+    gB = [g for g in grid if g["target"] == "bus"]
+    okB = bool(gB) and (not M or "share_add5m" in gB[0])
+    P("V6.22.bus", "정류장까지 부담 구간인 격자 수 (부담 정의, 버스정류장 기준)", need_g + ["(목적지 bus)"], f"{sum(1 for g in gB if burden(g))}곳" if okB else None)
+    P("V6.22.acc", "고령 보행자 사고가 겹치는 구간", ["legal_summary.csv (11, 사고 자료)"], None, later="실제 결과 후")
+
+    # ── 13 방문일 (deck/inputs.json, SAFE.day* 와 같은 값. v6 는 글자로 넣어서 키를 따로 둠) ──
+    for i in (2, 3):
+        f = B.fields.get(f"SAFE.day{i}") or {}
+        P(f"V6.13.visit{i}", f"안심구역 {i}차 방문일", f.get("need") or ["deck/inputs.json"], f.get("value"))
+
+    # ── 15 현장실측 (실측 구간 이름이 맞을 때만) ──
+    keys15 = [("청계천", "평지 · 청계천"), ("주택가", "보통 · 주택가"), ("청구동", "계단 · 청구동"), ("대현산", "급경사 · 대현산")]
+    inp = extra.get("inputs") or {}
+    app = inp.get("mapapp_min") or {}
+    for i, (kw, _) in enumerate(keys15):
+        r = next((x for x in routes if kw in x.get("name", "")), None)
+        P(f"V6.15.{i}.app", f"현장실측 {kw} 지도앱 시간", ["deck/inputs.json 의 mapapp_min"], (f"{app[kw]}분" if kw in app else None), later="실제 결과 후")
+        P(f"V6.15.{i}.meas", f"현장실측 {kw} 실측", ["validation_routes.csv (measured_min)"], f"{num(r['measured_min']):g}분" if r and num(r.get("measured_min")) is not None else None, later="실제 결과 후")
+        P(f"V6.15.{i}.model", f"현장실측 {kw} 모델(성인)", ["validation_routes.csv (adult_min)"], f"{num(r['adult_min']):.1f}분" if r and num(r.get("adult_min")) is not None and num(r.get("measured_min")) is not None else None, later="실제 결과 후")
+    P("V6.15.wait", "대현산 모노레일 대기", ["deck/inputs.json 의 monorail_wait_s"], f"{inp['monorail_wait_s']}초" if inp.get("monorail_wait_s") else None, later="실제 결과 후")
+    P("V6.15.ride", "대현산 모노레일 탑승", ["deck/inputs.json 의 monorail_ride_s"], f"{inp['monorail_ride_s']}초" if inp.get("monorail_ride_s") else None, later="실제 결과 후")
+    P("V6.15.date", "현장실측 날짜", ["deck/inputs.json 의 survey_date"], inp.get("survey_date"), later="실제 결과 후")
+
+    # ── 29 민감도 (순위상관) ──
+    sens = {r["scenario"].strip(): num(r.get("rank_corr_vs_base")) for r in (R("sensitivity.csv") or [])}
+    mn = lambda *ks: min((sens[k] for k in ks if sens.get(k) is not None), default=None)
+    for key, lab, ks in [("speed", "보행속도 0.7·1.0m/s", ("보행속도 0.7m/s", "보행속도 1.0m/s")), ("down", "내리막 부담 0%·100%", ("내리막 부담 0%(Tobler 원식)", "내리막 부담 100%")),
+                         ("stair", "계단 가중 1.5", ("계단 가중 1.5",))]:
+        v = mn(*ks)
+        P(f"V6.29.{key}", f"민감도 순위상관: {lab}", ["sensitivity.csv (08)"], f"{v:.2f}" if v is not None else None)
+    P("V6.29.wheel", "민감도: 휠체어 경사 한계", ["08_sensitivity.py 에 이 시나리오 없음"], None, later="08 민감도에 없음")
+    P("V6.29.facility", "민감도: 모노레일·엘리베이터 시간", ["08_sensitivity.py 에 이 시나리오 없음"], None, later="08 민감도에 없음")
+
+
+def v6_plots(B, grid, T0, bands, R):
+    """[v6 기획서] 14장 지도: 분석 범위 구만, 구간 기준대로 색칠 (hbi = 격자 평균 HBI, min = 왕복 추가 5·10분 다수 격자)"""
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from matplotlib.collections import PatchCollection, LineCollection
+        from matplotlib.patches import Rectangle, Patch
+        from matplotlib.colors import LinearSegmentedColormap
+    except ImportError:
+        B.img("V6.map", "결과 지도 (v6)", ["grid_hbi.csv", "matplotlib"], None)
+        return
+    M = bands == "min"
+    cells = [g for g in grid if g["target"] == T0]
+    if not cells or (M and "share_add10m" not in cells[0]):
+        B.img("V6.map", "결과 지도 (v6)", ["grid_hbi.csv" + (" (share_add5m·share_add10m)" if M else "")], None)
+        return
+    gus = sorted({(r.get("adm_nm") or "").split()[1] for r in (R("dong_hbi.csv") or []) if len((r.get("adm_nm") or "").split()) >= 3}) or TARGET_GU
+    alld = load_dongs(None)
+    tgt = [d for d in alld if d["gu"] in gus]
+    x0 = min(d["bbox"][0] for d in tgt) - 300; x1 = max(d["bbox"][2] for d in tgt) + 300
+    y0 = min(d["bbox"][1] for d in tgt) - 300; y1 = max(d["bbox"][3] for d in tgt) + 300
+    W, H = 5.3, 3.53
+    if (x1 - x0) / (y1 - y0) < W / H:
+        c, half = (x0 + x1) / 2, (y1 - y0) * W / H / 2; x0, x1 = c - half, c + half
+    else:
+        c, half = (y0 + y1) / 2, (x1 - x0) * H / W / 2; y0, y1 = c - half, c + half
+    names = {f.name for f in matplotlib.font_manager.fontManager.ttflist}
+    plt.rcParams["font.family"] = next((f for f in ["Malgun Gothic", "Apple SD Gothic Neo", "AppleGothic", "NanumGothic"] if f in names), "sans-serif")
+    fig = plt.figure(figsize=(W, H), dpi=220)
+    ax = fig.add_axes([0, 0, 1, 1]); ax.set_facecolor("#FFFFFF"); fig.patch.set_facecolor("#FFFFFF")
+    ax.add_collection(LineCollection([r for d in alld if d["gu"] not in gus for r in d["rings"]], colors="#E4E8E6", linewidths=0.35))
+    rects = [Rectangle((num(g["cell_x"]) - 125, num(g["cell_y"]) - 125), 250, 250) for g in cells]
+    V6C = ["#8CB8A0", "#F2B134", "#E4572E", "#9E2A2B"]
+    if M:
+        cls = [2 if (num(g.get("share_add10m")) or 0) >= 0.5 else (1 if (num(g.get("share_add5m")) or 0) >= 0.5 else 0) for g in cells]
+        pc = PatchCollection(rects, facecolors=[V6C[k] for k in cls], linewidths=0)
+        leg = [Patch(color=V6C[0], label="왕복 5분 미만 더"), Patch(color=V6C[1], label="5~10분 더"), Patch(color=V6C[2], label="10분 이상 더")]
+        cap = "250m 격자 · 집 절반 이상이 넘는 왕복 추가 시간"
+    else:
+        pc = PatchCollection(rects, cmap=LinearSegmentedColormap.from_list("v6", V6C), linewidths=0)
+        pc.set_array([num(g["hbi_mean"]) for g in cells]); pc.set_clim(1.0, 2.2)
+        leg = [Patch(color=V6C[0], label="1.0~1.3 평지 수준"), Patch(color=V6C[1], label="1.3~1.8 체감 부담"), Patch(color=V6C[2], label="1.8 이상 고립 위험")]
+        cap = "250m 격자 평균 언덕 부담 지수(HBI)"
+    ax.add_collection(pc)
+    ax.add_collection(LineCollection([r for d in tgt for r in d["rings"]], colors="#6B7370", linewidths=0.4))
+    ax.legend(handles=leg, loc="lower left", fontsize=7, frameon=False, borderaxespad=0.6)
+    ax.text(x1 - 200, y1 - 200, cap + f" · 목적지 {TARGET_LABEL.get(T0, T0)}", fontsize=7, color="#6B7370", ha="right", va="top")
+    ax.plot([x1 - 1400, x1 - 400], [y0 + 350, y0 + 350], color="#1C2321", lw=1.6)
+    ax.text(x1 - 900, y0 + 450, "1km", fontsize=7, color="#1C2321", ha="center", va="bottom")
+    ax.set_xlim(x0, x1); ax.set_ylim(y0, y1); ax.set_aspect("equal"); ax.axis("off")
+    p = os.path.join(IMG_DIR, f"v6_map_{bands}.png")
+    fig.savefig(p); plt.close(fig)
+    B.img("V6.map", "결과 지도 (v6, " + ("왕복 추가 분" if M else "HBI") + ")", ["grid_hbi.csv"], p)
 
 
 if __name__ == "__main__":

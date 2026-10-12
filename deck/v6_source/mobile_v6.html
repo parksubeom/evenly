@@ -1,0 +1,77 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:900px;height:720px;font-family:'Noto Sans CJK KR',sans-serif;background:#fff;display:flex;align-items:flex-start;justify-content:center;gap:70px;padding-top:14px;color:#2B2F2E}
+.col{display:flex;flex-direction:column;align-items:center;gap:12px}
+.cap{font-size:17px;font-weight:700;color:#6B7370}
+.cap.on{color:#E4572E}
+.phone{width:320px;height:650px;border-radius:44px;border:10px solid #1C2321;overflow:hidden;position:relative;background:#FFFFFF}
+.notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:110px;height:24px;background:#1C2321;border-radius:0 0 14px 14px;z-index:3}
+.top{position:absolute;top:30px;left:14px;right:14px;background:#fff;border-radius:12px;padding:10px 12px;font-size:13px;box-shadow:0 1px 0 #E3E6E4;z-index:2}
+.top b{font-size:14px}
+.top .r{color:#6B7370;font-size:12px;margin-top:2px}
+.modes{display:flex;gap:6px;margin-top:8px}
+.modes span{font-size:12px;padding:3px 9px;border-radius:4px;border:1px solid #DADFDC;color:#6B7370}
+.modes .on{background:#1C2321;color:#fff;border-color:#1C2321;font-weight:700}
+svg.map{position:absolute;top:0;left:0}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:22px 22px 0 0;padding:16px 18px 18px;box-shadow:0 -1px 0 #E3E6E4}
+.grab{width:40px;height:4px;border-radius:2px;background:#DADFDC;margin:0 auto 12px}
+.big{font-size:30px;font-weight:900;line-height:1.1}
+.sub{font-size:13px;color:#6B7370;margin-top:4px}
+.warn{display:inline-block;margin-top:10px;font-size:13px;font-weight:700;color:#B8401F;background:#fff;border:1.5px solid #E4572E;padding:3px 10px;border-radius:4px}
+.alt{margin-top:12px;border:1px solid #DADFDC;border-radius:12px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;font-size:13px}
+.alt b{font-size:15px}
+.go{margin-top:12px;background:#1C2321;color:#fff;text-align:center;font-weight:700;padding:10px;border-radius:10px;font-size:14px}
+.go.gray{background:#4A6FA5}
+.prof{margin-top:10px}
+.tag{position:absolute;top:0;right:0;font-size:12px;color:#9E2A2B;border:1px solid #9E2A2B;border-radius:4px;padding:2px 8px}
+</style></head><body>
+<div class="tag">화면 예시 · 가상 수치</div>
+<div class="col"><div class="phone"><div class="notch"></div>
+  <svg class="map" width="300" height="630" viewBox="0 0 300 630">
+    <rect width="300" height="630" fill="#EEF1EE"/>
+    <path d="M-10 120 L310 160 M-10 300 L310 260 M90 -10 L120 640 M220 -10 L190 640" stroke="#fff" stroke-width="14"/>
+    <path d="M70 380 C110 330 150 300 175 250 C190 220 200 190 215 150" stroke="#4A6FA5" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <circle cx="70" cy="380" r="9" fill="#fff" stroke="#4A6FA5" stroke-width="4"/>
+    <circle cx="215" cy="150" r="10" fill="#4A6FA5"/>
+    <text x="80" y="406" font-size="13" fill="#2B2F2E" font-family="Noto Sans CJK KR">약국</text>
+    <text x="228" y="154" font-size="13" fill="#2B2F2E" font-family="Noto Sans CJK KR">집</text>
+  </svg>
+  <div class="top"><b>약국 → 집</b><div class="r">도보 길찾기</div></div>
+  <div class="sheet"><div class="grab"></div>
+    <div class="big">도보 7분</div>
+    <div class="sub">450m · 큰길 경유</div>
+    <div class="alt"><span>다른 경로</span><b>도보 8분</b></div>
+    <div class="go gray">안내 시작</div>
+  </div></div>
+  <div class="cap">지금의 도보 안내</div></div>
+
+<div class="col"><div class="phone"><div class="notch"></div>
+  <svg class="map" width="300" height="630" viewBox="0 0 300 630">
+    <rect width="300" height="630" fill="#F3F4F3"/>
+    <g fill="none" stroke="#DADFDC" stroke-width="1.2">
+      <ellipse cx="240" cy="168" rx="40" ry="30"/><ellipse cx="240" cy="168" rx="80" ry="58"/><ellipse cx="240" cy="168" rx="120" ry="88"/><ellipse cx="240" cy="168" rx="165" ry="120"/><ellipse cx="240" cy="168" rx="210" ry="152"/></g>
+    <path d="M-10 262 L310 282 M100 -10 L120 640 M215 -10 L198 640" stroke="#fff" stroke-width="12"/>
+    <g transform="translate(0,-16)"><path d="M58 318 C25 262 55 204 115 192 C165 182 205 178 236 166" stroke="#1C2321" stroke-width="3.5" fill="none" stroke-dasharray="6 6"/>
+    <path d="M58 318 C78 308 94 300 110 292" stroke="#8CB8A0" stroke-width="8" fill="none" stroke-linecap="round"/>
+    <path d="M110 292 C140 275 160 255 182 230" stroke="#F2B134" stroke-width="8" fill="none" stroke-linecap="round"/>
+    <path d="M182 230 C200 205 218 185 236 166" stroke="#9E2A2B" stroke-width="8" fill="none" stroke-linecap="round"/>
+    <circle cx="58" cy="318" r="8" fill="#fff" stroke="#1C2321" stroke-width="4"/>
+    <circle cx="236" cy="166" r="9" fill="#1C2321"/>
+    <text x="14" y="312" font-size="12" fill="#2B2F2E" font-family="Noto Sans CJK KR">약국</text>
+    <text x="250" y="171" font-size="12" fill="#2B2F2E" font-family="Noto Sans CJK KR">집</text>
+    <text x="200" y="246" font-size="11.5" font-weight="700" fill="#9E2A2B" font-family="Noto Sans CJK KR">급경사 계단</text>
+    <text x="62" y="240" font-size="11" fill="#1C2321" font-family="Noto Sans CJK KR">완만한 길</text></g>
+  </svg>
+  <div class="top"><b>약국 → 집</b><div class="r">도보 길찾기</div>
+    <div class="modes"><span>기본</span><span class="on">어르신</span><span>휠체어</span></div></div>
+  <div class="sheet"><div class="grab"></div>
+    <div class="big" style="color:#E4572E">어르신 약 14분</div>
+    <div class="sub">450m · 평지 기준 7분</div>
+    <div class="warn">오르막 많음 · 54m 올라가요</div>
+    <svg class="prof" width="264" height="44" viewBox="0 0 264 44"><path d="M0 40 C60 40 90 34 130 24 C170 14 210 6 264 4 L264 44 L0 44 Z" fill="#F3F4F3"/><path d="M0 40 C60 40 90 34 130 24 C170 14 210 6 264 4" stroke="#E4572E" stroke-width="2.5" fill="none"/></svg>
+    <div class="alt"><span>계단 없는 길 · 완만</span><b>10분 <span style="color:#6B7370;font-weight:400;font-size:12px">(+3분)</span></b></div>
+    <div class="go">완만한 길로 안내</div>
+  </div></div>
+  <div class="cap on">오르막 반영 (evenly 연계 구상)</div></div>
+</body></html>

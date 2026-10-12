@@ -2,12 +2,13 @@
   "name": "evenly-deck",
   "private": true,
   "scripts": {
-    "build": "node build_deck.js",
-    "build:fake": "node py.js ../tools/make_fake_results.py && node py.js ../tools/prepare_deck_data.py --src ../results/fake_export && node build_deck.js",
-    "build:fake:partial": "node py.js ../tools/make_fake_results.py --partial && node py.js ../tools/prepare_deck_data.py --src ../results/fake_export && node build_deck.js",
-    "build:real": "node py.js ../tools/prepare_deck_data.py --src ../results/raw_export --expect real && node build_deck.js",
-    "build:rehearsal": "node py.js ../tools/prepare_deck_data.py --src ../results/public_rehearsal/${REHEARSAL:-gwanak_v61} --expect rehearsal && node build_deck.js",
-    "build:fake:v4": "node py.js ../tools/make_fake_results.py --schema v4 && node py.js ../tools/prepare_deck_data.py --src ../results/fake_export && node build_deck.js"
+    "build": "node build_v6.js",
+    "build:fake": "node py.js ../tools/make_fake_results.py && node py.js ../tools/prepare_deck_data.py --src ../results/fake_export --expect fake && node build_v6.js --expect fake",
+    "build:real": "node py.js ../tools/prepare_deck_data.py --src ../results/raw_export --expect real && node build_v6.js --expect real",
+    "build:rehearsal": "node py.js ../tools/prepare_deck_data.py --src ../results/public_rehearsal/${REHEARSAL:-gwanak_v62} --expect rehearsal --bands ${BANDS:-hbi} && node build_v6.js --expect rehearsal",
+    "build:rehearsal:ab": "BANDS=hbi npm run build:rehearsal && BANDS=min npm run build:rehearsal",
+    "build:v5deck:fake": "node py.js ../tools/make_fake_results.py && node py.js ../tools/prepare_deck_data.py --src ../results/fake_export && node build_deck.js",
+    "build:v5deck:real": "node py.js ../tools/prepare_deck_data.py --src ../results/raw_export --expect real && node build_deck.js"
   },
   "dependencies": {
     "pptxgenjs": "^3.12.0"

@@ -24,6 +24,26 @@ def run(py, args, cwd, log, inp=""):
     return p.returncode, out, round(time.time() - t0)
 
 
+def fill_facilities(path, specs):
+    """--facility "이름=a_lon,a_lat,b_lon,b_lat" → interventions.csv 의 그 이름 줄 좌표 네 칸. 이름이 없으면 멈춤"""
+    import csv
+    rows = list(csv.reader(open(path, encoding="utf-8-sig", newline="")))
+    head = rows[0]
+    for sp in specs:
+        nm, _, xy = sp.partition("=")
+        v = [x.strip() for x in xy.split(",")]
+        if len(v) != 4 or not all(re.fullmatch(r"-?\d+(\.\d+)?", x) for x in v):
+            raise SystemExit(f"--facility 형식: 이름=a_lon,a_lat,b_lon,b_lat ({sp!r})")
+        hit = [r for r in rows[1:] if r and r[0].strip() == nm.strip()]
+        if len(hit) != 1:
+            raise SystemExit(f"interventions.csv 에 '{nm}' 줄이 {len(hit)}개")
+        for k, x in zip(("a_lon", "a_lat", "b_lon", "b_lat"), v):
+            hit[0][head.index(k)] = x
+        print(f"시설 좌표 넣음: {nm} = {', '.join(v)}", flush=True)
+    with open(path, "w", encoding="utf-8-sig", newline="") as f:
+        csv.writer(f).writerows(rows)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--py", required=True, help="QGIS 파이썬 (osgeo·numpy 있는 것)")
@@ -31,6 +51,8 @@ def main():
     ap.add_argument("--modes", default="auto,register,all")
     ap.add_argument("--name", default="gwanak_v61", help="결과 폴더 이름 results/public_rehearsal/<이름> (영문·숫자·_.- 만). build:rehearsal 은 REHEARSAL=<이름>")
     ap.add_argument("--bundle", default="hbi_code_bundle_v6.1.txt", help="--root 안의 번들 파일 이름 (후보 번들 시험용)")
+    ap.add_argument("--facility", action="append", default=[], metavar="이름=a_lon,a_lat,b_lon,b_lat",
+                    help="[10/12] setup 뒤 external/interventions.csv 의 그 이름 줄에 양 끝 좌표를 넣음 (안내서 단계 7 처럼). 여러 번 가능")
     a = ap.parse_args()
     root = os.path.abspath(a.root)
     if not os.path.exists(os.path.join(root, "공개대역_README.txt")):
@@ -56,6 +78,8 @@ def main():
              ("run_all", ["run_all.py", "--modes", a.modes], H, ""),
              ("12", ["12_isochrone.py"], H, ""), ("13", ["13_siting.py"], H, ""), ("14", ["14_dong_context.py"], H, "")]
     for name, args, cwd, inp in steps:
+        if name == "check" and a.facility:              # [10/12] 단계 7 의 좌표 넣기를 setup 뒤에 미리 (그래서 run_all 이 09 를 함께 돌림)
+            fill_facilities(os.path.join(H, "external", "interventions.csv"), a.facility)
         rc, out, sec = run(a.py, args, cwd, os.path.join(logs, f"L_{name}.log"), inp)
         res[name] = {"rc": rc, "sec": sec}
         print(f"{name}: 끝남 {rc} ({sec}초)", flush=True)

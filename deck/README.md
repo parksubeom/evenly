@@ -1,5 +1,20 @@
 # 기획서 생성기
 
+**[10/12] 기준본은 v6 (편집형 30장)**: `build_v6.js` (디자인 원본 `v6_source/build6.js`, 결과 칸만 결과 키로). 결과 키 표는 `docs/기획서_v6_결과키.md`
+
+```
+cd deck
+npm install                  # 처음 한 번 (pptxgenjs)
+npm run build:fake           # 가상 수치 → ../deliverables/_test_기획서_v6.pptx (오른쪽 위 "가상 수치 · 검토용")
+npm run build:rehearsal:ab   # 공개 대역 A(HBI 1.3·1.8)·B(왕복 추가 5·10분) → _rehearsal_기획서_v6_A·B.pptx ("공개 대역 · 제출 금지")
+npm run build:real           # 실제 반출 결과 → ../deliverables/언덕위우리동네_기획서_final.pptx (가짜·공개 대역이면 멈춤)
+python3 ../tools/check_deck.py ../deliverables/_rehearsal_기획서_v6_A.pptx --missing data/missing_v6_A.txt
+python3 ../tools/render_deck.py ../deliverables/_rehearsal_기획서_v6_A.pptx --out ../_render/v6_A   # 미리보기 PNG
+```
+- 예전 29장 생성기 `build_deck.js` 는 쓰지 않음 (`npm run build:v5deck:fake|real` 로만 남김)
+
+## (예전 29장 생성기 설명)
+
 ```
 cd deck
 npm install              # 처음 한 번 (pptxgenjs)
