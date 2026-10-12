@@ -488,12 +488,12 @@ else:
     for r, x, y in zip(rows, sx, sy):
         rad = float(r.get("radius_m") or 300)
         m = valid & (np.hypot(X - x, Y - y) <= rad)         # 선정지 반경 안의 건물
-        hm = float(np.mean(H[m])) if m.any() else np.nan
+        hm = float(np.mean(H[m])) if m.sum() >= C.MIN_COUNT else np.nan   # [10/12 검토] 원 안 건물 1~4채면 값 빈 칸 (5건 미만 제외)
         pct = float(np.mean(cmean < hm)) if np.isfinite(hm) else np.nan   # 이 값보다 낮은 격자의 비율 = 백분위 (v4 방식)
         pc = float(np.mean(circ < hm)) if np.isfinite(hm) and len(circ) else np.nan   # 같은 반경 원 분포 안 백분위 (v5)
         site_h.append(hm)
         res.append([r["name"], int(m.sum()), fmt(hm),
-                    round(float(np.mean(H[m] >= C.HBI_BANDS[1])), 3) if m.any() else "",
+                    round(float(np.mean(H[m] >= C.HBI_BANDS[1])), 3) if m.sum() >= C.MIN_COUNT else "",
                     fmt(pct), (pct >= 0.9) if np.isfinite(pct) else "",
                     fmt(pc), (pc >= 0.9) if np.isfinite(pc) else ""])
     write_csv(os.path.join(C.OUTPUT, "validation_sites.csv"),
@@ -669,6 +669,8 @@ def band_weights(n_base, ns, ws, force=()):
 
 
 REP = rep_mode() == C.BUILDING_ATTR_MODE
+if not rep_mode():                                # [10/12] 대표 방식을 정할 수 없으면 값 칸을 비움 (안전 쪽)
+    log("!! 대표 방식을 정할 수 없어 연면적·격자 값 칸을 비웁니다 → python check.py 뒤 python run_all.py --modes auto,all")
 
 os.makedirs(C.OUTPUT, exist_ok=True)
 b = load_buildings()
@@ -698,8 +700,8 @@ for T in targets(b):                              # 목적지 종류마다 반�
                 [T, "휠체어 도달불가 비율", round(float(np.mean(~np.isfinite(b[f"{T}_t_wheel"][U]))), 3)],
                 # [v6.2] 연면적은 DT(행정동 표와 같은 목적지)만: 목적지끼리 빼면 몇 채 몫이 드러나므로 (의료·약국은 고위험 집합이 거의 같음).
                 #        분석 건물 연면적 합은 분석 건물이 DT 와 똑같은 목적지면 같은 값이라 냄, 다르면 빈 칸
-                [T, f"HBI {hi} 이상 건물의 연면적 합(㎡, 고령인구 배분용)", band_weights(int(v.sum()), [int((v & (H >= hi)).sum())], [b["weight"][v & (H >= hi)].sum()])[0] if T == DT else ""],
-                [T, "분석 건물 연면적 합(㎡)", round(float(b["weight"][v].sum())) if (T == DT or np.array_equal(v, V_DT)) else ""]]
+                [T, f"HBI {hi} 이상 건물의 연면적 합(㎡, 고령인구 배분용)", band_weights(int(v.sum()), [int((v & (H >= hi)).sum())], [b["weight"][v & (H >= hi)].sum()])[0] if (T == DT and REP) else ""],
+                [T, "분석 건물 연면적 합(㎡)", round(float(b["weight"][v].sum())) if REP and (T == DT or np.array_equal(v, V_DT)) else ""]]   # [10/12] 연면적은 대표 방식만
     # [v6.1] 구간(1.3·1.8)을 다시 볼 때 쓰는 분위수: HBI, 왕복 추가 시간(분) = 경사 반영 왕복 - 평지 가정 왕복 (경계 제외).
     #        건물이 QUANT_MIN 개 미만이면 빈 칸 (몇 채로 분위수를 내면 개별 값에 가까워짐)
     add_min = (b[f"{T}_t_elder"] - b[f"{T}_t_flat"]) / 60
@@ -811,6 +813,7 @@ write_csv(os.path.join(C.OUTPUT, "run_meta.csv"), ["key", "value"], [
     ["target_gu", ",".join(C.TARGET_GU) or "(전체)"], ["neighbor_gu", ",".join(C.NEIGHBOR_GU)],
     ["target_gu_all", ",".join(getattr(C, "TARGET_GU_ALL", []))], ["target_note", getattr(C, "TARGET_NOTE", "")],
     ["building_attr_mode", st.get("mode", C.BUILDING_ATTR_MODE)],
+    ["rep_mode", rep_mode()], ["is_rep_mode", "yes" if REP else "no"],   # [10/12] 값 칸을 낸 방식인지 (기획서는 yes 인 폴더를 씀)
     ["hbi_bands", ",".join(f"{x:g}" for x in C.HBI_BANDS)], ["extra_min_bands", ",".join(f"{x:g}" for x in C.MIN_BANDS)],   # [v6.2] 구간 문턱 (기획서가 읽음)
     ["register_link_rate", st.get("link_rate", "")], ["register_join", st.get("register_join", "")], ["register_join_used", st.get("join_used", "")],
     ["register_rate_pnu", st.get("rate_pnu", "")], ["register_rate_pk", st.get("rate_pk", "")],
@@ -850,7 +853,7 @@ if bd:
         wall = b["weight"][(which == k) & U].sum()            # 동 전체 주거 연면적 (경계 제외)
         n_high = int((m & (H >= hi)).sum())
         whigh = b["weight"][m & (H >= hi)].sum()              # 그중 HBI 1.8 이상 건물의 연면적
-        wh_pub = band_weights(n_all, [n_high], [whigh])[0]    # [v6.2] 1~4채 몫이 드러나면 빈 칸 (v6.1a 까지는 그대로 냈음)
+        wh_pub = band_weights(n_all, [n_high], [whigh])[0] if REP else ""   # [v6.2] 1~4채 몫이 드러나면 빈 칸. [10/12] 대표 방식만
         est = round(pop[code] * whigh / wall) if code in pop and wall > 0 and wh_pub != "" else ""   # 고령인구 × 연면적 비율 (가렸으면 빈 칸)
         if est != "":
             total += est
@@ -865,7 +868,7 @@ if bd:
             if w_ != "":
                 pub_band[j].append(n_)
         rows.append([code, str(a.get(sk, "")) if sk else "", a.get(nk, "") if nk else "", int(m.sum()), round(float(H[m].mean()), 3),
-                     round(float(np.mean(H[m] >= hi)), 3), round(float(wall)), wh_pub, est] + extra)
+                     round(float(np.mean(H[m] >= hi)), 3), round(float(wall)) if REP else "", wh_pub, est] + extra)   # [10/12] weight_all 도 대표 방식만
     write_csv(os.path.join(C.OUTPUT, "dong_hbi.csv"),
               ["adm_cd", "adm_cd_stat", "adm_nm", "n_bld", "hbi_mean", "share_high", "weight_all", "weight_high", "elderly_in_high_est"]
               + [f"{p_}_{band_tag(mb)}" for mb in C.MIN_BANDS for p_ in ("n", "share", "weight")], rows)
@@ -1354,6 +1357,8 @@ gx = np.floor(X / C.GRID).astype(np.int64)
 gy = np.floor(Y / C.GRID).astype(np.int64)
 ok0 = U & (node >= 0)
 REP = rep_mode() == C.BUILDING_ATTR_MODE                         # [v6.2] 연면적은 대표 방식만 (05 와 같음)
+if not rep_mode():                                               # [10/12] 정할 수 없으면 연면적·시간 값을 비움
+    log("!! 대표 방식을 정할 수 없어 연면적·시간 값 칸을 비웁니다 → python check.py 뒤 python run_all.py --modes auto,all")
 DT = "medical" if "medical_hbi" in b else (targets(b)[0] if targets(b) else None)   # [v6.2] 연면적은 05 행정동 표와 같은 목적지만
 n_single = len(fac)                                              # scen 앞쪽 n_single 개 = 시설 하나씩, 그 뒤 = ALL
 in_all = [st != "existing" for _, st, _, _ in fac]               # 시설 i 가 ALL 에 들어가는지
@@ -1546,7 +1551,9 @@ for it in R:                                                     # scen 순서 =
 #  연면적과 같은 이유). 목적지마다 POOL_T 에 이미 낸 시간 값의 건물 집합을 모으고 (HBI 는 05 격자·행정동 HBI 평균 집합도),
 #  줄마다 수혜 집합 S 를 연면적과 같은 검사(publishable)로 봄. 시설 하나씩 → ALL 순서, 줄마다 summary → 격자
 T_COLS = (4, 5, 6, 7, 8)                                         # mean_saved_min, saved_p95_min, sum_saved_bld_min, hbi_before, hbi_after
-POOL_T = {}
+POOL_T = {}                                                      # HBI 값(설치 전 HBI)의 공개 집합: 목적지마다 (목적지가 다르면 HBI 가 다른 양)
+POOL_SV = []                                                     # [10/12 검토] 단축 값의 공개 집합: 목적지를 합쳐 하나 (같은 건물의 단축 시간은 목적지가 달라도
+                                                                 #   같은 경우가 많아 목적지끼리 빼면 몇 채 몫이 나옴, 독립 검토가 4채 4.7분 재현)
 for T in tg:
     pt = []
     if REP:
@@ -1558,23 +1565,31 @@ for T in tg:
             pt += [q for q in (np.flatnonzero(vT & (which == k)) for k in range(len(dcode))) if len(q) >= MC]
     POOL_T[T] = pt
 tblank = 0
+tb_single = False                                                # [10/12 검토] ③ 시설 하나 줄을 5채 이상인데 가렸으면 ALL 도 (빼기로 되살리지 않게)
+tb_cells = set()                                                 # 시설 하나에서 5채 이상인데 가린 격자 칸 (cx, cy) → ALL 의 같은 칸도
 for it in R:
     T, S = it["T"], np.flatnonzero(it["ben"])
-    ok_t = REP and publishable(S, POOL_T[T])
+    is_all = it["si"] >= n_single
+    ok_t = REP and not (is_all and tb_single) and publishable(S, POOL_SV) and publishable(S, POOL_T[T])
     if ok_t and len(S):
+        POOL_SV.append(S)
         POOL_T[T].append(S)
     if not ok_t:
         tblank += any(it["row"][c] not in ("", None) for c in T_COLS)
         for c in T_COLS:
             it["row"][c] = ""
-    for cx, cy, cn, cm, cS in it.get("cells", []):              # 격자 평균 단축: summary 를 낸 뒤 칸마다 (큰 칸부터가 아니라 순서대로, 보수적)
-        okc = REP and publishable(cS, POOL_T[T])
+        if not is_all and len(S) >= MC and in_all[it["si"]]:
+            tb_single = True
+    for cx, cy, cn, cm, cS in it.get("cells", []):              # 격자 평균 단축: summary 를 낸 뒤 칸마다 (단축 값이라 POOL_SV)
+        okc = REP and not (is_all and (cx, cy) in tb_cells) and publishable(cS, POOL_SV)
         if okc:
-            POOL_T[T].append(cS)
+            POOL_SV.append(cS)
+        elif not is_all and len(cS) >= MC and in_all[it["si"]]:
+            tb_cells.add((cx, cy))
         grows.append([it["name"], T, cx, cy, cn, cm if okc else ""])
 if tblank:
     log(f"  시간 값 가림: summary {tblank}줄의 평균·분위 단축·HBI 칸을 비움 "
-        + ("(수혜 1~4채이거나 다른 시간 값과 빼면 1~4채 몫이 남음)" if REP else f"(대표 방식 {rep_mode()} 에서만 냄)"))
+        + ("(수혜 1~4채이거나 다른 시간 값과 빼면 1~4채 몫이 남음)" if REP else f"(대표 방식 {rep_mode() or '(정할 수 없음)'} 에서만 냄)"))
 np.savez_compressed(os.path.join(C.WORK, "intervention_sets.npz"), x=X, y=Y, names=np.array([n for n, _ in scen]),   # [v6.2] 노출 검사용 (work, 반출 안 함)
                     rowkey=np.array([f"{it['si']}|{it['T']}" for it in R]),                                           # summary 줄 순서
                     drowkey=np.array([f"{it['si']}|{it['T']}|{k}" for it in R for k in it.get("dkeys", [])]),         # 동 표 줄 순서 (k = 동 번호)
@@ -1626,7 +1641,8 @@ np.seterr(invalid="ignore", divide="ignore")
 import config as C
 from lib.qio import log, write_csv, transform_xy, transformer, find_files, iter_layer, read_any as read_table, safe_head
 from lib.qgraph import spearman
-from lib.bload import load_buildings, usable
+from lib.bload import load_buildings, usable, rep_mode
+REP10 = rep_mode() == C.BUILDING_ATTR_MODE        # [10/12 검토] 격자 hbi_mean 은 대표 방식만 (05 격자와 같음: 방식끼리 빼면 몇 채 HBI)
 
 os.makedirs(C.OUTPUT, exist_ok=True)
 todo = {k: v for k, v in C.POINT_DATA.items() if v.get("path")}
@@ -1708,7 +1724,7 @@ for name, cfg in todo.items():
     grows = []
     for k in np.where(cnt >= C.MIN_COUNT)[0]:
         n = float(pmap.get(ub[k], 0))
-        grows.append([(ub[k] // 10**7 + 0.5) * C.GRID, (ub[k] % 10**7 + 0.5) * C.GRID, int(cnt[k]), round(float(hm[k]), 3),
+        grows.append([(ub[k] // 10**7 + 0.5) * C.GRID, (ub[k] % 10**7 + 0.5) * C.GRID, int(cnt[k]), round(float(hm[k]), 3) if REP10 else "",
                       round(n, 2) if summing else int(n), round(n / cnt[k] * 100, 3)])
     write_csv(os.path.join(C.OUTPUT, f"points_{name}_grid.csv"), ["cell_x", "cell_y", "n_bld", "hbi_mean", "n_points", "per100_bld"], grows)
 
@@ -2314,6 +2330,15 @@ for k, code in enumerate(dcode):
     ns = [round(float((BC[m] == c).sum()) / n, 4) for c in ORDER]
     wt = BW[m].sum()
     ws = [round(float(BW[m][BC[m] == c].sum() / wt), 4) if wt > 0 else "" for c in ORDER]
+    # [10/12 검토] w_share × 동 연면적(05 의 weight_all ÷ w_share_주거)으로 1~4채 용도의 연면적이 드러남 (리허설 의료 1채 3,305㎡)
+    #   → 그 용도는 빈 칸. 빈 칸이 하나뿐이면 1 − 나머지 합으로 되살아나므로 건물이 가장 적은 다른 용도도 빈 칸 (v5 부터 있던 것)
+    nc = [int((BC[m] == c).sum()) for c in ORDER]
+    hide = {j for j, x in enumerate(nc) if 0 < x < C.MIN_COUNT}
+    if len(hide) == 1:
+        rest = [j for j, x in enumerate(nc) if x > 0 and j not in hide]
+        if rest:
+            hide.add(min(rest, key=lambda j: nc[j]))
+    ws = ["" if j in hide else w for j, w in enumerate(ws)]
     link_km = float(e["length"][lwhich == k].sum()) / 1000
     row = [code, n] + ns + ws + [round(float(BF[m].mean()), 2), int((swhich == k).sum()), int((uwhich == k).sum()),
                                   round(link_km / area_km2, 2) if area_km2 > 0 else ""]
@@ -2540,18 +2565,18 @@ python 01_inspect.py
 ### 반출 전 체크리스트 (output 폴더)
 밖에서는 원자료를 다시 계산할 수 없으니, 반출 신청 전에 아래가 모두 있는지 확인하세요.
 - [ ] `summary.csv` — 목적지별 요약 (기획서 16장)
-- [ ] `grid_hbi.csv`, `grid_hbi_medical.gpkg` 등 — 격자 결과·지도 (16장, 본선 데모). [v6.1b] `weight`(연면적) 칸은 빈 칸. [v6.2] 맨 뒤 `n_addNm`·`share_addNm` (왕복 추가 N분 이상 건물 수·비율, 문턱은 mapping 의 `extra_min_bands`)과 `add_min_med` (격자 주거 건물의 왕복 추가 분 중앙값). [10/12] `--modes` 로 여러 방식을 내면 **대표 방식(check 가 고른 방식) 밖의 격자는 건물 수(n_bld)만** (값 칸은 빈 칸, gpkg 도 n_bld 만, map_*.png 는 그리지 않고 지난 그림은 지움): 방식끼리 같은 칸의 평균·비율을 빼면 비주거 1~4채의 HBI 가 드러나서. `validation_new_candidates.csv` 의 hbi_mean 도 대표 방식만
+- [ ] `grid_hbi.csv`, `grid_hbi_medical.gpkg` 등 — 격자 결과·지도 (16장, 본선 데모). [v6.1b] `weight`(연면적) 칸은 빈 칸. [v6.2] 맨 뒤 `n_addNm`·`share_addNm` (왕복 추가 N분 이상 건물 수·비율, 문턱은 mapping 의 `extra_min_bands`)과 `add_min_med` (격자 주거 건물의 왕복 추가 분 중앙값). [10/12] `--modes` 로 여러 방식을 내면 **대표 방식(check 가 고른 방식) 밖의 격자는 건물 수(n_bld)만** (값 칸은 빈 칸, gpkg 도 n_bld 만, map_*.png 는 그리지 않고 지난 그림은 지움): 방식끼리 같은 칸의 평균·비율을 빼면 비주거 1~4채의 HBI 가 드러나서. `validation_new_candidates.csv` 의 hbi_mean 도 대표 방식만. 대표 방식 밖은 summary·dong_hbi 의 연면적 칸도 빈 칸. run_meta.csv 의 `is_rep_mode` = 값 칸을 낸 방식인지. **run_all 은 이번 방식 목록에 없는 지난 방식 폴더(와 방식으로 돌릴 때 output/ 맨 위의 지난 결과 파일)를 `work/old_output/<시각>/` 로 옮김** (지우지 않음, 반출하지 않음: 대표 방식이 바뀐 뒤 옛 폴더가 값이 든 채 함께 나가지 않게). 방식 폴더를 단독으로 돌릴 때 `--modes` 기억이 없으면 대표 방식을 몰라 값 칸을 비움
 - [ ] `dong_hbi.csv` — 행정동 결과 (weight_all·weight_high 열 포함 → 밖에서 고령인구 추정). [v6.2] 맨 뒤 `n_addNm`·`share_addNm`·`weight_addNm`. 연면적(weight_high·weight_addNm)은 1~4채 몫이 드러나면 빈 칸, weight_addNm 은 check 가 고른 방식 폴더에만
-- [ ] `validation_sites.csv`, `validation_routes.csv`, `validation_new_candidates.csv`, `validation_ablation.csv` (17·18장)
+- [ ] `validation_sites.csv`, `validation_routes.csv`, `validation_new_candidates.csv`, `validation_ablation.csv` (17·18장). [10/12] 선정지 원 안 건물이 1~4채면 hbi_mean·share_high·백분위 빈 칸
 - [ ] `validation_measured.csv` — [v5] 실측 vs 예측 상관계수 (실측 3구간 이상일 때, 17장)
 - [ ] `intervention_summary.csv`, `intervention_grid.csv`, `intervention_dong.csv` — [v5] 시설 설치 효과 (22·23장). 맨 뒤 열 n_exit_high·weight_exit_high·n_exit_mid (summary), weight_exit_high (dong) = 설치 후 HBI 1.8(1.3) 아래로 내려온 주거 건물 (연면적은 MIN_COUNT 개 미만이면 빈 칸). [v6.2] summary 맨 뒤에 n_saved_30s·n_saved_60s(고령자 왕복 30초·60초 이상 단축), wheel_cut_n·wheel_cut_p25_m·p50_m·p75_m(휠체어 시간이 준 건물의 휠체어 길 길이 감소 m. 음수 = 설치 후 길이 더 김(설치 전 길이 짧지만 가파른 길). 100채(`WHEEL_CUT_MIN`) 미만이면 빈 칸), rise_m·pass_s(시설 높이 차·통과 초). [v6.2] `intervention_wait.csv` = 시설마다 대기 30·60·90초(config `WAIT_SENS_S`)로 바꿔 다시 계산한 의료 목적지 수혜 건물 수(n_benefit·n_saved_30s·wheel_benefit, 수만, 연면적 없음). 기획서 29장 '엘리베이터 설정' 칸. 연면적 칸은 의료·대표 방식만, 1~4채이거나 05·09 의 다른 연면적과 빼서(겹치지 않는 여럿의 합 포함) 1~4채가 남으면 빈 칸. [10/12] summary 의 `max_saved_min`(최대 단축, 늘 한 건물 값) → `saved_p95_min`(95% 분위 단축, 수혜 100채 미만이면 빈 칸). 맨 뒤 `n_benefit_any` = 고령자 왕복 30초 이상(`ANY_ELDER_S`) 또는 휠체어 왕복 1분 이상(새로 도달 포함) 준 건물 수 (기획서 20장 '1억 원당 수혜'). 시간 값(mean_saved_min·saved_p95_min·sum_saved_bld_min·hbi_before·hbi_after, 격자의 mean_saved_min)도 대표 방식에서만 내고, 수혜 1~4채이거나 같은 목적지의 다른 시간 값(05 격자·동 HBI 평균 포함)과 빼서 1~4채가 남으면 빈 칸
-- [ ] `points_summary.csv`, `points_*_dong.csv`, `points_*_grid.csv` — [v5] 점 자료 결합 (개수·값 합계만, 좌표 없음)
+- [ ] `points_summary.csv`, `points_*_dong.csv`, `points_*_grid.csv` — [v5] 점 자료 결합 (개수·값 합계만, 좌표 없음). [10/12] 격자의 hbi_mean 은 대표 방식만
 - [ ] `legal_summary.csv`, `legal_*.csv` — [v5] 법정동별 교통사고 건수 (행 단위 사고 없음)
 - [ ] `parcel_summary.csv`, `parcel_by_legal_dong.csv` (필지 결합)
 - [ ] `join_summary.csv`, `join_*.csv` (KCB 를 썼다면, 19장)
 - [ ] `sensitivity.csv` (민감도, 질의응답)
 - [ ] `isochrone_*.gpkg`, `isochrone_summary.csv`, `map_isochrone_*.png` — [v5] 12_isochrone.py. 반출 설명: "시설 주변 도보 도달 범위를 나타낸 면 도형(길 중심선 25m 버퍼, 10m 단순화). 건물·필지 단위 정보 없음" (범위 안 주거 건물 수는 MIN_COUNT 개 미만이면 빈 칸)
-- [ ] `dong_context.csv` — [v5] 14_dong_context.py. 행정동별 용도 비율·층수·역·정류장·링크 밀도·SKT 주거 칸 합 (건물 MIN_COUNT 개 이상 동만, 개별 건물·셀 좌표 없음)
+- [ ] `dong_context.csv` — [v5] 14_dong_context.py. 행정동별 용도 비율·층수·역·정류장·링크 밀도·SKT 주거 칸 합 (건물 MIN_COUNT 개 이상 동만, 개별 건물·셀 좌표 없음). [10/12] `w_share_<용도>`(연면적 비율)는 그 용도가 1~4채면 빈 칸, 빈 칸이 하나뿐이면 가장 적은 다른 용도도 (05 의 weight_all 과 곱하면 몇 채 연면적이 나와서)
 - [ ] `siting_summary.csv` — [v5] 13_siting.py. 시설 둘레 30m 필지의 지목별 면적 비율만 (필지 번호·소유 정보 없음, 필지 MIN_COUNT 개 미만이면 비율 빈 칸)
 - [ ] `map_*.png` (matplotlib 이 있을 때만. 없으면 gpkg 로 밖에서 지도 제작)
 
@@ -21996,7 +22021,9 @@ def rep_mode():
         modes = []
     ch = (C.MAPPING.get("building_attr_chosen") or "").strip().lower()
     modes = [ch if m == "auto" else m for m in modes]
-    return ch if ch in modes else (modes[0] if modes else C.BUILDING_ATTR_MODE)
+    # [10/12 검토] 방식 폴더(output/<방식>)인데 --modes 기억이 없으면(방식 없이 run_all 을 친 뒤 단독 실행 등) 대표 방식을 모름 → ""
+    #   (예전에는 그 방식을 대표로 봐서 다른 방식 폴더와 함께 값이 나갈 수 있었음). auto 인데 check 가 고른 방식이 비어도 ""
+    return ch if ch in modes else (modes[0] if modes else "")
 '''
 
 # ---------------------------------------------------------------- hbi6/lib/codebook.py
@@ -25168,6 +25195,33 @@ if "--from" in sys.argv:
             raise SystemExit(f"{os.path.relpath(wb, C.BASE)} 가 없습니다 → --from 03")
     steps = steps[k:]
 
+# [10/12 검토] 이번 실행의 방식 목록에 없는 방식 결과 폴더(지난 실행이 남김)는 반출 폴더에서 빼서 work/old_output/<시각>/ 로 옮김 (지우지 않음).
+#  대표 방식이 바뀐 뒤(--modes 를 바꿔 침, setup 다시 → check 가 다른 방식을 고름 등) 옛 대표 방식 폴더가 값이 든 채 함께 반출되면
+#  방식끼리 빼서 몇 채 값이 드러남. 방식 없이 돌리면 방식 폴더를, 방식으로 돌리면 output/ 맨 위의 지난 결과 파일(방식 없이 돌린 것)을 옮김
+def _move_stale():
+    import shutil
+    out, moved = C.OUTPUT, []
+    dst = os.path.join(C.WORK, "old_output", time.strftime("%Y%m%d_%H%M%S", time.localtime(T0)))
+    keep = set(MODES or [])
+    for m in ("layer", "register", "gisbld", "all"):
+        p_ = os.path.join(out, m)
+        if os.path.isdir(p_) and m not in keep:
+            os.makedirs(dst, exist_ok=True)
+            shutil.move(p_, os.path.join(dst, m))
+            moved.append(f"output/{m}/")
+    if MODES and os.path.isdir(out):
+        for f in sorted(os.listdir(out)):
+            if f.endswith((".csv", ".gpkg", ".png")) and os.path.isfile(os.path.join(out, f)):
+                os.makedirs(dst, exist_ok=True)
+                shutil.move(os.path.join(out, f), os.path.join(dst, f))
+                moved.append(f"output/{f}")
+    if moved:
+        print(f"# 이번 실행에 없는 지난 결과 {len(moved)}개를 반출 폴더에서 뺌 → {os.path.relpath(dst, C.BASE)} (지우지 않음, 반출하지 않음): "
+              + ", ".join(moved[:5]) + (" …" if len(moved) > 5 else ""))
+
+
+_move_stale()
+
 # [v6] 알려진 실패 → (찾을 글자, 원인, 할 일). 마지막 화면 글자에서 위에서부터 찾음
 KNOWN = [
     (r"KeyError: '([^']+)'", "칸(필드) 이름 '{0}' 을 자료에서 찾지 못함",
@@ -26372,7 +26426,7 @@ if __name__ == "__main__":
 '''
 
 # ---------------------------------------------------------------- hbi6/VERSION
-FILES['hbi6/VERSION'] = r'''hbi_code v6.2 #ac7de0
+FILES['hbi6/VERSION'] = r'''hbi_code v6.2 #8ccf06
 '''
 
 try:

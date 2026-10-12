@@ -196,18 +196,18 @@ python 01_inspect.py
 ### 반출 전 체크리스트 (output 폴더)
 밖에서는 원자료를 다시 계산할 수 없으니, 반출 신청 전에 아래가 모두 있는지 확인하세요.
 - [ ] `summary.csv` — 목적지별 요약 (기획서 16장)
-- [ ] `grid_hbi.csv`, `grid_hbi_medical.gpkg` 등 — 격자 결과·지도 (16장, 본선 데모). [v6.1b] `weight`(연면적) 칸은 빈 칸. [v6.2] 맨 뒤 `n_addNm`·`share_addNm` (왕복 추가 N분 이상 건물 수·비율, 문턱은 mapping 의 `extra_min_bands`)과 `add_min_med` (격자 주거 건물의 왕복 추가 분 중앙값). [10/12] `--modes` 로 여러 방식을 내면 **대표 방식(check 가 고른 방식) 밖의 격자는 건물 수(n_bld)만** (값 칸은 빈 칸, gpkg 도 n_bld 만, map_*.png 는 그리지 않고 지난 그림은 지움): 방식끼리 같은 칸의 평균·비율을 빼면 비주거 1~4채의 HBI 가 드러나서. `validation_new_candidates.csv` 의 hbi_mean 도 대표 방식만
+- [ ] `grid_hbi.csv`, `grid_hbi_medical.gpkg` 등 — 격자 결과·지도 (16장, 본선 데모). [v6.1b] `weight`(연면적) 칸은 빈 칸. [v6.2] 맨 뒤 `n_addNm`·`share_addNm` (왕복 추가 N분 이상 건물 수·비율, 문턱은 mapping 의 `extra_min_bands`)과 `add_min_med` (격자 주거 건물의 왕복 추가 분 중앙값). [10/12] `--modes` 로 여러 방식을 내면 **대표 방식(check 가 고른 방식) 밖의 격자는 건물 수(n_bld)만** (값 칸은 빈 칸, gpkg 도 n_bld 만, map_*.png 는 그리지 않고 지난 그림은 지움): 방식끼리 같은 칸의 평균·비율을 빼면 비주거 1~4채의 HBI 가 드러나서. `validation_new_candidates.csv` 의 hbi_mean 도 대표 방식만. 대표 방식 밖은 summary·dong_hbi 의 연면적 칸도 빈 칸. run_meta.csv 의 `is_rep_mode` = 값 칸을 낸 방식인지. **run_all 은 이번 방식 목록에 없는 지난 방식 폴더(와 방식으로 돌릴 때 output/ 맨 위의 지난 결과 파일)를 `work/old_output/<시각>/` 로 옮김** (지우지 않음, 반출하지 않음: 대표 방식이 바뀐 뒤 옛 폴더가 값이 든 채 함께 나가지 않게). 방식 폴더를 단독으로 돌릴 때 `--modes` 기억이 없으면 대표 방식을 몰라 값 칸을 비움
 - [ ] `dong_hbi.csv` — 행정동 결과 (weight_all·weight_high 열 포함 → 밖에서 고령인구 추정). [v6.2] 맨 뒤 `n_addNm`·`share_addNm`·`weight_addNm`. 연면적(weight_high·weight_addNm)은 1~4채 몫이 드러나면 빈 칸, weight_addNm 은 check 가 고른 방식 폴더에만
-- [ ] `validation_sites.csv`, `validation_routes.csv`, `validation_new_candidates.csv`, `validation_ablation.csv` (17·18장)
+- [ ] `validation_sites.csv`, `validation_routes.csv`, `validation_new_candidates.csv`, `validation_ablation.csv` (17·18장). [10/12] 선정지 원 안 건물이 1~4채면 hbi_mean·share_high·백분위 빈 칸
 - [ ] `validation_measured.csv` — [v5] 실측 vs 예측 상관계수 (실측 3구간 이상일 때, 17장)
 - [ ] `intervention_summary.csv`, `intervention_grid.csv`, `intervention_dong.csv` — [v5] 시설 설치 효과 (22·23장). 맨 뒤 열 n_exit_high·weight_exit_high·n_exit_mid (summary), weight_exit_high (dong) = 설치 후 HBI 1.8(1.3) 아래로 내려온 주거 건물 (연면적은 MIN_COUNT 개 미만이면 빈 칸). [v6.2] summary 맨 뒤에 n_saved_30s·n_saved_60s(고령자 왕복 30초·60초 이상 단축), wheel_cut_n·wheel_cut_p25_m·p50_m·p75_m(휠체어 시간이 준 건물의 휠체어 길 길이 감소 m. 음수 = 설치 후 길이 더 김(설치 전 길이 짧지만 가파른 길). 100채(`WHEEL_CUT_MIN`) 미만이면 빈 칸), rise_m·pass_s(시설 높이 차·통과 초). [v6.2] `intervention_wait.csv` = 시설마다 대기 30·60·90초(config `WAIT_SENS_S`)로 바꿔 다시 계산한 의료 목적지 수혜 건물 수(n_benefit·n_saved_30s·wheel_benefit, 수만, 연면적 없음). 기획서 29장 '엘리베이터 설정' 칸. 연면적 칸은 의료·대표 방식만, 1~4채이거나 05·09 의 다른 연면적과 빼서(겹치지 않는 여럿의 합 포함) 1~4채가 남으면 빈 칸. [10/12] summary 의 `max_saved_min`(최대 단축, 늘 한 건물 값) → `saved_p95_min`(95% 분위 단축, 수혜 100채 미만이면 빈 칸). 맨 뒤 `n_benefit_any` = 고령자 왕복 30초 이상(`ANY_ELDER_S`) 또는 휠체어 왕복 1분 이상(새로 도달 포함) 준 건물 수 (기획서 20장 '1억 원당 수혜'). 시간 값(mean_saved_min·saved_p95_min·sum_saved_bld_min·hbi_before·hbi_after, 격자의 mean_saved_min)도 대표 방식에서만 내고, 수혜 1~4채이거나 같은 목적지의 다른 시간 값(05 격자·동 HBI 평균 포함)과 빼서 1~4채가 남으면 빈 칸
-- [ ] `points_summary.csv`, `points_*_dong.csv`, `points_*_grid.csv` — [v5] 점 자료 결합 (개수·값 합계만, 좌표 없음)
+- [ ] `points_summary.csv`, `points_*_dong.csv`, `points_*_grid.csv` — [v5] 점 자료 결합 (개수·값 합계만, 좌표 없음). [10/12] 격자의 hbi_mean 은 대표 방식만
 - [ ] `legal_summary.csv`, `legal_*.csv` — [v5] 법정동별 교통사고 건수 (행 단위 사고 없음)
 - [ ] `parcel_summary.csv`, `parcel_by_legal_dong.csv` (필지 결합)
 - [ ] `join_summary.csv`, `join_*.csv` (KCB 를 썼다면, 19장)
 - [ ] `sensitivity.csv` (민감도, 질의응답)
 - [ ] `isochrone_*.gpkg`, `isochrone_summary.csv`, `map_isochrone_*.png` — [v5] 12_isochrone.py. 반출 설명: "시설 주변 도보 도달 범위를 나타낸 면 도형(길 중심선 25m 버퍼, 10m 단순화). 건물·필지 단위 정보 없음" (범위 안 주거 건물 수는 MIN_COUNT 개 미만이면 빈 칸)
-- [ ] `dong_context.csv` — [v5] 14_dong_context.py. 행정동별 용도 비율·층수·역·정류장·링크 밀도·SKT 주거 칸 합 (건물 MIN_COUNT 개 이상 동만, 개별 건물·셀 좌표 없음)
+- [ ] `dong_context.csv` — [v5] 14_dong_context.py. 행정동별 용도 비율·층수·역·정류장·링크 밀도·SKT 주거 칸 합 (건물 MIN_COUNT 개 이상 동만, 개별 건물·셀 좌표 없음). [10/12] `w_share_<용도>`(연면적 비율)는 그 용도가 1~4채면 빈 칸, 빈 칸이 하나뿐이면 가장 적은 다른 용도도 (05 의 weight_all 과 곱하면 몇 채 연면적이 나와서)
 - [ ] `siting_summary.csv` — [v5] 13_siting.py. 시설 둘레 30m 필지의 지목별 면적 비율만 (필지 번호·소유 정보 없음, 필지 MIN_COUNT 개 미만이면 비율 빈 칸)
 - [ ] `map_*.png` (matplotlib 이 있을 때만. 없으면 gpkg 로 밖에서 지도 제작)
 
