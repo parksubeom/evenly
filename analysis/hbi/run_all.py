@@ -95,6 +95,33 @@ if "--from" in sys.argv:
             raise SystemExit(f"{os.path.relpath(wb, C.BASE)} 가 없습니다 → --from 03")
     steps = steps[k:]
 
+# [10/12 검토] 이번 실행의 방식 목록에 없는 방식 결과 폴더(지난 실행이 남김)는 반출 폴더에서 빼서 work/old_output/<시각>/ 로 옮김 (지우지 않음).
+#  대표 방식이 바뀐 뒤(--modes 를 바꿔 침, setup 다시 → check 가 다른 방식을 고름 등) 옛 대표 방식 폴더가 값이 든 채 함께 반출되면
+#  방식끼리 빼서 몇 채 값이 드러남. 방식 없이 돌리면 방식 폴더를, 방식으로 돌리면 output/ 맨 위의 지난 결과 파일(방식 없이 돌린 것)을 옮김
+def _move_stale():
+    import shutil
+    out, moved = C.OUTPUT, []
+    dst = os.path.join(C.WORK, "old_output", time.strftime("%Y%m%d_%H%M%S", time.localtime(T0)))
+    keep = set(MODES or [])
+    for m in ("layer", "register", "gisbld", "all"):
+        p_ = os.path.join(out, m)
+        if os.path.isdir(p_) and m not in keep:
+            os.makedirs(dst, exist_ok=True)
+            shutil.move(p_, os.path.join(dst, m))
+            moved.append(f"output/{m}/")
+    if MODES and os.path.isdir(out):
+        for f in sorted(os.listdir(out)):
+            if f.endswith((".csv", ".gpkg", ".png")) and os.path.isfile(os.path.join(out, f)):
+                os.makedirs(dst, exist_ok=True)
+                shutil.move(os.path.join(out, f), os.path.join(dst, f))
+                moved.append(f"output/{f}")
+    if moved:
+        print(f"# 이번 실행에 없는 지난 결과 {len(moved)}개를 반출 폴더에서 뺌 → {os.path.relpath(dst, C.BASE)} (지우지 않음, 반출하지 않음): "
+              + ", ".join(moved[:5]) + (" …" if len(moved) > 5 else ""))
+
+
+_move_stale()
+
 # [v6] 알려진 실패 → (찾을 글자, 원인, 할 일). 마지막 화면 글자에서 위에서부터 찾음
 KNOWN = [
     (r"KeyError: '([^']+)'", "칸(필드) 이름 '{0}' 을 자료에서 찾지 못함",

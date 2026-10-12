@@ -77,12 +77,12 @@ else:
     for r, x, y in zip(rows, sx, sy):
         rad = float(r.get("radius_m") or 300)
         m = valid & (np.hypot(X - x, Y - y) <= rad)         # 선정지 반경 안의 건물
-        hm = float(np.mean(H[m])) if m.any() else np.nan
+        hm = float(np.mean(H[m])) if m.sum() >= C.MIN_COUNT else np.nan   # [10/12 검토] 원 안 건물 1~4채면 값 빈 칸 (5건 미만 제외)
         pct = float(np.mean(cmean < hm)) if np.isfinite(hm) else np.nan   # 이 값보다 낮은 격자의 비율 = 백분위 (v4 방식)
         pc = float(np.mean(circ < hm)) if np.isfinite(hm) and len(circ) else np.nan   # 같은 반경 원 분포 안 백분위 (v5)
         site_h.append(hm)
         res.append([r["name"], int(m.sum()), fmt(hm),
-                    round(float(np.mean(H[m] >= C.HBI_BANDS[1])), 3) if m.any() else "",
+                    round(float(np.mean(H[m] >= C.HBI_BANDS[1])), 3) if m.sum() >= C.MIN_COUNT else "",
                     fmt(pct), (pct >= 0.9) if np.isfinite(pct) else "",
                     fmt(pc), (pc >= 0.9) if np.isfinite(pc) else ""])
     write_csv(os.path.join(C.OUTPUT, "validation_sites.csv"),

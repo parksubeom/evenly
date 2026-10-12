@@ -158,6 +158,15 @@ for k, code in enumerate(dcode):
     ns = [round(float((BC[m] == c).sum()) / n, 4) for c in ORDER]
     wt = BW[m].sum()
     ws = [round(float(BW[m][BC[m] == c].sum() / wt), 4) if wt > 0 else "" for c in ORDER]
+    # [10/12 검토] w_share × 동 연면적(05 의 weight_all ÷ w_share_주거)으로 1~4채 용도의 연면적이 드러남 (리허설 의료 1채 3,305㎡)
+    #   → 그 용도는 빈 칸. 빈 칸이 하나뿐이면 1 − 나머지 합으로 되살아나므로 건물이 가장 적은 다른 용도도 빈 칸 (v5 부터 있던 것)
+    nc = [int((BC[m] == c).sum()) for c in ORDER]
+    hide = {j for j, x in enumerate(nc) if 0 < x < C.MIN_COUNT}
+    if len(hide) == 1:
+        rest = [j for j, x in enumerate(nc) if x > 0 and j not in hide]
+        if rest:
+            hide.add(min(rest, key=lambda j: nc[j]))
+    ws = ["" if j in hide else w for j, w in enumerate(ws)]
     link_km = float(e["length"][lwhich == k].sum()) / 1000
     row = [code, n] + ns + ws + [round(float(BF[m].mean()), 2), int((swhich == k).sum()), int((uwhich == k).sum()),
                                   round(link_km / area_km2, 2) if area_km2 > 0 else ""]

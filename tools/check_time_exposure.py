@@ -127,6 +127,22 @@ for m in MODES:
                     continue
                 ii = [i for i in np.where(v)[0] if dong_of.get(keyl[i]) == code]
                 chk(f"dong hbi_mean|{t}", m, S, r["hbi_mean"], float(np.mean(H[ii])), "add", ("hbi", t))
+    # [10/12 검토] 10 의 points_*_grid·dong hbi_mean (목적지 = 10 이 쓰는 기준 목적지, 05 와 같은 칸 집합)
+    import glob as _g
+    T10 = DT
+    H10 = np.array([fl(r[f"{T10}_hbi"]) for r in R]); v10 = np.isfinite(H10) & (edge < 0.5)
+    for pf in sorted(_g.glob(f"{H6}/output/{m}/points_*_grid.csv")):
+        cells10 = {}
+        for i in np.where(v10)[0]:
+            cells10.setdefault((round((gx[i] + 0.5) * GRID, 2), round((gy[i] + 0.5) * GRID, 2)), []).append(i)
+        for r in rd(pf):
+            ii = cells10.get((round(float(r["cell_x"]), 2), round(float(r["cell_y"]), 2)), [])
+            chk(f"10 {os.path.basename(pf)} hbi_mean|{T10}", m, {keyl[i] for i in ii}, r.get("hbi_mean"),
+                float(np.mean(H10[ii])) if ii else None, "add", ("hbi", T10))
+    for r in rd(f"{H6}/output/{m}/validation_sites.csv"):         # 04 선정지 원: 1~4채인데 값이 있으면 단독 (집합은 원이라 빼기는 안 봄)
+        n_ = int(float(r.get("n_bld") or 0))
+        if 0 < n_ < MINC and pub(r.get("hbi_mean")):
+            CNT["단독"].append(("04 validation_sites hbi_mean", m, n_))
     # 09
     p = f"{H6}/work/{m}/intervention_sets.npz"
     SS = rd(f"{H6}/output/{m}/intervention_summary.csv"); IG = rd(f"{H6}/output/{m}/intervention_grid.csv")
@@ -144,11 +160,11 @@ for m in MODES:
     for r, key in zip(SS, rk):
         si, T = int(key[0]), key[1]
         ben = np.where(z[f"s{si}_{T}_ben"])[0]; S = {keys9[i] for i in ben}
-        fam = ("iv", T)
-        for col in ("mean_saved_min", "sum_saved_bld_min", "hbi_after"):
+        fam = ("sv", "모든 목적지")                     # [10/12 검토] 단축 값은 목적지를 합쳐 한 양 (같은 건물의 단축이 목적지끼리 같은 경우가 많음)
+        for col in ("mean_saved_min", "sum_saved_bld_min"):
             chk(f"09 {col}|{T}", m, S, r.get(col), None, "add", fam)
+        chk(f"09 hbi_after|{T}", m, S, r.get("hbi_after"), None, "add", ("hbia", T))
         chk(f"09 hbi_before|{T}", m, S, r.get("hbi_before"), None, "add", ("hbi", T))
-        chk(f"09 hbi_before|{T}", m, S, r.get("hbi_before"), None, "add", fam)
         if "max_saved_min" in r:
             chk(f"09 max_saved_min|{T}", m, S, r.get("max_saved_min"), None, "max")
         chk(f"09 saved_p95_min|{T}", m, S, r.get("saved_p95_min"), None, "ord")
@@ -159,7 +175,7 @@ for m in MODES:
             Sc = cells.get(ck, set())
             if int(rr["n_benefit"]) != len(Sc):
                 CNT["값 다름"] += 1
-            chk(f"09 grid mean_saved_min|{T}", m, Sc, rr.get("mean_saved_min"), None, "add", fam)
+            chk(f"09 grid mean_saved_min|{T}", m, Sc, rr.get("mean_saved_min"), None, "add", fam)   # 단축 값 (목적지 합친 양)
 
 print(f"방식 {MODES}: 공개 시간 값 {CNT['값']}개, 다시 계산한 값과 다름 {CNT['값 다름']}")
 print(f"② 1~4채 값 그대로: {len(CNT['단독'])}건 {CNT['단독'][:6]}")

@@ -32,4 +32,6 @@ def rep_mode():
         modes = []
     ch = (C.MAPPING.get("building_attr_chosen") or "").strip().lower()
     modes = [ch if m == "auto" else m for m in modes]
-    return ch if ch in modes else (modes[0] if modes else C.BUILDING_ATTR_MODE)
+    # [10/12 검토] 방식 폴더(output/<방식>)인데 --modes 기억이 없으면(방식 없이 run_all 을 친 뒤 단독 실행 등) 대표 방식을 모름 → ""
+    #   (예전에는 그 방식을 대표로 봐서 다른 방식 폴더와 함께 값이 나갈 수 있었음). auto 인데 check 가 고른 방식이 비어도 ""
+    return ch if ch in modes else (modes[0] if modes else "")

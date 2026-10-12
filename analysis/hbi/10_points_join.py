@@ -27,7 +27,8 @@ np.seterr(invalid="ignore", divide="ignore")
 import config as C
 from lib.qio import log, write_csv, transform_xy, transformer, find_files, iter_layer, read_any as read_table, safe_head
 from lib.qgraph import spearman
-from lib.bload import load_buildings, usable
+from lib.bload import load_buildings, usable, rep_mode
+REP10 = rep_mode() == C.BUILDING_ATTR_MODE        # [10/12 검토] 격자 hbi_mean 은 대표 방식만 (05 격자와 같음: 방식끼리 빼면 몇 채 HBI)
 
 os.makedirs(C.OUTPUT, exist_ok=True)
 todo = {k: v for k, v in C.POINT_DATA.items() if v.get("path")}
@@ -109,7 +110,7 @@ for name, cfg in todo.items():
     grows = []
     for k in np.where(cnt >= C.MIN_COUNT)[0]:
         n = float(pmap.get(ub[k], 0))
-        grows.append([(ub[k] // 10**7 + 0.5) * C.GRID, (ub[k] % 10**7 + 0.5) * C.GRID, int(cnt[k]), round(float(hm[k]), 3),
+        grows.append([(ub[k] // 10**7 + 0.5) * C.GRID, (ub[k] % 10**7 + 0.5) * C.GRID, int(cnt[k]), round(float(hm[k]), 3) if REP10 else "",
                       round(n, 2) if summing else int(n), round(n / cnt[k] * 100, 3)])
     write_csv(os.path.join(C.OUTPUT, f"points_{name}_grid.csv"), ["cell_x", "cell_y", "n_bld", "hbi_mean", "n_points", "per100_bld"], grows)
 

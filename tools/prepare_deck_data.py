@@ -174,8 +174,15 @@ def main():
             raise SystemExit(f"!! {os.path.relpath(src, ROOT)}/{a.mode}/summary.csv 가 없습니다. 있는 방식: {subs or '없음'}")
         src = os.path.join(src, a.mode)
     elif subs and not os.path.exists(os.path.join(src, "summary.csv")):
-        src = os.path.join(src, subs[0])
-        print(f"방식 폴더 {subs} 중 {subs[0]} 을 씀 (다른 방식은 --mode)")
+        # [10/12 검토] run_meta.csv 의 is_rep_mode = yes 인 방식(값 칸을 낸 대표 방식)을 먼저. 없으면 예전 순서
+        def _rep(m):
+            for r in read_csv(os.path.join(src, m, "run_meta.csv")) or []:
+                if r.get("key") == "is_rep_mode":
+                    return r.get("value") == "yes"
+            return False
+        pick = next((m for m in subs if _rep(m)), subs[0])
+        src = os.path.join(src, pick)
+        print(f"방식 폴더 {subs} 중 {pick} 을 씀" + (" (대표 방식)" if _rep(pick) else "") + " (다른 방식은 --mode)")
     elif subs:
         print(f"!! 맨 위 결과를 씀. 방식 폴더도 있음: {subs} (고르려면 --mode)")
     attr_mode = os.path.basename(src) if src != base else None

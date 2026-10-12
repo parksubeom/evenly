@@ -196,6 +196,8 @@ gx = np.floor(X / C.GRID).astype(np.int64)
 gy = np.floor(Y / C.GRID).astype(np.int64)
 ok0 = U & (node >= 0)
 REP = rep_mode() == C.BUILDING_ATTR_MODE                         # [v6.2] 연면적은 대표 방식만 (05 와 같음)
+if not rep_mode():                                               # [10/12] 정할 수 없으면 연면적·시간 값을 비움
+    log("!! 대표 방식을 정할 수 없어 연면적·시간 값 칸을 비웁니다 → python check.py 뒤 python run_all.py --modes auto,all")
 DT = "medical" if "medical_hbi" in b else (targets(b)[0] if targets(b) else None)   # [v6.2] 연면적은 05 행정동 표와 같은 목적지만
 n_single = len(fac)                                              # scen 앞쪽 n_single 개 = 시설 하나씩, 그 뒤 = ALL
 in_all = [st != "existing" for _, st, _, _ in fac]               # 시설 i 가 ALL 에 들어가는지
@@ -388,7 +390,9 @@ for it in R:                                                     # scen 순서 =
 #  연면적과 같은 이유). 목적지마다 POOL_T 에 이미 낸 시간 값의 건물 집합을 모으고 (HBI 는 05 격자·행정동 HBI 평균 집합도),
 #  줄마다 수혜 집합 S 를 연면적과 같은 검사(publishable)로 봄. 시설 하나씩 → ALL 순서, 줄마다 summary → 격자
 T_COLS = (4, 5, 6, 7, 8)                                         # mean_saved_min, saved_p95_min, sum_saved_bld_min, hbi_before, hbi_after
-POOL_T = {}
+POOL_T = {}                                                      # HBI 값(설치 전 HBI)의 공개 집합: 목적지마다 (목적지가 다르면 HBI 가 다른 양)
+POOL_SV = []                                                     # [10/12 검토] 단축 값의 공개 집합: 목적지를 합쳐 하나 (같은 건물의 단축 시간은 목적지가 달라도
+                                                                 #   같은 경우가 많아 목적지끼리 빼면 몇 채 몫이 나옴, 독립 검토가 4채 4.7분 재현)
 for T in tg:
     pt = []
     if REP:
@@ -400,23 +404,31 @@ for T in tg:
             pt += [q for q in (np.flatnonzero(vT & (which == k)) for k in range(len(dcode))) if len(q) >= MC]
     POOL_T[T] = pt
 tblank = 0
+tb_single = False                                                # [10/12 검토] ③ 시설 하나 줄을 5채 이상인데 가렸으면 ALL 도 (빼기로 되살리지 않게)
+tb_cells = set()                                                 # 시설 하나에서 5채 이상인데 가린 격자 칸 (cx, cy) → ALL 의 같은 칸도
 for it in R:
     T, S = it["T"], np.flatnonzero(it["ben"])
-    ok_t = REP and publishable(S, POOL_T[T])
+    is_all = it["si"] >= n_single
+    ok_t = REP and not (is_all and tb_single) and publishable(S, POOL_SV) and publishable(S, POOL_T[T])
     if ok_t and len(S):
+        POOL_SV.append(S)
         POOL_T[T].append(S)
     if not ok_t:
         tblank += any(it["row"][c] not in ("", None) for c in T_COLS)
         for c in T_COLS:
             it["row"][c] = ""
-    for cx, cy, cn, cm, cS in it.get("cells", []):              # 격자 평균 단축: summary 를 낸 뒤 칸마다 (큰 칸부터가 아니라 순서대로, 보수적)
-        okc = REP and publishable(cS, POOL_T[T])
+        if not is_all and len(S) >= MC and in_all[it["si"]]:
+            tb_single = True
+    for cx, cy, cn, cm, cS in it.get("cells", []):              # 격자 평균 단축: summary 를 낸 뒤 칸마다 (단축 값이라 POOL_SV)
+        okc = REP and not (is_all and (cx, cy) in tb_cells) and publishable(cS, POOL_SV)
         if okc:
-            POOL_T[T].append(cS)
+            POOL_SV.append(cS)
+        elif not is_all and len(cS) >= MC and in_all[it["si"]]:
+            tb_cells.add((cx, cy))
         grows.append([it["name"], T, cx, cy, cn, cm if okc else ""])
 if tblank:
     log(f"  시간 값 가림: summary {tblank}줄의 평균·분위 단축·HBI 칸을 비움 "
-        + ("(수혜 1~4채이거나 다른 시간 값과 빼면 1~4채 몫이 남음)" if REP else f"(대표 방식 {rep_mode()} 에서만 냄)"))
+        + ("(수혜 1~4채이거나 다른 시간 값과 빼면 1~4채 몫이 남음)" if REP else f"(대표 방식 {rep_mode() or '(정할 수 없음)'} 에서만 냄)"))
 np.savez_compressed(os.path.join(C.WORK, "intervention_sets.npz"), x=X, y=Y, names=np.array([n for n, _ in scen]),   # [v6.2] 노출 검사용 (work, 반출 안 함)
                     rowkey=np.array([f"{it['si']}|{it['T']}" for it in R]),                                           # summary 줄 순서
                     drowkey=np.array([f"{it['si']}|{it['T']}|{k}" for it in R for k in it.get("dkeys", [])]),         # 동 표 줄 순서 (k = 동 번호)

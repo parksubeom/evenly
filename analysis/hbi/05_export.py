@@ -52,6 +52,8 @@ def band_weights(n_base, ns, ws, force=()):
 
 
 REP = rep_mode() == C.BUILDING_ATTR_MODE
+if not rep_mode():                                # [10/12] 대표 방식을 정할 수 없으면 값 칸을 비움 (안전 쪽)
+    log("!! 대표 방식을 정할 수 없어 연면적·격자 값 칸을 비웁니다 → python check.py 뒤 python run_all.py --modes auto,all")
 
 os.makedirs(C.OUTPUT, exist_ok=True)
 b = load_buildings()
@@ -81,8 +83,8 @@ for T in targets(b):                              # 목적지 종류마다 반�
                 [T, "휠체어 도달불가 비율", round(float(np.mean(~np.isfinite(b[f"{T}_t_wheel"][U]))), 3)],
                 # [v6.2] 연면적은 DT(행정동 표와 같은 목적지)만: 목적지끼리 빼면 몇 채 몫이 드러나므로 (의료·약국은 고위험 집합이 거의 같음).
                 #        분석 건물 연면적 합은 분석 건물이 DT 와 똑같은 목적지면 같은 값이라 냄, 다르면 빈 칸
-                [T, f"HBI {hi} 이상 건물의 연면적 합(㎡, 고령인구 배분용)", band_weights(int(v.sum()), [int((v & (H >= hi)).sum())], [b["weight"][v & (H >= hi)].sum()])[0] if T == DT else ""],
-                [T, "분석 건물 연면적 합(㎡)", round(float(b["weight"][v].sum())) if (T == DT or np.array_equal(v, V_DT)) else ""]]
+                [T, f"HBI {hi} 이상 건물의 연면적 합(㎡, 고령인구 배분용)", band_weights(int(v.sum()), [int((v & (H >= hi)).sum())], [b["weight"][v & (H >= hi)].sum()])[0] if (T == DT and REP) else ""],
+                [T, "분석 건물 연면적 합(㎡)", round(float(b["weight"][v].sum())) if REP and (T == DT or np.array_equal(v, V_DT)) else ""]]   # [10/12] 연면적은 대표 방식만
     # [v6.1] 구간(1.3·1.8)을 다시 볼 때 쓰는 분위수: HBI, 왕복 추가 시간(분) = 경사 반영 왕복 - 평지 가정 왕복 (경계 제외).
     #        건물이 QUANT_MIN 개 미만이면 빈 칸 (몇 채로 분위수를 내면 개별 값에 가까워짐)
     add_min = (b[f"{T}_t_elder"] - b[f"{T}_t_flat"]) / 60
@@ -194,6 +196,7 @@ write_csv(os.path.join(C.OUTPUT, "run_meta.csv"), ["key", "value"], [
     ["target_gu", ",".join(C.TARGET_GU) or "(전체)"], ["neighbor_gu", ",".join(C.NEIGHBOR_GU)],
     ["target_gu_all", ",".join(getattr(C, "TARGET_GU_ALL", []))], ["target_note", getattr(C, "TARGET_NOTE", "")],
     ["building_attr_mode", st.get("mode", C.BUILDING_ATTR_MODE)],
+    ["rep_mode", rep_mode()], ["is_rep_mode", "yes" if REP else "no"],   # [10/12] 값 칸을 낸 방식인지 (기획서는 yes 인 폴더를 씀)
     ["hbi_bands", ",".join(f"{x:g}" for x in C.HBI_BANDS)], ["extra_min_bands", ",".join(f"{x:g}" for x in C.MIN_BANDS)],   # [v6.2] 구간 문턱 (기획서가 읽음)
     ["register_link_rate", st.get("link_rate", "")], ["register_join", st.get("register_join", "")], ["register_join_used", st.get("join_used", "")],
     ["register_rate_pnu", st.get("rate_pnu", "")], ["register_rate_pk", st.get("rate_pk", "")],
@@ -233,7 +236,7 @@ if bd:
         wall = b["weight"][(which == k) & U].sum()            # 동 전체 주거 연면적 (경계 제외)
         n_high = int((m & (H >= hi)).sum())
         whigh = b["weight"][m & (H >= hi)].sum()              # 그중 HBI 1.8 이상 건물의 연면적
-        wh_pub = band_weights(n_all, [n_high], [whigh])[0]    # [v6.2] 1~4채 몫이 드러나면 빈 칸 (v6.1a 까지는 그대로 냈음)
+        wh_pub = band_weights(n_all, [n_high], [whigh])[0] if REP else ""   # [v6.2] 1~4채 몫이 드러나면 빈 칸. [10/12] 대표 방식만
         est = round(pop[code] * whigh / wall) if code in pop and wall > 0 and wh_pub != "" else ""   # 고령인구 × 연면적 비율 (가렸으면 빈 칸)
         if est != "":
             total += est
@@ -248,7 +251,7 @@ if bd:
             if w_ != "":
                 pub_band[j].append(n_)
         rows.append([code, str(a.get(sk, "")) if sk else "", a.get(nk, "") if nk else "", int(m.sum()), round(float(H[m].mean()), 3),
-                     round(float(np.mean(H[m] >= hi)), 3), round(float(wall)), wh_pub, est] + extra)
+                     round(float(np.mean(H[m] >= hi)), 3), round(float(wall)) if REP else "", wh_pub, est] + extra)   # [10/12] weight_all 도 대표 방식만
     write_csv(os.path.join(C.OUTPUT, "dong_hbi.csv"),
               ["adm_cd", "adm_cd_stat", "adm_nm", "n_bld", "hbi_mean", "share_high", "weight_all", "weight_high", "elderly_in_high_est"]
               + [f"{p_}_{band_tag(mb)}" for mb in C.MIN_BANDS for p_ in ("n", "share", "weight")], rows)
