@@ -103,11 +103,12 @@ HEAD = ('<table><colgroup><col style="width:4%"><col style="width:4.5%"><col sty
         '</colgroup><tr><th></th><th>#</th><th>칠 명령</th><th>화면에서 볼 것</th><th>쪽</th></tr>')
 
 
-def gold(stuck_page):
+def gold(stuck_page, stuck="오류 마지막 줄"):
+    """[v6.2] stuck = 막혔을 때 적을 것 (v6.2 부터 메모 카드 다섯 줄. 예전 카드는 그대로)"""
     return ('<div class="gold"><b class="t">황금 규칙 3개</b><ol>'
             '<li>명령 치기 전 <b>한/영 키</b>로 영어인지 확인 (한글이면 <q>ㅔㅛ쇄ㅜ</q> 로 쳐짐)</li>'
             '<li>실행 중엔 <b>검은 창 클릭 금지</b> (제목에 <q>선택</q> 이 보이면 Esc)</li>'
-            f'<li>막히면 <b>오류 마지막 줄</b>을 적고 안내서 <b>{stuck_page}쪽</b></li></ol></div>')
+            f'<li>막히면 <b>{stuck}</b>을 적고 안내서 <b>{stuck_page}쪽</b></li></ol></div>')
 
 
 def folders(parcel_note):
@@ -273,6 +274,53 @@ def v61_card(pg, ver="v6.1"):
     return {"cmds": prep + main + fix + more, "html": html_body}
 
 
+def v62_card(pg, ver="v6.2"):
+    """[v6.2, 10/12] 2차 방문 카드 v6.2: v6.1b 카드 + 메모 카드(오류 번호), 봉천 a·b·관악 od_pairs 가 미리 들어 있음 (잰 분만 넣고 --from 04)"""
+    prep = [r"cd /d C:\Users\user\Desktop\박수범", f"python hbi_code_bundle_{ver}.txt", "cd hbi6"]
+    prep_see = ["<b>박</b> 까지 치고 Tab", q("완료: 파일 52개"), f"맨 아래 {q('…' + chr(92) + 'hbi6>')}"]
+    main = ["python setup.py", "python check.py", "python run_all.py --modes auto,all"]
+    main_see = ["질문은 모두 <b>Enter</b>", f"끝에 {q('통과')}. {q('범위 밖')} 멈춤 → 다시, Enter",
+                f"약 3~6분, 단계마다 {q('# 끝: 정상')}"]
+    fix = ["notepad mapping.txt", "python run_all.py --from 06", "chcp 65001"]
+    fix_see = [f"{q('→')} 안내대로, = 오른쪽만", "06 자리에 멈춘 번호", "한글이 깨지면 치고 다시"]
+    more = ["notepad external\\od_pairs.csv", "python run_all.py --from 04", "python 12_isochrone.py", "python 13_siting.py", "python 14_dong_context.py"]
+    sec = lambda t: f'<tr class="sec"><td colspan="5">{t}</td></tr>'
+    head6 = HEAD.replace('<col style="width:60%"><col style="width:21.5%">', '<col style="width:52%"><col style="width:29.5%">')
+    k, out = 0, ["<h2>명령 (위에서부터 한 줄씩, 끝나면 □)</h2>", head6, sec("준비 (한 번)")]
+
+    def add(c, s_, g):
+        nonlocal k
+        k += 1
+        if len(c) > 30:
+            out.append(f'<tr><td class="box">□</td><td class="n">{k}</td><td colspan="2"><code>{html.escape(c)}</code> '
+                       f'<span class="see">{s_}</span></td><td class="pg">{g}</td></tr>')
+        else:
+            out.append(row(k, c, s_, g))
+    for c, s_, g in zip(prep, prep_see, [p(pg, "2")] * 3):
+        add(c, s_, g)
+    out.append(sec("명령 세 줄 (이것이 전부)"))
+    for c, s_, g in zip(main, main_see, [p(pg, "3", "3-2"), p(pg, "4"), p(pg, "5", "5-2", "5-3")]):
+        add(c, s_, g)
+    out.append(sec("멈췄을 때 (화면의 메모 카드 다섯 줄을 적어 옴)"))
+    for c, s_, g in zip(fix, fix_see, [p(pg, "4-2"), p(pg, "6"), p(pg, "9")]):
+        add(c, s_, g)
+    out.append(sec("관악 실측을 한 뒤 (좌표는 이미 들어 있음)"))
+    add(more[0], "①~④ 잰 분 칸만", p(pg, "7"))
+    add(more[1], f"{q('단계:')} 에 09", p(pg, "7"))
+    k += 1
+    out.append(f'<tr><td class="box">□</td><td class="n">{k}</td><td>' + "<br>".join(f"<code>{html.escape(c)}</code>" for c in more[2:])
+               + f'</td><td class="see">한 줄씩. 12 관악 밖·13 좌표 없는 시설 건너뜀</td><td class="pg">{p(pg, "7")}</td></tr>')
+    out.append(note_row("<code>output</code> 폴더 반출 신청 (work 는 반출 안 함), 반출 시각 메모", p(pg, "8")) + "</table>")
+    folders6 = ('<h2>담당자에게 물을 것</h2><table><colgroup><col style="width:32%"><col style="width:18%"><col style="width:28%"><col style="width:22%"></colgroup>'
+                '<tr><td>박수범 폴더에 자료·번들</td><td>○ / ×</td><td>나머지 4개 구 자료</td><td>들어옴 / 아직</td></tr></table>')
+    memo = ('<h2>메모 칸 (값은 적지 않음, ★ = 다음 번들에 꼭 필요. 02 값 두 줄은 안내서 메모 칸)</h2><table><colgroup><col style="width:22%"><col style="width:28%"><col style="width:18%"><col style="width:32%"></colgroup>'
+            '<tr><td>고른 방식·연결률</td><td class="blank">______ ____ %</td><td>연결망·노드</td><td class="blank">____ 개, ____ %</td></tr>'
+            '<tr><td>★ 폴더 이름</td><td colspan="3" class="blank">DEM 5m ______ · DEM 1m ______ · 상호제공 ______</td></tr>'
+            '<tr><td>오류 번호</td><td class="blank">E__-______ · 단계 ____</td><td>시간·반출</td><td class="blank">__:__ → __:__, 반출 __:__</td></tr></table>')
+    html_body = (f"<h1>2차 방문 카드 · {ver} · 관악만 분석하는 날</h1>" + gold(pg["9"], "메모 카드 다섯 줄") + folders6 + "".join(out) + memo)
+    return {"cmds": prep + main + fix + more, "html": html_body}
+
+
 def render(body, out):
     m_ = re.search(r"<h1>(.*?)</h1>", body)                     # [v6.1a] PDF 제목 = 카드 첫 제목
     doc = f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>{m_.group(1) if m_ else "1차 방문 카드"}</title><style>{CSS}</style></head><body>{body}</body></html>'
@@ -309,6 +357,10 @@ def main():
     v61bb = os.path.join(ROOT, "deliverables", "hbi_code_bundle_v6.1b.txt")
     if os.path.exists(os.path.join(DOCS, "2차방문_v6.1b_안내서.pdf")) and os.path.exists(v61bb):
         jobs.append(("v6.1b", lambda pg: v61_card(pg, "v6.1b"), "2차방문_v6.1b_안내서", open(v61bb, encoding="utf-8").read(), "hbi_code_bundle_v6.1b.txt"))
+    # [v6.2] 반입본을 v6.2 로 바꿈 (10/12 판정)
+    v62b = os.path.join(ROOT, "deliverables", "hbi_code_bundle_v6.2.txt")
+    if os.path.exists(os.path.join(DOCS, "2차방문_v6.2_안내서.pdf")) and os.path.exists(v62b):
+        jobs.append(("v6.2", v62_card, "2차방문_v6.2_안내서", open(v62b, encoding="utf-8").read(), "hbi_code_bundle_v6.2.txt"))
     if "--only" in sys.argv:                 # [v6.1] python3 tools/print_card.py --only v6.1 → 그 카드만 (동결된 1차 방문 카드는 다시 만들지 않음)
         want = sys.argv[sys.argv.index("--only") + 1]
         jobs = [j for j in jobs if j[0] == want]
