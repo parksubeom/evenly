@@ -25,7 +25,7 @@ python run_all.py                ← 분석. 멈추면 고친 뒤 python run_all
 - **건물 용도 방식** (`building_attr_mode`): `layer` 건물 레이어 칸(v5 와 같음) / `register` 건물 → 필지 → 건축물대장(`external/building_register.csv`, 번들과 따로 반입) / `all` 모든 건물을 집(용도 미구분) / `stop`
 - **대상 구** (`target_gu`): 출발점(집)은 대상 구 안 건물만. 옆 구(`neighbor_gu`)는 길·목적지로만 씀. 비우면 v5 와 같이 자료 전체
 - [v6.2] 모든 명령(setup·check·run_all·01~14)은 화면 글자를 `work/logs/` 에 저장 (**반출하지 않음**, `lib/runlog.py`. 가장 최근 것은 `notepad work\logs\마지막.log`). `run_all.py` 는 단계별 요약 한 장을 `output/run_summary.txt` 에(값 없음), 자료 구조를 `output/schema/schema.txt` 에 저장. 멈추면 화면에 **메모 카드 다섯 줄**(오류 번호·단계·오류 종류·내용·할 일)이 나옴 → 그 다섯 줄만 손으로 적어 오면 됨 (반출하지 않아도 됨). 카드·오류 글자의 값은 모양만 (`<한글 3자>`)
-- `output/run_meta.csv`: 대상 구, 건물 용도 방식, 건축물대장 연결률, AREA_BBOX 와 이유
+- `output/run_meta.csv`: 대상 구, 건물 용도 방식, 건축물대장 연결률, AREA_BBOX 와 이유. [v6.2] `hbi_bands`(체감 부담·고위험 HBI 문턱)·`extra_min_bands`(왕복 추가 분 문턱) — 기획서 생성기가 이 값을 읽어 구간을 적음
 
 아래 v5 설명(단계별 파일)은 그대로 유효합니다.
 
@@ -196,11 +196,11 @@ python 01_inspect.py
 ### 반출 전 체크리스트 (output 폴더)
 밖에서는 원자료를 다시 계산할 수 없으니, 반출 신청 전에 아래가 모두 있는지 확인하세요.
 - [ ] `summary.csv` — 목적지별 요약 (기획서 16장)
-- [ ] `grid_hbi.csv`, `grid_hbi_medical.gpkg` 등 — 격자 결과·지도 (16장, 본선 데모). [v6.1b] `weight`(연면적) 칸은 빈 칸. [v6.2] 맨 뒤 `n_addNm`·`share_addNm` (왕복 추가 N분 이상 건물 수·비율, 문턱은 mapping 의 `extra_min_bands`)
+- [ ] `grid_hbi.csv`, `grid_hbi_medical.gpkg` 등 — 격자 결과·지도 (16장, 본선 데모). [v6.1b] `weight`(연면적) 칸은 빈 칸. [v6.2] 맨 뒤 `n_addNm`·`share_addNm` (왕복 추가 N분 이상 건물 수·비율, 문턱은 mapping 의 `extra_min_bands`)과 `add_min_med` (격자 주거 건물의 왕복 추가 분 중앙값)
 - [ ] `dong_hbi.csv` — 행정동 결과 (weight_all·weight_high 열 포함 → 밖에서 고령인구 추정). [v6.2] 맨 뒤 `n_addNm`·`share_addNm`·`weight_addNm`. 연면적(weight_high·weight_addNm)은 1~4채 몫이 드러나면 빈 칸, weight_addNm 은 check 가 고른 방식 폴더에만
 - [ ] `validation_sites.csv`, `validation_routes.csv`, `validation_new_candidates.csv`, `validation_ablation.csv` (17·18장)
 - [ ] `validation_measured.csv` — [v5] 실측 vs 예측 상관계수 (실측 3구간 이상일 때, 17장)
-- [ ] `intervention_summary.csv`, `intervention_grid.csv`, `intervention_dong.csv` — [v5] 시설 설치 효과 (22·23장). 맨 뒤 열 n_exit_high·weight_exit_high·n_exit_mid (summary), weight_exit_high (dong) = 설치 후 HBI 1.8(1.3) 아래로 내려온 주거 건물 (연면적은 MIN_COUNT 개 미만이면 빈 칸). [v6.2] summary 맨 뒤에 n_saved_30s·n_saved_60s(고령자 왕복 30초·60초 이상 단축), wheel_cut_n·wheel_cut_p25_m·p50_m·p75_m(휠체어 시간이 준 건물의 휠체어 길 길이 감소 m. 음수 = 설치 후 길이 더 김(설치 전 길이 짧지만 가파른 길). 100채(`WHEEL_CUT_MIN`) 미만이면 빈 칸), rise_m·pass_s(시설 높이 차·통과 초). 연면적 칸은 의료·대표 방식만, 1~4채이거나 05·09 의 다른 연면적과 빼서(겹치지 않는 여럿의 합 포함) 1~4채가 남으면 빈 칸
+- [ ] `intervention_summary.csv`, `intervention_grid.csv`, `intervention_dong.csv` — [v5] 시설 설치 효과 (22·23장). 맨 뒤 열 n_exit_high·weight_exit_high·n_exit_mid (summary), weight_exit_high (dong) = 설치 후 HBI 1.8(1.3) 아래로 내려온 주거 건물 (연면적은 MIN_COUNT 개 미만이면 빈 칸). [v6.2] summary 맨 뒤에 n_saved_30s·n_saved_60s(고령자 왕복 30초·60초 이상 단축), wheel_cut_n·wheel_cut_p25_m·p50_m·p75_m(휠체어 시간이 준 건물의 휠체어 길 길이 감소 m. 음수 = 설치 후 길이 더 김(설치 전 길이 짧지만 가파른 길). 100채(`WHEEL_CUT_MIN`) 미만이면 빈 칸), rise_m·pass_s(시설 높이 차·통과 초). [v6.2] `intervention_wait.csv` = 시설마다 대기 30·60·90초(config `WAIT_SENS_S`)로 바꿔 다시 계산한 의료 목적지 수혜 건물 수(n_benefit·n_saved_30s·wheel_benefit, 수만, 연면적 없음). 기획서 29장 '엘리베이터 설정' 칸. 연면적 칸은 의료·대표 방식만, 1~4채이거나 05·09 의 다른 연면적과 빼서(겹치지 않는 여럿의 합 포함) 1~4채가 남으면 빈 칸
 - [ ] `points_summary.csv`, `points_*_dong.csv`, `points_*_grid.csv` — [v5] 점 자료 결합 (개수·값 합계만, 좌표 없음)
 - [ ] `legal_summary.csv`, `legal_*.csv` — [v5] 법정동별 교통사고 건수 (행 단위 사고 없음)
 - [ ] `parcel_summary.csv`, `parcel_by_legal_dong.csv` (필지 결합)

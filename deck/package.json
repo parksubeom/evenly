@@ -5,7 +5,7 @@
     "build": "node build_v6.js",
     "build:fake": "node py.js ../tools/make_fake_results.py && node py.js ../tools/prepare_deck_data.py --src ../results/fake_export --expect fake && node build_v6.js --expect fake",
     "build:real": "node py.js ../tools/prepare_deck_data.py --src ../results/raw_export --expect real && node build_v6.js --expect real",
-    "build:rehearsal": "node py.js ../tools/prepare_deck_data.py --src ../results/public_rehearsal/${REHEARSAL:-gwanak_v62} --expect rehearsal --bands ${BANDS:-hbi} && node build_v6.js --expect rehearsal",
+    "build:rehearsal": "node py.js ../tools/prepare_deck_data.py --src ../results/public_rehearsal/${REHEARSAL:-gwanak_v62} --expect rehearsal --bands ${BANDS:-mix} && node build_v6.js --expect rehearsal",
     "build:rehearsal:ab": "BANDS=hbi npm run build:rehearsal && BANDS=min npm run build:rehearsal",
     "build:v5deck:fake": "node py.js ../tools/make_fake_results.py && node py.js ../tools/prepare_deck_data.py --src ../results/fake_export && node build_deck.js",
     "build:v5deck:real": "node py.js ../tools/prepare_deck_data.py --src ../results/raw_export --expect real && node build_deck.js"

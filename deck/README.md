@@ -6,11 +6,13 @@
 cd deck
 npm install                  # 처음 한 번 (pptxgenjs)
 npm run build:fake           # 가상 수치 → ../deliverables/_test_기획서_v6.pptx (오른쪽 위 "가상 수치 · 검토용")
-npm run build:rehearsal:ab   # 공개 대역 A(HBI 1.3·1.8)·B(왕복 추가 5·10분) → _rehearsal_기획서_v6_A·B.pptx ("공개 대역 · 제출 금지")
+npm run build:rehearsal      # 공개 대역, 혼합 기준 → _rehearsal_기획서_v6.pptx ("공개 대역 · 제출 금지")
+npm run build:rehearsal:ab   # 비교용 A(HBI 1.3·1.8)·B(왕복 추가 5·10분) → _rehearsal_기획서_v6_A·B.pptx
 npm run build:real           # 실제 반출 결과 → ../deliverables/언덕위우리동네_기획서_final.pptx (가짜·공개 대역이면 멈춤)
-python3 ../tools/check_deck.py ../deliverables/_rehearsal_기획서_v6_A.pptx --missing data/missing_v6_A.txt
-python3 ../tools/render_deck.py ../deliverables/_rehearsal_기획서_v6_A.pptx --out ../_render/v6_A   # 미리보기 PNG
+python3 ../tools/check_deck.py ../deliverables/_rehearsal_기획서_v6.pptx --missing data/missing_v6.txt
+python3 ../tools/render_deck.py ../deliverables/_rehearsal_기획서_v6.pptx --out ../_render/v6_mix   # 미리보기 PNG
 ```
+- [10/12] 구간 기준은 **혼합**이다. 체감 부담은 HBI 1.3 이상이고, 고립 위험은 왕복이 10분 이상 더 걸리는 경우다. 문턱은 분석 mapping 의 `hbi_band`·`extra_min_bands` 에서 정하고, 결과의 `run_meta.csv` 를 거쳐 기획서로 온다. 기획서 안에 숫자를 따로 적지 않는다.
 - 예전 29장 생성기 `build_deck.js` 는 쓰지 않음 (`npm run build:v5deck:fake|real` 로만 남김)
 
 ## (예전 29장 생성기 설명)

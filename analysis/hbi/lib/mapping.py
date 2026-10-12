@@ -76,7 +76,8 @@ DEFAULTS = {
     "layer_overpass": ("N3A_A0063321,육교", "육교 (점검용)", "레이어"),
     "layer_station": ("N3P_A0131122,정거장", "철도·지하철 정거장 (점)", "레이어"),
     # ── 결과 구간 [v6.2] ──
-    "extra_min_bands": ("3,5,10", "[v6.2] 왕복 추가 시간(분) 구간 문턱 (쉼표로 여럿). 이 분 이상인 건물 수·비율·연면적을 summary·격자·행정동·결과 점검표에 냄. HBI 1.3·1.8 구간도 그대로 냄", "결과 구간"),
+    "extra_min_bands": ("3,5,10", "[v6.2] 왕복 추가 시간(분) 구간 문턱 (쉼표로 여럿). 이 분 이상인 건물 수·비율·연면적을 summary·격자·행정동·결과 점검표에 냄. 가장 큰 값 = 기획서의 '고립 위험'. HBI 1.3·1.8 구간도 그대로 냄", "결과 구간"),
+    "hbi_band": ("1.3", "[v6.2] 체감 부담 HBI 문턱 (이 값 이상 = 체감 부담. 결과의 HBI 구간 첫 값, 1 보다 크고 1.8 보다 작게). HBI 1.8 구간은 결과에 그대로", "결과 구간"),
 }
 LAYER_KEYS = ["sidewalk_cl", "road_cl", "stairs", "building", "bus_stop", "bridge", "tunnel", "overpass", "station"]
 
@@ -177,6 +178,7 @@ def apply(g):
     rf = m.get("register_file") or ""
     g["REGISTER_FILE"] = rf if (not rf or os.path.isabs(rf)) else os.path.join(HERE, rf)
     g["MIN_BANDS"] = min_bands(m.get("extra_min_bands"))
+    g["HBI_BANDS"] = [hbi_band(m.get("hbi_band"), g["HBI_BANDS"]), g["HBI_BANDS"][1]]     # [v6.2] 체감 부담 문턱은 mapping 한 곳에서
 
 
 def min_bands(v):
@@ -191,6 +193,19 @@ def min_bands(v):
     if len({band_tag(x) for x in out}) < len(out):
         raise SystemExit(f"mapping.txt 의 extra_min_bands = {v} → 같은 칸 이름이 되는 값이 겹침 (예: 3,5,10). 고친 뒤 python check.py")
     return out
+
+
+def hbi_band(v, bands):
+    """[v6.2] hbi_band 값 → 체감 부담 HBI 문턱. 비우거나 ? 이면 config 의 값 그대로. 1 보다 크고 고립 위험 문턱(1.8)보다 작아야 함"""
+    if v is None or str(v).strip() in ("", "?"):
+        return bands[0]
+    try:
+        x = round(float(str(v).strip()), 3)
+    except ValueError:
+        raise SystemExit(f"mapping.txt 의 hbi_band = {v} → 숫자 하나 (예: 1.3). 고친 뒤 python check.py")
+    if not (1.0 < x < bands[1]):
+        raise SystemExit(f"mapping.txt 의 hbi_band = {v} → 1 보다 크고 {bands[1]:g} 보다 작게 (예: 1.3). 고친 뒤 python check.py")
+    return x
 
 
 def band_tag(x):

@@ -27,6 +27,8 @@
                              시간이 준 건물 수), wheel_cut_p25_m·p50_m·p75_m(그 건물들의 휠체어 길 길이 감소 m 분위수. 길 길이 = 휠체어가 고르는
                              시간 최소 길, 가는 길·오는 길 평균. 음수 = 설치 후 길이 더 김(설치 전 길이 짧지만 가파른 길). wheel_cut_n 이 WHEEL_CUT_MIN(100) 미만이면 빈 칸), rise_m(시설 a·b 높이 차 m, DEM 5m),
                              pass_s(시설 통과 시간 초). ALL 행의 rise_m·pass_s 는 빈 칸
+  [v6.2] intervention_wait.csv  : 시설 하나씩 대기시간을 config.WAIT_SENS_S(30·60·90초)로 바꿨을 때 수혜 건물 수 (05 와 같은 기준 목적지만,
+                             건물 수만): facility, target, wait_s, pass_s, n_benefit, n_saved_30s, wheel_benefit
                              [v6.2] 연면적 칸(weight_benefit·weight_exit_high, 동 표의 weight_benefit·weight_all·weight_x_saved_min·weight_exit_high)은
                              05 와 같은 목적지(의료)·대표 방식만. 1~4채이거나, 05·09 가 낸 다른 연면적과 빼서(짝 하나, 겹치지 않는 여럿의 합,
                              summary − 동 합, ALL − 시설들) 1~4채가 남으면 빈 칸 (lib/expose.py). v6.1b 까지는 수혜 1~4채여도 냈음
@@ -151,7 +153,7 @@ for r, (ax, ay, bx, by), z5, z1 in zip(rows, P, Z5, Z1):
         log(f"  시설 {r['name']} [{typ}, {r.get('status')}] 길이 {straight:.0f}m, 통과 {t / 60:.1f}분 (대기 {wait:g}초, {speed:g}m/s)"
             + (f", 높이 차 {rise:.1f}m (DEM 5m, 참고)" if rise is not None else ""))
     fac.append((r["name"], (r.get("status") or "planned").strip().lower(), (int(na), int(nb_), float(t), straight + walk),
-                {"rise": round(rise, 1) if rise is not None else "", "pass": round(float(t), 1)}))
+                {"rise": round(rise, 1) if rise is not None else "", "pass": round(float(t), 1), "wait": float(wait)}))
 
 if not fac:                                                      # [v6.1a] 좌표가 찬 시설이 모두 범위 밖 → 실패로 멈추지 않고 결과 없이 끝냄
     if no_height:                                                # [v6.2]
@@ -248,6 +250,25 @@ for si, (name, extra) in enumerate(scen):
             ms = np.bincount(inv, saved[ben]) / cnt / 60
             for k in np.where(cnt >= C.MIN_COUNT)[0]:
                 grows.append([name, T, (u[k] // 10**7 + 0.5) * C.GRID, (u[k] % 10**7 + 0.5) * C.GRID, int(cnt[k]), round(float(ms[k]), 2)])
+
+# ── 3-1. [v6.2] 대기시간 비교: 시설 하나씩, 기준 목적지(DT)만, 대기 = WAIT_SENS_S 로 바꿔 수혜 건물 수 ─
+wrows = []
+DTw = "medical" if "medical_hbi" in b else (targets(b)[0] if targets(b) else None)
+if DTw in tg and getattr(C, "WAIT_SENS_S", None):
+    te0, tw0 = b[f"{DTw}_t_elder"], b[f"{DTw}_t_wheel"]
+    w0 = np.where(np.isfinite(tw0), tw0, np.inf)
+    for fname, _, (na, nb_, t0, ln), info in fac:
+        for ws in C.WAIT_SENS_S:
+            t1 = t0 - info["wait"] + ws
+            r = run_with_extra(N, e, s, dest[DTw], [(na, nb_, t1, ln)])
+            te1 = np.full(len(node), np.nan); tw1 = np.full(len(node), np.nan)
+            te1[ok0] = r["t_elder"][node[ok0]]; tw1[ok0] = r["t_wheel"][node[ok0]]
+            okw = ok0 & np.isfinite(te0) & np.isfinite(te1)
+            sv = np.where(okw, te0 - te1, 0.0)
+            w1 = np.where(np.isfinite(tw1), tw1, np.inf)
+            wb = ok0 & ((~np.isfinite(w0) & np.isfinite(w1)) | (np.isfinite(w0) & (w0 - w1 >= C.BENEFIT_MIN_S)))
+            wrows.append([fname, DTw, ws, round(float(t1), 1), int((okw & (sv >= C.BENEFIT_MIN_S)).sum()), int((okw & (sv >= 30)).sum()), int(wb.sum())])
+        log(f"  대기시간 비교 {fname} · {DTw}: " + ", ".join(f"{r_[2]:g}초 → 수혜 {r_[4]}동·휠체어 {r_[6]}동" for r_ in wrows[-len(C.WAIT_SENS_S):]))
 
 # ── 4. [v6.2] 연면적 가림 ─────────────────────────────────
 #  연면적은 DT·REP 만 (05 와 같은 목적지·대표 방식). 값마다 그 건물 집합 S 를 두고, 이미 공개한 집합과 05 가 낼 수 있는 집합
@@ -365,6 +386,7 @@ write_csv(os.path.join(C.OUTPUT, "intervention_summary.csv"),
            "n_exit_high", "weight_exit_high", "n_exit_mid"]
           + [f"n_saved_{k:g}s" for k in C.SAVED_BANDS_S] + ["wheel_cut_n"] + [f"wheel_cut_p{q:g}_m" for q in C.WHEEL_CUT_Q]
           + ["rise_m", "pass_s"], summ)
+write_csv(os.path.join(C.OUTPUT, "intervention_wait.csv"), ["facility", "target", "wait_s", "pass_s", "n_benefit", "n_saved_30s", "wheel_benefit"], wrows)
 write_csv(os.path.join(C.OUTPUT, "intervention_grid.csv"), ["facility", "target", "cell_x", "cell_y", "n_benefit", "mean_saved_min"], grows)
 write_csv(os.path.join(C.OUTPUT, "intervention_dong.csv"),
           ["facility", "target", "adm_cd", "n_benefit", "weight_benefit", "weight_all", "weight_x_saved_min", "weight_exit_high"], drows)

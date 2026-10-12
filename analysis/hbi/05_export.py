@@ -116,11 +116,14 @@ for T in targets(b):                              # 목적지 종류마다 반�
     # [v6.2] 격자별 왕복 추가 문턱 이상 건물 수·비율 (연면적은 격자에 내지 않음: 목적지끼리·방식끼리 빼서 몇 채 몫이 드러날 수 있어서)
     am = add_min[v]
     bn = {mb: np.bincount(inv, (am >= mb).astype(float), minlength=len(u)) for mb in C.MIN_BANDS}
+    amed = np.array([np.nanmedian(am[inv == k]) for k in range(len(u))]) if C.MIN_BANDS else None   # [v6.2] 격자 왕복 추가 시간 중앙값(분)
     for k in np.where(keep)[0]:
         extra = []
         for mb in C.MIN_BANDS:
             n_ = int(bn[mb][k])
             extra += [n_, round(n_ / cnt[k], 3)]
+        if C.MIN_BANDS:
+            extra.append(round(float(amed[k]), 1))
         grid_rows.append([T, (u[k] // 10**7 + 0.5) * C.GRID, (u[k] % 10**7 + 0.5) * C.GRID, int(cnt[k]),
                           "", round(mean[k], 3), round(med[k], 3), round(high[k], 3), round(el[k], 1), round(fl[k], 1)] + extra)
         # [v6.2] 격자 연면적(weight)은 빈 칸 (v6.1b 와 같음): layer·all 을 함께 내면 같은 칸 weight 차가 비주거 몇 채 연면적이 됨 (v6.1a 리허설 280칸)
@@ -165,7 +168,7 @@ for T in targets(b):                              # 목적지 종류마다 반�
 
 write_csv(os.path.join(C.OUTPUT, "grid_hbi.csv"),
           ["target", "cell_x", "cell_y", "n_bld", "weight", "hbi_mean", "hbi_median", "share_high", "elder_min", "flat_min"]
-          + [f"{p_}_{band_tag(mb)}" for mb in C.MIN_BANDS for p_ in ("n", "share")], grid_rows)
+          + [f"{p_}_{band_tag(mb)}" for mb in C.MIN_BANDS for p_ in ("n", "share")] + (["add_min_med"] if C.MIN_BANDS else []), grid_rows)
 # [v6] 실행 정보: output/run_meta.csv (대상 구, 건물 용도 방식, 연결률, 범위). summary.csv 에는 뜻이 바뀌는 경우에만 meta 행
 from lib.battr import load_stats
 st = load_stats()
@@ -181,6 +184,7 @@ write_csv(os.path.join(C.OUTPUT, "run_meta.csv"), ["key", "value"], [
     ["target_gu", ",".join(C.TARGET_GU) or "(전체)"], ["neighbor_gu", ",".join(C.NEIGHBOR_GU)],
     ["target_gu_all", ",".join(getattr(C, "TARGET_GU_ALL", []))], ["target_note", getattr(C, "TARGET_NOTE", "")],
     ["building_attr_mode", st.get("mode", C.BUILDING_ATTR_MODE)],
+    ["hbi_bands", ",".join(f"{x:g}" for x in C.HBI_BANDS)], ["extra_min_bands", ",".join(f"{x:g}" for x in C.MIN_BANDS)],   # [v6.2] 구간 문턱 (기획서가 읽음)
     ["register_link_rate", st.get("link_rate", "")], ["register_join", st.get("register_join", "")], ["register_join_used", st.get("join_used", "")],
     ["register_rate_pnu", st.get("rate_pnu", "")], ["register_rate_pk", st.get("rate_pk", "")],
     ["ufid_match_rate", "" if st.get("rate_ufid") is None else st.get("rate_ufid")],

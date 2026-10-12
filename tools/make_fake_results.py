@@ -21,6 +21,7 @@ from evenly_common import (ROOT, TARGET_GU, FAKE_MARKER, load_dongs, load_sites,
 GRID = 250
 MIN_COUNT = 5
 HI, LO = 1.8, 1.3
+BANDS = [3, 5, 10]                                      # [v6.2] 왕복 추가 문턱(분) = mapping 의 extra_min_bands 기본값
 TARGETS = ["medical", "bus", "elderly", "station"]      # v4 는 약국 미포함 → pharmacy 는 만들지 않음
 # 목적지별 평지 가정 왕복 시간(분)의 대략 범위, HBI 강도
 TPROF = {"medical": (8, 34, 1.0), "bus": (3, 14, 0.8), "elderly": (10, 40, 1.05), "station": (14, 48, 1.15)}
@@ -143,13 +144,16 @@ def main():
             med = max(1.0, hbi + rnd.gauss(0, 0.03))
             share = max(0.0, min(1.0, 1 / (1 + math.exp(-(hbi - HI) * 9)) + rnd.gauss(0, 0.03)))
             wt = c["n"] * rnd.uniform(140, 520)
-            rows.append({"c": c, "hbi": hbi, "med": med, "share": share, "wt": wt,
-                         "elder": flat * hbi * rnd.uniform(0.97, 1.03), "flat": flat})
+            elder = flat * hbi * rnd.uniform(0.97, 1.03)
+            ext = max(0.0, elder - flat)                      # [v6.2] 격자 왕복 추가 시간 중앙값(분)과 문턱별 비율 (가짜)
+            sb = {b_: max(0.0, min(1.0, 1 / (1 + math.exp(-(ext - b_) / (0.25 * b_ + 0.8))) + rnd.gauss(0, 0.02))) for b_ in BANDS}
+            rows.append({"c": c, "hbi": hbi, "med": med, "share": share, "wt": wt, "elder": elder, "flat": flat, "ext": ext, "sb": sb})
         by_target[T] = rows
         for r in rows:
             c = r["c"]
             grid_rows.append([T, c["x"], c["y"], c["n"], round(r["wt"]), round(r["hbi"], 3), round(r["med"], 3),
-                              round(r["share"], 3), round(r["elder"], 1), round(r["flat"], 1)])
+                              round(r["share"], 3), round(r["elder"], 1), round(r["flat"], 1)]
+                             + ([v for b_ in BANDS for v in (round(c["n"] * r["sb"][b_]), round(r["sb"][b_], 3))] + [round(r["ext"], 1)] if V5 else []))
         nb = sum(r["c"]["n"] for r in rows)
         hi_n = round(sum(r["c"]["n"] * r["share"] for r in rows))
         mid_n = sum(r["c"]["n"] for r in rows if LO <= r["hbi"] < HI)
@@ -166,11 +170,20 @@ def main():
                     [T, "휠체어 도달불가 비율", round(rnd.uniform(0.01, 0.05), 3)],
                     [T, f"HBI {HI} 이상 건물의 연면적 합(㎡, 고령인구 배분용)", round(wt_hi)],
                     [T, "분석 건물 연면적 합(㎡)", round(sum(r["wt"] for r in rows))]]
+        if V5:                                            # [v6.2] 왕복 추가 문턱 줄 (연면적은 의료만, 05 와 같음)
+            for b_ in BANDS:
+                nn = round(sum(r["c"]["n"] * r["sb"][b_] for r in rows))
+                summary += [[T, f"왕복 추가 {b_}분 이상 비율", round(nn / nb, 3)], [T, f"왕복 추가 {b_}분 이상 건물 수", nn],
+                            [T, f"왕복 추가 {b_}분 이상 건물의 연면적 합(㎡)", round(sum(r["wt"] * r["sb"][b_] for r in rows)) if T == "medical" else ""]]
         gpkg_write(P(f"grid_hbi_{T}.gpkg"), f"grid_{T}", [(r["c"]["gx"], r["c"]["gy"]) for r in rows],
                    {"n_bld": [r["c"]["n"] for r in rows], "hbi_mean": [round(r["hbi"], 3) for r in rows],
                     "hbi_median": [round(r["med"], 3) for r in rows], "share_high": [round(r["share"], 3) for r in rows],
                     "elder_min": [round(r["elder"], 1) for r in rows], "flat_min": [round(r["flat"], 1) for r in rows]})
-    write_csv(P("grid_hbi.csv"), ["target", "cell_x", "cell_y", "n_bld", "weight", "hbi_mean", "hbi_median", "share_high", "elder_min", "flat_min"], grid_rows)
+    write_csv(P("grid_hbi.csv"), ["target", "cell_x", "cell_y", "n_bld", "weight", "hbi_mean", "hbi_median", "share_high", "elder_min", "flat_min"]
+              + ([f"{p_}_add{b_}m" for b_ in BANDS for p_ in ("n", "share")] + ["add_min_med"] if V5 else []), grid_rows)
+    if V5:                                                # [v6.2] 구간 문턱 (05 의 run_meta.csv 와 같은 키)
+        write_csv(P("run_meta.csv"), ["key", "value"], [["target_gu", ",".join(TARGET_GU)], ["building_attr_mode", "layer"],
+                                                       ["hbi_bands", f"{LO:g},{HI:g}"], ["extra_min_bands", ",".join(str(b_) for b_ in BANDS)]])
     write_csv(P("summary.csv"), ["target", "metric", "value"], summary)
 
     # 행정동 (기준 목적지 medical)
@@ -178,19 +191,24 @@ def main():
     agg = {}
     for r in med:
         d = r["c"]["dong"]
-        g = agg.setdefault(d["adm_cd"], {"d": d, "n": 0, "hs": 0.0, "sh": 0.0, "wa": 0.0, "wh": 0.0})
+        g = agg.setdefault(d["adm_cd"], {"d": d, "n": 0, "hs": 0.0, "sh": 0.0, "wa": 0.0, "wh": 0.0, "nb": {b_: 0.0 for b_ in BANDS}, "wb": {b_: 0.0 for b_ in BANDS}})
         g["n"] += r["c"]["n"]; g["hs"] += r["hbi"] * r["c"]["n"]; g["sh"] += r["share"] * r["c"]["n"]
         g["wa"] += r["wt"] * 1.06; g["wh"] += r["wt"] * r["share"]
+        for b_ in BANDS:
+            g["nb"][b_] += r["c"]["n"] * r["sb"][b_]; g["wb"][b_] += r["wt"] * r["sb"][b_]
     dong_rows = [[k, g["d"]["adm_cd_stat"], g["d"]["adm_nm"], g["n"], round(g["hs"] / g["n"], 3), round(g["sh"] / g["n"], 3),
-                  round(g["wa"]), round(g["wh"]), ""] for k, g in agg.items() if g["n"] >= MIN_COUNT]
-    hdr = ["adm_cd", "adm_cd_stat", "adm_nm", "n_bld", "hbi_mean", "share_high", "weight_all", "weight_high", "elderly_in_high_est"]
+                  round(g["wa"]), round(g["wh"]), ""]
+                 + ([v for b_ in BANDS for v in (round(g["nb"][b_]), round(g["nb"][b_] / g["n"], 3), round(g["wb"][b_]))] if V5 else [])
+                 for k, g in agg.items() if g["n"] >= MIN_COUNT]
+    hdr = ["adm_cd", "adm_cd_stat", "adm_nm", "n_bld", "hbi_mean", "share_high", "weight_all", "weight_high", "elderly_in_high_est"] \
+        + ([f"{p_}_add{b_}m" for b_ in BANDS for p_ in ("n", "share", "weight")] if V5 else [])
     write_csv(P("dong_hbi.csv"), hdr, dong_rows)
     # 밖에서 만드는 고령인구 추정표 (tools/outside_elderly.py 결과 형식: 열 순서 유지 + pop65 + base_ym)
     ew = []
     for r in dong_rows:
         pop = rnd.randint(2200, 9000)
         est = round(pop * r[7] / r[6]) if r[6] else ""
-        ew.append(r[:8] + [est, pop, "2026-08-31"])
+        ew.append(r[:8] + [est] + r[9:] + [pop, "2026-08-31"])
     write_csv(P("dong_hbi_with_elderly.csv"), hdr + ["pop65", "base_ym"], ew)   # tools/outside_elderly.py 와 같은 열 (base_ym = 인구 기준일)
 
     # 검증 ① 선정지
@@ -218,16 +236,17 @@ def main():
               [[r["c"]["x"], r["c"]["y"], round(r["hbi"], 3), r["c"]["n"]] for r in cand[:30]])
     # 검증 ② 구간
     write_csv(P("validation_routes.csv"), ["name", "straight_m", "net_m", "elder_min", "adult_min", "wheel_path_m", "flat_min", "measured_min"], [
-        ["대현산배수지공원(모노레일 하부→공원)", 271, 356.0, 11.2, 8.1, 742.0, 7.4, ""],
-        ["현장실측1", 402, 468.0, 15.6, 11.3, 1180.0, 9.8, 12.0],
-        ["현장실측2", 310, 377.0, 10.9, 7.9, 655.0, 7.9, 8.5],
-        ["현장실측3", 455, 520.0, 13.4, 9.7, 980.0, 10.8, 10.5]])
+        ["대현산배수지공원(모노레일 하부→공원)", 271, 356.0, 11.2, 8.1, 742.0, 7.4, 9.6],
+        ["현장실측 청계천 산책로(평지)", 402, 468.0, 9.6, 7.0, 468.0, 9.8, 7.2],
+        ["현장실측 신당동 주택가 오르막", 310, 377.0, 10.9, 7.9, 655.0, 7.9, 8.5],
+        ["현장실측 청구동 마을마당 계단", 120, 151.0, 6.4, 4.6, 520.0, 3.2, 5.1],
+        ["봉천 선정지 계단: 아래 끝 → 위 끝", 31, 31.0, 1.9, 1.4, 412.0, 0.6, ""]])
     if V5:
-        write_csv(P("validation_measured.csv"), ["n", "r_adult_pred_vs_measured"], [[3, 0.981]])
+        write_csv(P("validation_measured.csv"), ["n", "r_adult_pred_vs_measured"], [[4, 0.981]])
         # 개입 효과 (v5): 선정지 5곳(planned) + 신규 후보 상위 5곳, 마지막 행 ALL
         wall = {r[0]: r[6] for r in dong_rows}
         facs = [(f"planned:{s['name']}", s["x"], s["y"]) for s in sites] + [(f"cand:{i + 1:02d}", r["c"]["x"], r["c"]["y"]) for i, r in enumerate(cand[:5])]
-        isum, idong, igrid, allb = [], {}, [], {}
+        isum, idong, igrid, allb, iwait = [], {}, [], {}, []
         for T in ["medical", "station_ev"]:
             for fname, fx, fy in facs + [("ALL(후보 전체)", None, None)]:
                 if fx is None:
@@ -241,16 +260,28 @@ def main():
                 sv = [max(0.0, (r["elder"] - r["flat"]) * rnd.uniform(0.4, 0.7)) for r in ben]
                 nb = sum(r["c"]["n"] for r in ben)
                 hb = sum(r["hbi"] * r["c"]["n"] for r in ben) / nb
+                wbn = rnd.randint(10, 90) if T == "station_ev" else rnd.randint(0, 30)
+                one = fx is not None
+                vert = one and "봉천" in fname
                 isum.append([fname, T, nb, round(sum(r["wt"] for r in ben)), round(sum(v * r["c"]["n"] for v, r in zip(sv, ben)) / nb, 1), round(max(sv), 1),
                              round(sum(v * r["c"]["n"] for v, r in zip(sv, ben))), round(hb, 3), round(1 + (hb - 1) * rnd.uniform(0.3, 0.45), 3),
-                             rnd.randint(0, 40) if T == "station_ev" else 0, rnd.randint(10, 90) if T == "station_ev" else 0])
+                             rnd.randint(0, 40) if T == "station_ev" else 0, wbn,
+                             # [v6.2] n_exit_high·weight_exit_high·n_exit_mid, n_saved_30s·60s, wheel_cut_n·p25·p50·p75, rise_m·pass_s
+                             rnd.randint(0, nb // 6), "", rnd.randint(0, nb // 4), round(nb * 1.2), nb, wbn,
+                             *( [rnd.randint(150, 260), rnd.randint(260, 380), rnd.randint(380, 520)] if wbn >= 100 else ["", "", ""] ),
+                             (5.1 if vert else round(rnd.uniform(8, 30), 1)) if one else "", (51.7 if vert else round(rnd.uniform(80, 200), 1)) if one else ""])
+                if one and T == "medical":
+                    for w_ in (30, 60, 90):
+                        iwait.append([fname, T, w_, round((51.7 if vert else 120.0) - (45 if vert else 60) + w_, 1), max(0, round(nb * (1.2 - w_ / 150))), round(nb * (1.4 - w_ / 200)), max(0, wbn - w_ // 30)])
                 for v, r in zip(sv, ben):
                     k = (fname, T, r["c"]["dong"]["adm_cd"])
                     g = idong.setdefault(k, [0, 0.0, 0.0])
                     g[0] += r["c"]["n"]; g[1] += r["wt"]; g[2] += r["wt"] * v
                     igrid.append([fname, T, r["c"]["x"], r["c"]["y"], r["c"]["n"], round(v, 1)])
         write_csv(P("intervention_summary.csv"), ["facility", "target", "n_benefit", "weight_benefit", "mean_saved_min", "max_saved_min", "sum_saved_bld_min",
-                                                  "hbi_before", "hbi_after", "wheel_newly_reachable", "wheel_benefit"], isum)
+                                                  "hbi_before", "hbi_after", "wheel_newly_reachable", "wheel_benefit", "n_exit_high", "weight_exit_high", "n_exit_mid",
+                                                  "n_saved_30s", "n_saved_60s", "wheel_cut_n", "wheel_cut_p25_m", "wheel_cut_p50_m", "wheel_cut_p75_m", "rise_m", "pass_s"], isum)
+        write_csv(P("intervention_wait.csv"), ["facility", "target", "wait_s", "pass_s", "n_benefit", "n_saved_30s", "wheel_benefit"], iwait)
         write_csv(P("intervention_dong.csv"), ["facility", "target", "adm_cd", "n_benefit", "weight_benefit", "weight_all", "weight_x_saved_min"],
                   [[f, t, cd, g[0], round(g[1]), wall.get(cd, round(g[1] * 3)), round(g[2])] for (f, t, cd), g in idong.items()])
         write_csv(P("intervention_grid.csv"), ["facility", "target", "cell_x", "cell_y", "n_benefit", "mean_saved_min"], igrid)
@@ -379,8 +410,23 @@ def main():
             [nm, "HBI 하위 25% 법정동 평균(필지 100개당)", round(lo_, 3)], [nm, "HBI 상위 25% 법정동 평균(필지 100개당)", round(hi_, 3)]])
 
     with open(P("deck_inputs.json"), "w", encoding="utf-8") as f:
-        json.dump({"team_name": "테스트팀", "visit_dates": ["2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-19"]},
-                  f, ensure_ascii=False, indent=1)
+        json.dump({"team_name": "테스트팀", "visit_dates": ["2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-19"],
+                   "mapapp_min": {"청계천": 6, "주택가": 7, "청구동": 3, "대현산": 6}, "monorail_wait_s": 55, "monorail_ride_s": 190,   # [v6.2] 15장 (가짜)
+                   "survey_date": "2026.10.03"}, f, ensure_ascii=False, indent=1)
+    if V5:                                                # [v6.2] 12_isochrone 그림 자리 (가짜: 동심원 세 칸)
+        try:
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+            fig, axs = plt.subplots(1, 3, figsize=(6, 2.2), dpi=150)
+            for ax, (lab, rr) in zip(axs, [("평지 가정", 1.0), ("고령자 경사 반영", 0.7), ("휠체어", 0.45)]):
+                for m_, col in ((15, "#DDE3E0"), (10, "#E9B8A6"), (5, "#9AA5AD")):
+                    ax.add_patch(plt.Circle((0, 0), m_ * rr, color=col))
+                ax.plot(0, 0, "k*"); ax.set_xlim(-16, 16); ax.set_ylim(-16, 16); ax.set_aspect("equal"); ax.axis("off"); ax.set_title(lab, fontsize=7)
+            fig.suptitle("가상 등시선 (테스트 데이터)", fontsize=8)
+            fig.savefig(P("map_isochrone_봉천동_비안어린이공원.png")); plt.close(fig)
+        except ImportError:
+            pass
     with open(P("_source.txt"), "w", encoding="utf-8") as f:     # 출처 표지 (merge_exports·prepare_deck_data 가 읽음)
         f.write(f"fake\nmake_fake_results.py {a.schema}{' --partial' if a.partial else ''}\n")
     with open(P(FAKE_MARKER), "w", encoding="utf-8") as f:
