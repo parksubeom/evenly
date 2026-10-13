@@ -11,6 +11,8 @@
     "fallback-pdf": "npm run build:fallback && node py.js ../tools/check_deck.py ../deliverables/언덕위우리동네_기획서_대비책.pptx --missing data/missing_fallback.txt && node py.js ../tools/render_deck.py ../deliverables/언덕위우리동네_기획서_대비책.pptx --out ../_render/fallback && cp ../_render/fallback/언덕위우리동네_기획서_대비책.pdf ../deliverables/",
     "build:rehearsal": "node py.js ../tools/prepare_deck_data.py --src ../results/public_rehearsal/${REHEARSAL:-gwanak_v62f} --expect rehearsal --bands ${BANDS:-mix} && node build_v6.js --expect rehearsal",
     "build:rehearsal:ab": "BANDS=hbi npm run build:rehearsal && BANDS=min npm run build:rehearsal",
+    "// build:blueprint": "[10/13] 청사진 판(보관·발전용): 공개 대역 리허설 값, 표시 없음, 결과 장 노트 → ~/Downloads/$BP_NAME.pptx + 30장 모음 png. 제출용(build:real)과 따로",
+    "build:blueprint": "node py.js ../tools/prepare_deck_data.py --src ../results/public_rehearsal/${REHEARSAL:-gwanak_v63} --expect rehearsal --bands mix && node build_v6.js --expect rehearsal --blueprint --out \"$HOME/Downloads/${BP_NAME:-기획서_청사진_v10}.pptx\" --missing data/missing_blueprint.txt && node py.js ../tools/check_deck.py \"$HOME/Downloads/${BP_NAME:-기획서_청사진_v10}.pptx\" --missing data/missing_blueprint.txt && node py.js ../tools/render_deck.py \"$HOME/Downloads/${BP_NAME:-기획서_청사진_v10}.pptx\" --out ../_render/blueprint && node py.js ../tools/contact_sheet.py ../_render/blueprint \"$HOME/Downloads/${BP_NAME:-기획서_청사진_v10}_30장.png\"",
     "build:v5deck:fake": "node py.js ../tools/make_fake_results.py && node py.js ../tools/prepare_deck_data.py --src ../results/fake_export && node build_deck.js",
     "build:v5deck:real": "node py.js ../tools/prepare_deck_data.py --src ../results/raw_export --expect real && node build_deck.js"
   },

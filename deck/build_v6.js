@@ -26,6 +26,16 @@ const FAKE = R.source === 'fake', REH = R.source === 'rehearsal', REAL = R.sourc
 //   1차 숫자로 못 채우는 결과 칸은 "2차 분석 결과 반영 예정" (missing 에 '대체'), 팀명·방문일이 비면 그대로 누락
 const FALLBACK = R.source === 'fallback';
 const FB_TEXT = '2차 분석 결과 반영 예정';
+// [10/13] 청사진 판 (npm run build:blueprint): 공개 대역 리허설 결과로 만드는 보관·발전용 (제출용 build:real 과 섞이지 않게 리허설 결과로만, --out 필수).
+//   오른쪽 위 표시·출처 줄의 '공개 대역' 문구·표지 안내를 빼고(v9 청사진처럼), 결과 장 발표자 노트에 BP_NOTE. 값이 없는 칸(실측·SKT 등)은 리허설 판 표기 그대로
+const BP = argv.includes('--blueprint');
+if (BP && R.source !== 'rehearsal') { console.error("!! --blueprint 는 공개 대역 리허설 결과(source = rehearsal)로만 만듭니다 → 제출용은 build:real"); process.exit(1); }
+if (BP && !arg('--out')) { console.error('!! --blueprint 는 --out 으로 출력 파일을 정해야 합니다 (deliverables 의 제출 파일 이름과 섞이지 않게)'); process.exit(1); }
+const BP_NOTE = '[청사진 메모] 공개 자료 리허설 값. 실제 결과로 교체할 것';
+// 결과 장 = 결과 키를 읽은 장 (값이 있든 없든). 범위·문턱·속도·팀명·방문일 같은 틀 값은 세지 않음
+const BP_FRAME = new Set(['V6.scope', 'V6.hb', 'V6.rmin', 'V6.speed', 'V6.bands', 'team_name', 'team_display', 'V6.13.visit2', 'V6.13.visit3', 'V6.16.speed_src']);
+const TOUCH = new Set(), SLIDES = {};
+const touch = key => { if (!BP_FRAME.has(key)) { TOUCH.add(page); if (process.env.BP_DEBUG) console.error('touch', page, key); } };
 const INPUT_KEYS = new Set(['team_name', 'team_display', 'V6.13.visit2', 'V6.13.visit3', 'V6.16.speed_src']);   // [v6.3] 어르신 속도 출처도 입력 칸
 // [10/13] 실제 판 --later-ok (22일 판정용, docs/22일_기획서_절차.md): 자료가 원래 없을 수 있는 칸(관악 실측·상호제공)만
 //   ___ 대신 결과 키의 later 문구 ("실측 후"·"상호제공데이터 확보 시", missing 에 '대체'). 그 밖의 누락은 그대로 ___
@@ -38,7 +48,7 @@ const PF = 14.3 / 9.4;                            // 3·12장 예시 길(profile
 const EX = () => { const a = 450 / 1.1 / 60, f = 450 / SPD() / 60; return { adult:a, flat:f, slope:f * PF }; };   // 예시 분: 성인 1.1m/s, 어르신 SPD
 
 const pres = new pptxgen(); pres.layout = 'LAYOUT_16x9';
-pres.title = (FAKE ? '[가상 수치 · 검토용] ' : REH ? '[공개 대역 · 제출 금지] ' : '') + '언덕 위 우리동네: 경사 반영 이동약자 접근성 지도';
+pres.title = (FAKE ? '[가상 수치 · 검토용] ' : BP ? '[청사진] ' : REH ? '[공개 대역 · 제출 금지] ' : '') + '언덕 위 우리동네: 경사 반영 이동약자 접근성 지도';
 const F = 'Malgun Gothic';
 const C = { ink:'1C2321', text:'2B2F2E', muted:'6B7370', line:'DADFDC', soft:'F3F4F3', acc:'E4572E', accD:'B8401F', teal:'2F7D6D', white:'FFFFFF',
   r1:'8CB8A0', r2:'F2B134', r3:'E4572E', r4:'9E2A2B', onDark:'C9D0CD', reh:'1F5FA8' };
@@ -74,6 +84,7 @@ function fb(key, used) {
 }
 // V: 결과 키 값 → 문자열. 없으면 공개 대역 판은 later 문구(대체), 나머지는 ___(누락)
 function V(key, blank = '___') {
+  touch(key);
   const f = R.fields[key];
   if (f && f.value !== null && f.value !== undefined && f.value !== '') return String(f.value);
   const lok = LATER_OK && LATER_OK_RE.test(key);
@@ -86,9 +97,10 @@ function V(key, blank = '___') {
   miss(key, f || { label:key, need:[] }); pending.push({ key, page });
   return blank;
 }
-const has = key => { const f = R.fields[key]; return !!(f && f.value !== null && f.value !== undefined && f.value !== ''); };
-const Q = (key, dflt) => { if (has(key)) return String(R.fields[key].value); fb(key, dflt); return dflt; };   // 기본 문구로 말이 되는 보조 값
+const has = key => { touch(key); const f = R.fields[key]; return !!(f && f.value !== null && f.value !== undefined && f.value !== ''); };
+const Q = (key, dflt) => { touch(key); if (has(key)) return String(R.fields[key].value); fb(key, dflt); return dflt; };   // 기본 문구로 말이 되는 보조 값
 function IMG(key) {
+  touch(key);
   const m = R.images[key];
   if (m && m.path && fs.existsSync(m.path)) return m.path;
   if (REH && m && m.later) { fb('img:' + key, m.later); return null; }
@@ -97,6 +109,7 @@ function IMG(key) {
   return null;
 }
 function TBL(key) {
+  touch(key);
   const t = R.tables[key];
   if (t && t.rows && t.rows.length) return t.rows;
   if (FALLBACK) { fb('tbl:' + key, FB_TEXT); return null; }
@@ -121,13 +134,14 @@ function tag(s, x, y, text, w, color) {
   T(s, text, { x, y, w, h:0.27, fontSize:10, bold:true, color, align:'center', valign:'middle' });
 }
 function reviewTag(s, dark) {
-  if (!FAKE && !REH) return;
+  if ((!FAKE && !REH) || BP) return;   // [10/13] 청사진 판은 표시 없음
   const col = 'C0392B', txt = FAKE ? '가상 수치 · 검토용' : '공개 대역 · 제출 금지';   // [10/12 판정] 두 표시 모두 빨강 테두리 (청사진)
   s.addShape(pres.shapes.RECTANGLE, { x:7.90, y:0.16, w:1.60, h:0.25, fill:{color: dark ? C.ink : C.white}, line:{color:col, width:1} });
   T(s, txt, { x:7.90, y:0.16, w:1.60, h:0.25, fontSize:9, bold:true, color:col, align:'center', valign:'middle' });
 }
 const tsize = t => t.length > 34 ? 19 : t.length > 27 ? 21 : 24;
-const SCOPE = REH ? `${Q('V6.scope', '관악구')}(공개 대역)` : FALLBACK ? '관악 일대(1차 반출)' : '5개 구';      // 14·17 장의 범위 표현 (공개 대역·대비책 판에서만 바뀜)
+const SCOPE = REH ? (BP ? Q('V6.scope', '관악구') : `${Q('V6.scope', '관악구')}(공개 대역)`) : FALLBACK ? '관악 일대(1차 반출)' : '5개 구';      // 14·17 장의 범위 표현 (공개 대역·대비책 판에서만 바뀜)
+const SFX = () => ((REH && !BP) || FALLBACK) ? ' · ' + SCOPE : '';   // 머리말 꼬리 (청사진 판은 v9 처럼 없음)
 // title 에 결과 값(V)이 들어가면 함수로 넘김: 장 번호를 올린 뒤에 값을 읽어야 누락이 이 장에 적힘
 function base(kicker, title, o={}) {
   const s = pres.addSlide(); page++;
@@ -137,9 +151,10 @@ function base(kicker, title, o={}) {
   T(s, title, { x:0.6, y:0.64, w:8.8, h:0.62, fontSize:o.tsize||tsize(flat(title)), bold:true, color:C.ink, valign:'middle' });
   T(s, String(page), { x:9.0, y:5.25, w:0.45, h:0.22, fontSize:9, color:C.muted, align:'right' });
   reviewTag(s);
+  SLIDES[page] = s;
   return s;
 }
-const src = (s, t) => T(s, t, { x:0.6, y:5.22, w:8.2, h:0.28, fontSize:8.5, color:C.muted });
+const src = (s, t) => T(s, BP ? String(t).replace(/공개 대역\(리허설\) 값 · /g, '') : t, { x:0.6, y:5.22, w:8.2, h:0.28, fontSize:8.5, color:C.muted });   // [10/13] 청사진 판: 출처 줄의 '공개 대역' 문구 뺌
 function takeaway(s, text, y) { bar(s, 0.6, y, 0.42); T(s, text, { x:0.82, y, w:8.6, h:0.42, fontSize:13, bold:true, color:C.ink, valign:'middle' }); }
 function stat(s, x, y, w, label, value, o={}) {
   T(s, label, { x, y, w, h:0.26, fontSize:11, color:C.muted });
@@ -199,7 +214,7 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
   bar(s, 0.7, 3.2, 0.42); T(s, `지도앱의 ${Math.round(EX().adult)}분이, 누군가에게는 ${Math.round(EX().slope)}분입니다.`, { x:0.92, y:3.2, w:8, h:0.42, fontSize:18, bold:true, color:C.white, valign:'middle' });   // [10/13] 3장 예시 길과 같은 계산 (어르신 속도)
   T(s, `서비스명 evenly   |   팀명 ${team()}   |   2026.10`, { x:0.7, y:4.8, w:7, h:0.3, fontSize:12, color:C.onDark });
   if (FAKE) T(s, '검토용 초안: 결과 숫자는 시나리오 확인을 위한 가상 값입니다. 제출 전 실제 분석 결과로 바꿔야 합니다.', { x:0.7, y:4.3, w:8.6, h:0.3, fontSize:11, bold:true, color:'F0A08A' });
-  if (REH) T(s, `완성본 청사진: ${Q('V6.scope', '관악구')} 공개 대역(리허설) 값으로 채운 검토판입니다. 실제 결과가 아니며 제출하지 않습니다.`, { x:0.7, y:4.3, w:8.6, h:0.3, fontSize:11, bold:true, color:'F0A08A' });
+  if (REH && !BP) T(s, `완성본 청사진: ${Q('V6.scope', '관악구')} 공개 대역(리허설) 값으로 채운 검토판입니다. 실제 결과가 아니며 제출하지 않습니다.`, { x:0.7, y:4.3, w:8.6, h:0.3, fontSize:11, bold:true, color:'F0A08A' });
   reviewTag(s, true); }
 
 // ── 2 한 장 요약 ── [10/13 v9 청사진] 찾은 것 세 가지 (숫자는 결과 키)
@@ -236,9 +251,11 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
   src(s, `예시 계산: 성인 1.1m/s, 고령자 ${SPD()}m/s, 평균 경사 12%, Tobler 보행함수. 현장 실측 구간 값으로 교체 예정`); }
 
 // ── 4 페르소나 ── [10/13 v9 청사진] 한 사람의 한 달: 지도앱 왕복(3장 예시 길) + 가장 급한 동 고립 위험 격자의 왕복 추가 중앙값 × 일주일 네 번
-{ const dong4 = has('V6.4.dong') ? R.fields['V6.4.dong'].value : '언덕 위 동네', add4 = has('V6.4.add') ? Number(R.fields['V6.4.add'].value) : null;
-  const map4 = Math.round(EX().adult * 2), up4 = add4 !== null ? Math.round(map4 + add4) : null, mon4 = add4 !== null ? add4 * 4 * 52 / 12 / 60 : null;
-  const s = base('한 사람의 한 달', mon4 !== null ? `김순자 할머니의 한 달은 ${Math.floor(mon4)}시간 더 깁니다` : '김순자 할머니의 한 달은 더 깁니다'); tag(s, 6.6, 0.82, '가상 인물', 1.0);
+{ let dong4, add4, map4, up4, mon4;   // 값은 장을 만든 뒤에 읽음 (빈칸·노트가 이 장에 적히게)
+  const s = base('한 사람의 한 달', () => {
+    dong4 = has('V6.4.dong') ? R.fields['V6.4.dong'].value : '언덕 위 동네'; add4 = has('V6.4.add') ? Number(R.fields['V6.4.add'].value) : null;
+    map4 = Math.round(EX().adult * 2); up4 = add4 !== null ? Math.round(map4 + add4) : null; mon4 = add4 !== null ? add4 * 4 * 52 / 12 / 60 : null;
+    return mon4 !== null ? `김순자 할머니의 한 달은 ${Math.floor(mon4)}시간 더 깁니다` : '김순자 할머니의 한 달은 더 깁니다'; }); tag(s, 6.6, 0.82, '가상 인물', 1.0);
   T(s, [
     { text:`${has('V6.4.dong') ? dong4 + ' ' : ''}언덕 위에 사는 김순자 할머니(78)는 약국과 시장, 동네 의원에 일주일에 네 번 다닙니다.`, options:{ breakLine:true } },
     { text:' ', options:{ breakLine:true, fontSize:6 } },
@@ -383,7 +400,7 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
     if (n13.length) src(s, n13.join(' / ')); } }   // [10/13] 작성 안내 줄: 방문일을 다 넣으면 빠짐
 
 // ── 14 결과 ① 사각지대 ── [10/13 v9 청사진]
-{ const s = base('관악구에서 찾은 것' + ((REH || FALLBACK) ? ' · ' + SCOPE : ''), () => FALLBACK
+{ const s = base('관악구에서 찾은 것' + SFX(), () => FALLBACK
     ? `관악 일대 건물의 약 ${V('V6.fb.share13')}%가 평지보다 ${Math.round((Number(HB()) - 1) * 100)}% 넘게 더 걸립니다`   // [10/13] 대비책 판: 1차 HBI 1.3 이상 비율
     : `평지 지도에서 "가까운 동네"의 ${V('V6.14.near_burden')}%가 실제로는 ${Math.round((Number(HB()) - 1) * 100)}% 넘게 더 걸립니다`, { tsize:19 });
   const m = IMG('V6.map');
@@ -445,7 +462,7 @@ const NCAND = () => V('V6.17.n_cand');
 // [v6.3] 09 후보 자동 결과(intervention_candidates.csv)가 있으면 후보·선정지 비교표 (후보별 수혜·1억 원당·규모별 처방), 없으면 v6.2 격자 표
 const CANDT = (R.tables['V6.17.cand'] && R.tables['V6.17.cand'].rows && R.tables['V6.17.cand'].rows.length) ? R.tables['V6.17.cand'].rows : null;
 if (CANDT) {
-  const s = base('관악구에서 찾은 것' + ((REH || FALLBACK) ? ' · ' + SCOPE : ''), () => [{ text:'서울시가 고른 봉천보다 더 급한 곳이 ', options:{ color:C.ink } }, { text:V('V6.17.n_facility'), options:{ color:C.acc } }, { text:' 있습니다', options:{ color:C.ink } }]);   // [10/13 v9] 표는 A1 (후보 자동, 1억 원당 5)
+  const s = base('관악구에서 찾은 것' + SFX(), () => [{ text:'서울시가 고른 봉천보다 더 급한 곳이 ', options:{ color:C.ink } }, { text:V('V6.17.n_facility'), options:{ color:C.acc } }, { text:' 있습니다', options:{ color:C.ink } }]);   // [10/13 v9] 표는 A1 (후보 자동, 1억 원당 5)
   // [10/13 판정] 단위 '개'(주거 건물), 수혜를 고령자(왕복 30초 이상)·휠체어(왕복 1분 이상)로 나눔. 1억 원당 = 둘 중 하나라도 해당하는 건물 ÷ 40
   const rows = [['위치', '고립 위험 주거 건물', '시설 (자동 배치)', '고령자 30초', '휠체어 1분', '1억 원당', '처방']];
   const cw = [1.5, 1.05, 1.9, 1.0, 1.0, 0.75, 1.6];
@@ -463,7 +480,7 @@ if (CANDT) {
   T(s, [{ text:'처방 규칙  ', options:{ bold:true, color:C.ink } }, { text:Q('V6.17.cand_rule', '500m 안 기존 시설 → 기존 시설 연계 / 1억 원당 수혜 건물 5개 이상 → 시설 검토 / 미만 → 난간·쉼터·계단 정비 + 방문돌봄 (시설 1곳 40억 원 가정)'), options:{ color:C.text } }],
     { x:0.82, y:4.25, w:8.6, h:0.75, fontSize:10.5, valign:'middle' });
   src(s, (REH ? '공개 대역(리허설) 값 · ' : '') + '후보 = 고립 위험 주거 건물이 가장 많은 250m 격자에서 그 건물들의 길이 가장 많이 지나는 가파른 구간에 시설을 자동 배치 · 수혜(의료) = 고령자 왕복 30초 이상 · 휠체어 왕복 1분 이상 단축되는 건물(새로 도달 포함), 1억 원당 = 둘 중 하나 ÷ 40억 · 시설 양 끝 좌표는 반출하지 않음');
-} else { const s = base('정책 제안' + ((REH || FALLBACK) ? ' · ' + SCOPE : ''), () => FALLBACK ? '어디부터 무엇을: 우선 검토 후보' : `어디부터 무엇을: 우선 검토 후보 ${NCAND()}곳`);
+} else { const s = base('정책 제안' + SFX(), () => FALLBACK ? '어디부터 무엇을: 우선 검토 후보' : `어디부터 무엇을: 우선 검토 후보 ${NCAND()}곳`);
   // 10/12: 열 = 위치, 고립 위험 건물 수, 왕복 추가 시간 중앙값, 500m 안 기존 시설, 처방 방향 (규칙). 1억 원당 수혜는 20장(시뮬레이션한 시설)만
   const rows = [['위치', Q('V6.17.n_head', '고립 위험 건물'), '왕복 추가 (중앙값)', '500m 안 기존 시설', '처방 방향']];
   const cw = [2.35, 1.35, 1.45, 1.6, 2.05];
@@ -513,7 +530,7 @@ if (CANDT) {
 // ── 20 한 사람에게 돌아가는 변화 ──
 if (Q('V6.20.mode', 'example') === 'wheel') {
   const s = base('관악구에서 찾은 것', () => `엘리베이터 한 대가 휠체어 길을 ${V('V6.20.before')}에서 ${V('V6.20.after')}로 줄입니다`, { tsize:19 });   // [10/13 v9]
-  tag(s, 0.6, 1.42, REH ? '리허설 시뮬레이션' : '모델 시뮬레이션', 1.55);
+  tag(s, 0.6, 1.42, BP ? '시설 시뮬레이션' : REH ? '리허설 시뮬레이션' : '모델 시뮬레이션', 1.55);
   T(s, '지금 (휠체어)', { x:0.6, y:1.85, w:3.6, h:0.3, fontSize:12.5, bold:true, color:C.muted });
   T(s, V('V6.20.before'), { x:0.6, y:2.12, w:3.6, h:0.85, fontSize:46, bold:true, color:C.acc });
   T(s, `높이 ${V('V6.20.rise')} 계단을 피해 비탈길로 우회\n서울시 발표: 200m 이상 우회`, { x:0.6, y:2.98, w:3.6, h:0.6, fontSize:11.5, color:C.text, lineSpacingMultiple:1.12 });
@@ -650,6 +667,7 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
   src(s, 'analysis/hbi/lib/model.py 발췌 / 실행 환경: QGIS 3.32 내장 Python, numpy·GDAL, 자체 다익스트라, 자동 점검(setup·check)'); }
 
 // ── 저장 + 누락 목록 ────────────────────────────────────────
+if (BP) for (const p_ of TOUCH) if (SLIDES[p_]) SLIDES[p_].addNotes(BP_NOTE);   // [10/13] 청사진 판: 결과 장 발표자 노트
 if (pending.length) { console.error('!! 빈칸으로 그려지지 않은 누락 key: ' + pending.map(p => p.page + '장 ' + p.key).join(', ')); process.exitCode = 1; }
 if (page > 30) { console.error(`!! 슬라이드 ${page}장 — 30장 제한 초과`); process.exit(1); }
 const OUT = arg('--out') || (REAL ? '../deliverables/언덕위우리동네_기획서_final.pptx'
@@ -667,6 +685,7 @@ fs.mkdirSync(path.dirname(MISS), { recursive:true });
 fs.writeFileSync(MISS, lines.join('\n') + '\n');
 if (R.source === 'none') console.warn('!! data/results.json 없음 → 빈칸 판');
 if (FAKE) console.warn('!! 가상 수치 — 모든 장 오른쪽 위에 "가상 수치 · 검토용"');
-if (REH) console.warn('!! 공개 대역 — 모든 장 오른쪽 위에 "공개 대역 · 제출 금지"');
+if (BP) console.warn(`!! 청사진 판 (공개 대역 리허설 값, 표시 없음) — 결과 장 노트 "${BP_NOTE}" · 보관·발전용, 제출하지 않음`);
+else if (REH) console.warn('!! 공개 대역 — 모든 장 오른쪽 위에 "공개 대역 · 제출 금지"');
 console.log(`슬라이드 ${page}장, 누락 ${missing.length}건, 대체 ${fallbacks.length}건 → ${MISS}`);
 pres.writeFile({ fileName: OUT }).then(f => console.log('wrote', f));
