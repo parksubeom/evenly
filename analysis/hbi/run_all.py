@@ -41,7 +41,7 @@ if C.DATA_ROOT_PARCEL: steps.append("06_parcel.py")                             
 if any(v.get("path") for v in C.JOIN_DATA.values()): steps.append("07_join_dong.py")  # SKT·KCB 경로가 있으면
 if "--sens" in sys.argv or (C.DATA_ROOT_DEM1M and getattr(C, "DEM1M_AUTO", False)):   # --sens, [v6.1] 또는 DEM 1m 폴더가 있으면
     steps.append("08_sensitivity.py")                                                 # (DEM 1m 가 있으면 08 에 "DEM 1m" 줄)
-# [v5] 09: interventions.csv 에 양 끝 좌표 4개가 다 채워진 행이 하나라도 있으면
+# [v5] 09: interventions.csv 에 양 끝 좌표 4개가 다 채워진 행이 하나라도 있으면 ([v6.3] 또는 mapping 의 auto_candidates 가 0 보다 크면)
 def _has_facility():
     import csv
     p = os.path.join(C.EXTERNAL, "interventions.csv")
@@ -49,7 +49,7 @@ def _has_facility():
         return False
     with open(p, encoding="utf-8-sig") as f:
         return any(all((r.get(k) or "").strip() for k in ("a_lon", "a_lat", "b_lon", "b_lat")) for r in csv.DictReader(f))
-if _has_facility(): steps.append("09_intervention.py")
+if _has_facility() or getattr(C, "AUTO_CANDIDATES", 0): steps.append("09_intervention.py")   # [v6.3] 후보 자동이면 좌표가 없어도
 if any(v.get("path") for v in C.POINT_DATA.values()): steps.append("10_points_join.py")   # [v5] 점 자료 경로가 있으면
 if any(v.get("path") for v in C.LEGAL_DONG_DATA.values()): steps.append("11_legal_dong_join.py")   # [v5] 법정동 이름 자료가 있으면
 

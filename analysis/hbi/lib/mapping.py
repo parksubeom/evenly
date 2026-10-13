@@ -11,7 +11,8 @@ lib/mapping.py ─ [v6] mapping.txt 읽기: 자료마다 다른 "칸 이름·레
   JS로 치면 .env 파일을 읽어 process.env 기본값 위에 덮어쓰는 dotenv 와 같습니다.
 
 [config.py 와의 관계]  config.py 맨 끝에서 apply(globals()) 를 불러, 아래 값으로 config 의
-    LAYERS, COL, FIELD, TARGET_GU, NEIGHBOR_GU, MAP_FOLDERS, BUILDING_ATTR_MODE, REGISTER, AREA_REASON, MIN_BANDS([v6.2]) 를 채웁니다.
+    LAYERS, COL, FIELD, TARGET_GU, NEIGHBOR_GU, MAP_FOLDERS, BUILDING_ATTR_MODE, REGISTER, AREA_REASON, MIN_BANDS([v6.2]),
+    RISK_MIN·AUTO_CANDIDATES·CAND_RULE([v6.3]) 를 채웁니다.
   이 파일은 config 를 import 하지 않습니다 (서로 부르면 순환 import).
 """
 import os
@@ -76,8 +77,15 @@ DEFAULTS = {
     "layer_overpass": ("N3A_A0063321,육교", "육교 (점검용)", "레이어"),
     "layer_station": ("N3P_A0131122,정거장", "철도·지하철 정거장 (점)", "레이어"),
     # ── 결과 구간 [v6.2] ──
-    "extra_min_bands": ("3,5,10", "[v6.2] 왕복 추가 시간(분) 구간 문턱 (쉼표로 여럿). 이 분 이상인 건물 수·비율·연면적을 summary·격자·행정동·결과 점검표에 냄. 가장 큰 값 = 기획서의 '고립 위험'. HBI 1.3·1.8 구간도 그대로 냄", "결과 구간"),
+    "extra_min_bands": ("3,5,10,15", "[v6.2] 왕복 추가 시간(분) 구간 문턱 (쉼표로 여럿). 이 분 이상인 건물 수·비율·연면적을 summary·격자·행정동·결과 점검표에 냄. [v6.3] 15 를 더함 (기준 민감도: 5·10·15분 동 순위상관). HBI 1.3·1.8 구간도 그대로 냄", "결과 구간"),
+    "risk_min": ("10", "[v6.3] 고립 위험 문턱(분): 왕복이 이 분 이상 더 걸리면 고립 위험 (extra_min_bands 안의 값). 09 후보 자동·05 독거노인 추정·기획서가 씀", "결과 구간"),
     "hbi_band": ("1.3", "[v6.2] 체감 부담 HBI 문턱 (이 값 이상 = 체감 부담. 결과의 HBI 구간 첫 값, 1 보다 크고 1.8 보다 작게). HBI 1.8 구간은 결과에 그대로", "결과 구간"),
+    # ── 후보 시설 [v6.3] (09 후보 자동) ──
+    "auto_candidates": ("5", "[v6.3] 09 가 고립 위험 집이 가장 많은 격자 K곳에 시설을 자동으로 놓아 봄 (0 = 안 함). 시설 양 끝 좌표는 반출하지 않음", "후보 시설"),
+    "cand_min_risk": ("30", "[v6.3] 처방: 격자 고립 위험 집이 이 수 이상이고 1억 원당 수혜가 cand_min_per100m 이상이면 '시설 검토', 아니면 '난간·쉼터·계단 정비 + 방문돌봄'", "후보 시설"),
+    "cand_min_per100m": ("1.0", "[v6.3] 처방: 1억 원당 수혜 건물(고령자 30초 또는 휠체어 1분 이상 단축) 기준", "후보 시설"),
+    "facility_cost_eok": ("40", "[v6.3] 시설 1곳 비용 가정(억 원). 1억 원당 수혜 = 수혜 건물 ÷ 이 값", "후보 시설"),
+    "existing_radius_m": ("500", "[v6.3] 처방: 격자 가운데에서 이 거리(m) 안에 기존 이동편의시설(external/existing_facilities.csv)이 있으면 '기존 시설 연계'", "후보 시설"),
 }
 LAYER_KEYS = ["sidewalk_cl", "road_cl", "stairs", "building", "bus_stop", "bridge", "tunnel", "overpass", "station"]
 
@@ -179,6 +187,38 @@ def apply(g):
     g["REGISTER_FILE"] = rf if (not rf or os.path.isabs(rf)) else os.path.join(HERE, rf)
     g["MIN_BANDS"] = min_bands(m.get("extra_min_bands"))
     g["HBI_BANDS"] = [hbi_band(m.get("hbi_band"), g["HBI_BANDS"]), g["HBI_BANDS"][1]]     # [v6.2] 체감 부담 문턱은 mapping 한 곳에서
+    g["RISK_MIN"] = risk_min(m.get("risk_min"), g["MIN_BANDS"])                             # [v6.3] 고립 위험 문턱(분)
+    g["AUTO_CANDIDATES"] = _num(m.get("auto_candidates"), "auto_candidates", int, 0, 20)
+    g["CAND_RULE"] = {"min_risk": _num(m.get("cand_min_risk"), "cand_min_risk", int, 0, None),
+                      "min_per100m": _num(m.get("cand_min_per100m"), "cand_min_per100m", float, 0, None),
+                      "cost_eok": _num(m.get("facility_cost_eok"), "facility_cost_eok", float, 1e-9, None),
+                      "radius_m": _num(m.get("existing_radius_m"), "existing_radius_m", float, 0, None)}
+
+
+def _num(v, key, typ, lo, hi):
+    """[v6.3] mapping 숫자 한 칸 (비우거나 ? 이면 DEFAULTS). lo·hi 밖이면 멈춤"""
+    if v is None or str(v).strip() in ("", "?"):
+        v = DEFAULTS[key][0]
+    try:
+        x = typ(float(str(v).strip()))
+    except ValueError:
+        raise SystemExit(f"mapping.txt 의 {key} = {v} → 숫자 하나 (기본 {DEFAULTS[key][0]}). 고친 뒤 python check.py")
+    if (lo is not None and x < lo) or (hi is not None and x > hi):
+        raise SystemExit(f"mapping.txt 의 {key} = {v} → {lo if lo is not None else ''}~{hi if hi is not None else ''} 사이 (기본 {DEFAULTS[key][0]}). 고친 뒤 python check.py")
+    return x
+
+
+def risk_min(v, bands):
+    """[v6.3] risk_min → 고립 위험 문턱(분). extra_min_bands 안의 값이어야 함 (그 칸의 수·비율·연면적을 씀). 비우면 10, 10 이 없으면 가장 큰 값"""
+    if v is None or str(v).strip() in ("", "?"):
+        return 10.0 if 10.0 in bands else (bands[-1] if bands else None)
+    try:
+        x = round(float(str(v).strip().rstrip("분")), 2)
+    except ValueError:
+        raise SystemExit(f"mapping.txt 의 risk_min = {v} → 분을 숫자 하나로 (예: 10). 고친 뒤 python check.py")
+    if bands and x not in bands:
+        raise SystemExit(f"mapping.txt 의 risk_min = {v} → extra_min_bands ({','.join(f'{b:g}' for b in bands)}) 안의 값이어야 함. 고친 뒤 python check.py")
+    return x if bands else None
 
 
 def min_bands(v):

@@ -96,3 +96,34 @@ def removal_leak(nB, subs, mc, budget=50000):
     except (OverflowError, RecursionError):
         return True
     return bool(r[max(1, nB - mc + 1):nB].any())
+
+
+def publishable(S, pool, nb, mc):
+    """[v6.3] 집합 S(건물 번호 배열)의 값을 내도 되는가 (09 안에 있던 것을 05 도 쓰게 옮김. 계산은 같음)
+    pool: 이미 공개한(또는 공개할 수 있는) 값의 건물 집합들, nb: 건물 전체 수, mc: MIN_COUNT
+      0채면 됨, 1 ~ mc-1 채면 안 됨, S 에서 S 안의 공개 집합 몇 개를 빼거나, S 를 품는 공개 집합에서 S 와 다른 공개 집합을 빼서
+      1 ~ mc-1 채가 남으면 안 됨"""
+    n = len(S)
+    if n == 0:
+        return True
+    if n < mc:
+        return False
+
+    def mask_of(Q):
+        m = np.zeros(nb, bool)
+        m[Q] = True
+        return m
+    Sm, subs, sups = mask_of(S), [], []
+    for q in pool:
+        k = int(Sm[q].sum())
+        if k == len(q) and len(q) < n:
+            subs.append(q)
+        elif k == n and len(q) > n:
+            sups.append(q)
+    if removal_leak(n, subs, mc):
+        return False
+    for P in sups:
+        Pm = mask_of(P)
+        if removal_leak(len(P), [q for q in pool if len(q) < len(P) and int(Pm[q].sum()) == len(q)] + [S], mc):
+            return False
+    return True

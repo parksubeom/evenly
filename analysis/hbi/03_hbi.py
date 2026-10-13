@@ -20,6 +20,7 @@
   3. 각 건물을 가장 가까운 길 노드에 연결 (60m 넘으면 제외)
   4. 목적지 종류마다: 모든 집 → 가장 가까운 목적지 왕복 시간을 고령자/평지/휠체어로 계산
 [결과] work/buildings_hbi.csv, work/buildings_hbi.gpkg  ← 건물 단위라 반출하지 않음 (QGIS에서 열어 확인만)
+       [v6.3] htype 열 = 집 종류 번호 (05 가 고립 위험 집 종류 구성을 세는 데만 씀)
 [결과 열 이름 읽는 법]  (medical 자리에 bus, elderly, station, station_ev, pharmacy, market 이 올 수 있음)
   medical_hbi          : 의료시설 기준 HBI (왕복)
   medical_home_ratio   : 귀갓길(의료시설→집) 편도만의 배수
@@ -50,7 +51,7 @@ def snap(xs, ys, maxd):
 
 # 1. 건물 읽기 ─────────────────────────────────────────────
 log("건물 레이어 읽기")
-H = {"x": [], "y": [], "floors": [], "area": []}    # 집(출발점) 정보
+H = {"x": [], "y": [], "floors": [], "area": [], "htype": []}    # 집(출발점) 정보. [v6.3] htype = 집 종류 (lib/battr.py HTYPE_NAMES)
 MED, ELD = [], []                                   # 의료시설, 노유자시설 좌표
 BX, BY = [], []
 nb = 0
@@ -76,6 +77,7 @@ for g, a in iter_buildings():                       # [v6] 용도·종류·층�
         H["x"].append(x); H["y"].append(y)
         H["floors"].append(min(max(fl, 1), 60))     # 1~60층 범위로 제한
         H["area"].append(g.GetArea())               # 바닥 면적 (m²)
+        H["htype"].append(a.get("htype", 0))        # [v6.3] 0 모름 1 단독 2 다가구 3 연립·다세대 4 아파트 5 공동 기타 (결과 점검의 집 종류 구성)
 H = {k: np.array(v, float) for k, v in H.items()}   # 리스트 → numpy 배열
 # [v6] 대상 구 밖(옆 구 등)의 집은 출발점에서 뺌 → 결과(04·05·06)에는 대상 구만. 대상 구가 비어 있으면 그대로 (v5 와 같음)
 n_res_all = len(H["x"])

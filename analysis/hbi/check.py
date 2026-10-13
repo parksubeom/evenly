@@ -218,6 +218,8 @@ def main():
     print(f"  건물 용도 방식: {C.BUILDING_ATTR_MODE}, 대상 구: {','.join(C.TARGET_GU) or '전체'}, 옆 구: {','.join(C.NEIGHBOR_GU) or '없음'}")
     print(f"  왕복 추가 구간 [v6.2]: {('·'.join(f'{x:g}' for x in C.MIN_BANDS) + '분 이상') if C.MIN_BANDS else '내지 않음'} (mapping 의 extra_min_bands)"
           f" · 체감 부담 HBI {C.HBI_BANDS[0]:g} 이상 (mapping 의 hbi_band)")
+    print(f"  고립 위험 [v6.3]: 왕복 {C.RISK_MIN:g}분 이상 더 (mapping 의 risk_min) · 후보 자동 {C.AUTO_CANDIDATES}곳 (mapping 의 auto_candidates, 0 = 안 함)"
+          if C.RISK_MIN else "  고립 위험 [v6.3]: 왕복 추가 구간이 없어 후보 자동·독거노인 추정을 하지 않음")
     unk = [k for k in M.read_raw() if k not in M.DEFAULTS]
     if unk:                                       # [v6.2] 철자가 틀린 키는 쓰이지 않고 기본값으로 돎
         warn(f"mapping.txt 에 모르는 키: {', '.join(unk)} (그 줄은 쓰이지 않음)", "철자 확인 (python setup.py 가 만든 키 이름과 같게)")

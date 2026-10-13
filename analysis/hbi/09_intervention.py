@@ -50,8 +50,8 @@ from lib.qio import log, read_csv, write_csv, transform_xy, transformer, find_fi
 from lib.qgraph import NearestIndex
 from lib.netload import load
 from lib.bload import load_buildings, usable, targets, rep_mode
-from lib.model import run_with_extra
-from lib.expose import removal_leak   # [v6.2] 연면적 빼기 노출 검사
+from lib.model import run_with_extra, route
+from lib.expose import publishable as _publishable   # [v6.2] 연면적 빼기 노출 검사 ([v6.3] 함수는 lib/expose.py 로 옮김)
 
 os.makedirs(C.OUTPUT, exist_ok=True)
 
@@ -63,7 +63,7 @@ def fnum(v):
 
 rows = [r for r in read_csv(os.path.join(C.EXTERNAL, "interventions.csv"))
         if all(fnum(r.get(k)) is not None for k in ("a_lon", "a_lat", "b_lon", "b_lat"))]   # 좌표 4개가 다 있는 행만
-if not rows:
+if not rows and not C.AUTO_CANDIDATES:                           # [v6.3] 후보 자동(mapping 의 auto_candidates)이면 시설 좌표가 없어도 계속
     raise SystemExit("external/interventions.csv 에 양 끝 좌표(a_lon, a_lat, b_lon, b_lat)가 모두 채워진 행이 없습니다 → 건너뜀")
 
 net = load()
@@ -157,7 +157,160 @@ for r, (ax, ay, bx, by), z5, z1 in zip(rows, P, Z5, Z1):
         log(f"  시설 {r['name']} [{typ}, {r.get('status')}] 길이 {straight:.0f}m, 통과 {t / 60:.1f}분 (대기 {wait:g}초, {speed:g}m/s)"
             + (f", 높이 차 {rise:.1f}m (DEM 5m, 참고)" if rise is not None else ""))
     fac.append((r["name"], (r.get("status") or "planned").strip().lower(), (int(na), int(nb_), float(t), straight + walk),
-                {"rise": round(rise, 1) if rise is not None else "", "pass": round(float(t), 1), "wait": float(wait)}))
+                {"rise": round(rise, 1) if rise is not None else "", "pass": round(float(t), 1), "wait": float(wait), "typ": typ}))
+
+# ── 2. 행정동 준비 (05_export.py 와 같은 방식. [v6.3] 후보 이름에 쓰려고 후보 찾기 앞으로) ─────────────
+bd = find_files(C.EXTERNAL, ["dong_boundary"], ".geojson") + find_files(C.EXTERNAL, ["dong_boundary"], ".shp")
+X, Y = b["x"], b["y"]
+which, dcode = None, []
+if bd:
+    from lib.qnetwork import points_in_polygons
+    polys = [(g, a) for g, a in iter_layer(files=bd[:1], bbox=None)]
+    ck = next(k for k in polys[0][1] if k.upper() in ("ADM_CD", "ADM_DR_CD", "ADSTRD_CD", "CODE"))
+    bx0, bx1, by0, by1 = np.nanmin(X), np.nanmax(X), np.nanmin(Y), np.nanmax(Y)
+    polys = [p for p in polys if not (p[0].GetEnvelope()[1] < bx0 or p[0].GetEnvelope()[0] > bx1 or
+                                      p[0].GetEnvelope()[3] < by0 or p[0].GetEnvelope()[2] > by1)]
+    _, which = points_in_polygons(X, Y, polys)                   # 건물마다 몇 번째 동인지 (-1 = 없음)
+    dcode = [str(a[ck]) for _, a in polys]
+    nk = next((k for k in polys[0][1] if k.upper() in ("ADM_NM", "NAME")), None)
+    dname = [str(a.get(nk, "")) if nk else "" for _, a in polys]
+    wall = np.array([b["weight"][(which == k) & U].sum() for k in range(len(polys))])   # 동 전체 주거 연면적 (경계 제외)
+
+# ── 2-1. [v6.3] 후보 자동: 고립 위험 집이 가장 많은 격자 K곳(mapping 의 auto_candidates)에 시설을 놓아 봄 ─────────────
+#  ① 기준 목적지(DT, 05 행정동 표와 같은 의료)에서 왕복이 RISK_MIN 분 이상 더 걸리는 집(고립 위험)이 많은 격자부터 (05 격자와 같은 건물·칸)
+#  ② 그 집들의 고령자 최단 경로(가는 길·오는 길)마다 가파른 링크(계단, 경사 CAND_STEEP 이상)가 이어지는 구간을 잘라 셈
+#     (구간이 수평 CAND_MAX_LEN_M 보다 길면 그 안에서 높이 차가 가장 큰 창). 지나는 집이 가장 많은 구간
+#     (계단이 든 구간을 먼저, 없으면 경사 구간. 한 끝이 격자 가운데에서 CAND_RADIUS_M 안, 지나는 집 MIN_COUNT 이상, 높이 차 CAND_MIN_RISE_M 이상)
+#  ③ 구간의 낮은 끝(a)·높은 끝(b) 을 시설 양 끝으로: 수평 CAND_VERTICAL_MAX_M 이하면 수직(대기 + 높이 차 ÷ 속도),
+#     넘으면 경사형 엘리베이터(대기 + 길이 ÷ 속도). 봉천(사람이 넣은 시설)과 같은 식. 높이 = 02 의 노드 높이(DEM 5m)
+#  ④ 다른 시설과 같은 계산 (목적지는 DT 만, ALL 에는 넣지 않음). 양 끝 좌표는 반출하지 않음 (work/intervention_candidates_ends.csv 만)
+DT = "medical" if "medical_hbi" in b else (targets(b)[0] if targets(b) else None)
+gx = np.floor(X / C.GRID).astype(np.int64)
+gy = np.floor(Y / C.GRID).astype(np.int64)
+CANDS = []                                                       # 후보마다 정보 (반출 표·화면용)
+if C.AUTO_CANDIDATES > 0 and DT in dest and C.RISK_MIN:
+    from lib.model import directed, elder_time
+    from lib.qgraph import Graph
+    addT = (b[f"{DT}_t_elder"] - b[f"{DT}_t_flat"]) / 60
+    vT = U & np.isfinite(b[f"{DT}_hbi"])
+    riskT = vT & (addT >= C.RISK_MIN) & (node >= 0)
+    ckey = gx * 10**7 + gy
+    ku, kc = np.unique(ckey[vT], return_counts=True)
+    kr = dict(zip(*np.unique(ckey[riskT], return_counts=True)))
+    cells = sorted(((int(kr.get(k, 0)), int(c), int(k)) for k, c in zip(ku, kc) if c >= C.MIN_COUNT and kr.get(k, 0) >= C.MIN_COUNT),
+                   key=lambda t: (-t[0], -t[0] / t[1]))[:C.AUTO_CANDIDATES * C.CAND_SEARCH]
+    uu, vv, LL, ss_, st_ = directed(e, s)
+    Ge = Graph(uu, vv, elder_time(LL, ss_, st_), N)
+    _, pgo = Ge.dijkstra_pred(dest[DT], reverse=True)            # pgo[x] = x 에서 목적지 쪽으로 다음 노드 (가는 길)
+    _, pbk = Ge.dijkstra_pred(dest[DT])                          # pbk[x] = 목적지에서 x 로 오는 길의 바로 앞 노드 (오는 길)
+    eu, ev = e["u"].astype(np.int64), e["v"].astype(np.int64)
+    pkey = np.minimum(eu, ev) * N + np.maximum(eu, ev)           # 링크 = 노드 쌍 (방향 없음)
+    stp = e["is_stair"].astype(bool)
+    sel = stp | (np.abs(s) >= C.CAND_STEEP)
+    STEEP = {}                                                   # 노드 쌍 → 계단인가 (가파른 링크만)
+    for q, isst in zip(pkey[sel].tolist(), stp[sel].tolist()):
+        STEEP[q] = STEEP.get(q, False) or isst
+    z5 = net["z5"]
+    fac_nodes = [(x[0], x[1]) for _, _, x, _ in fac]
+
+    def add_run(seq, h, runs):
+        """경로의 이어진 가파른 구간 seq (노드 순서) 를 셈. 수평 길이가 CAND_MAX_LEN_M 를 넘으면 그 안에서 높이 차가 가장 큰 창
+        (길이 상한 안)만 씀. 구간 이름 = (낮은 끝 노드, 높은 끝 노드)"""
+        xy = nodes[seq]
+        d = np.r_[0, np.cumsum(np.hypot(*np.diff(xy, axis=0).T))]   # 구간 처음부터 수평 거리
+        zz = z5[seq]
+        if not np.isfinite(zz).all():
+            return
+        lo_, hi_ = 0, len(seq) - 1
+        if d[-1] > C.CAND_MAX_LEN_M:                             # 창: 시작점 i 마다 상한 안에서 가장 먼 j
+            bestw, j = (-1.0, 0, 0), 0
+            for i_ in range(len(seq)):
+                j = max(j, i_)
+                while j + 1 < len(seq) and d[j + 1] - d[i_] <= C.CAND_MAX_LEN_M:
+                    j += 1
+                if j > i_ and abs(zz[j] - zz[i_]) > bestw[0]:
+                    bestw = (abs(zz[j] - zz[i_]), i_, j)
+            if bestw[0] < 0:
+                return
+            lo_, hi_ = bestw[1], bestw[2]
+        sub = seq[lo_:hi_ + 1]
+        a_, b_ = (sub[0], sub[-1]) if z5[sub[0]] <= z5[sub[-1]] else (sub[-1], sub[0])
+        rr = runs.setdefault((a_, b_), {"h": set(), "st": False, "nodes": set(sub)})
+        rr["h"].add(h)
+        rr["st"] = rr["st"] or any(STEEP.get(min(x0, x1) * N + max(x0, x1), False) for x0, x1 in zip(sub[:-1], sub[1:]))
+    used_nodes = set()
+    for nr, nc, k in cells:
+        if len(CANDS) >= C.AUTO_CANDIDATES:
+            break
+        cx, cy = (k // 10**7 + 0.5) * C.GRID, (k % 10**7 + 0.5) * C.GRID
+        runs = {}                                                # 구간 (낮은 끝, 높은 끝) → {"h": 지나는 집, "st": 계단이 든가, "len": 수평 길이}
+        for h in np.flatnonzero(riskT & (ckey == k)).tolist():
+            for P_ in (pgo, pbk):                                # 가는 길·오는 길의 노드 순서
+                path, x = [int(node[h])], int(node[h])
+                while P_[x] >= 0 and len(path) <= N:
+                    x = int(P_[x])
+                    path.append(x)
+                cur = [path[0]]                                  # 이어지는 가파른 링크를 한 구간으로 (끊기면 새 구간)
+                for x0, x1 in zip(path[:-1], path[1:]):
+                    q = min(x0, x1) * N + max(x0, x1)
+                    if q in STEEP:
+                        cur.append(x1)
+                        continue
+                    if len(cur) > 1:
+                        add_run(cur, h, runs)
+                    cur = [x1]
+                if len(cur) > 1:
+                    add_run(cur, h, runs)
+        best = None
+        for (na_, nb2), rr in runs.items():
+            nh_ = len(rr["h"])
+            rise = float(z5[nb2] - z5[na_])
+            near = min(np.hypot(*(nodes[na_] - (cx, cy))), np.hypot(*(nodes[nb2] - (cx, cy))))
+            if nh_ < C.MIN_COUNT or near > C.CAND_RADIUS_M or rise < C.CAND_MIN_RISE_M or rr["nodes"] & used_nodes:
+                continue
+            if any(min(np.hypot(*(nodes[na_] - nodes[f0])), np.hypot(*(nodes[nb2] - nodes[f1]))) < 30 for f0, f1 in fac_nodes):
+                continue                                         # 사람이 넣은 시설(봉천 등)과 같은 자리
+            score = (rr["st"], nh_, rise)                        # 계단이 든 구간 먼저, 지나는 집이 많은 순, 높이 차 큰 순
+            if best is None or score > best[0]:
+                best = (score, na_, nb2, rise, rr["nodes"], nh_)
+        if best is None:
+            log(f"  후보 격자 ({cx:.0f}, {cy:.0f}) 고립 위험 집 {nr}채: 지나는 가파른 구간이 없거나 앞 후보·사람이 넣은 시설과 같은 구간 → 다음 격자")
+            continue
+        (isst, nh, _), na_, nb2, rise, nds, _ = best
+        nds = np.array(sorted(nds), np.int64)
+        straight = float(np.hypot(*(nodes[nb2] - nodes[na_])))
+        typ = "vertical" if straight <= C.CAND_VERTICAL_MAX_M else "elevator"
+        base = C.FACILITY[typ]
+        t = base["wait_s"] + (rise / base["speed"] if typ == "vertical" else straight / base["speed"])
+        tw, lw = route(N, e, s, na_, nb2, mode="wheel")         # 지금 휠체어로 아래 끝 → 위 끝 (시간 최소 길의 길이)
+        used_nodes |= set(nds.tolist())
+        nm = f"후보{len(CANDS) + 1}"
+        kd = -1
+        if which is not None:
+            _, wc = points_in_polygons(np.array([cx]), np.array([cy]), polys)
+            kd = int(wc[0])
+        CANDS.append(dict(name=nm, cx=cx, cy=cy, n_bld=nc, n_risk=nr, stair=bool(isst), houses=nh, typ=typ, rise=rise, straight=straight,
+                          t=t, wheel_now=(lw if np.isfinite(lw) else None), a=na_, b=nb2, dong=kd))
+        fac.append((nm, "candidate", (na_, nb2, float(t), straight), {"rise": round(rise, 1), "pass": round(float(t), 1), "wait": float(base["wait_s"]), "typ": typ}))
+        log(f"  {nm}: 격자 ({cx:.0f}, {cy:.0f}){' ' + dname[kd] if kd >= 0 else ''} 고립 위험 집 {nr}채 → 그 집들의 길이 가장 많이 지나는 "
+            f"{'계단' if isst else '경사'} 구간 (지나는 집 {nh}채), 높이 차 {rise:.1f}m · 수평 {straight:.0f}m → "
+            f"{'수직' if typ == 'vertical' else '경사형'} 엘리베이터 통과 {t / 60:.1f}분, 지금 휠체어 길 "
+            + (f"{lw:.0f}m" if np.isfinite(lw) else "없음 (계단만)"))
+    if CANDS:
+        from lib.qio import srs_from, TARGET
+        from osgeo import osr as _osr
+        dst = srs_from("EPSG:4326")
+        dst.SetAxisMappingStrategy(_osr.OAMS_TRADITIONAL_GIS_ORDER)
+        back = transformer(TARGET, dst)
+        ends = []
+        for c in CANDS:
+            lon, lat = transform_xy(back, [nodes[c["a"], 0], nodes[c["b"], 0]], [nodes[c["a"], 1], nodes[c["b"], 1]])
+            ends.append([c["name"], c["typ"], round(float(lon[0]), 6), round(float(lat[0]), 6), round(float(lon[1]), 6), round(float(lat[1]), 6),
+                         round(c["rise"], 1), round(c["straight"], 1)])
+        write_csv(os.path.join(C.WORK, "intervention_candidates_ends.csv"),          # 반출하지 않음 (work): 시설 양 끝 경위도
+                  ["name", "type", "a_lon", "a_lat", "b_lon", "b_lat", "rise_m", "straight_m"], ends)
+    log(f"  후보 자동: 고립 위험 집이 많은 격자 {len(cells)}곳을 보고 후보 {len(CANDS)}곳 (mapping 의 auto_candidates = {C.AUTO_CANDIDATES}, "
+        f"고립 위험 = 왕복 {C.RISK_MIN:g}분 이상 더). 양 끝 좌표는 work 에만")
 
 if not fac:                                                      # [v6.1a] 좌표가 찬 시설이 모두 범위 밖 → 실패로 멈추지 않고 결과 없이 끝냄
     if no_height:                                                # [v6.2]
@@ -171,41 +324,27 @@ if out_of_data:
 if no_height:
     log(f"  높이 차를 잴 수 없어 건너뛴 수직 엘리베이터 {len(no_height)}곳: {', '.join(no_height)}")
 scen = [(n, [x]) for n, _, x, _ in fac]                          # 시나리오 = 시설 하나씩
-cand = [x for n, st, x, _ in fac if st != "existing"]            # ALL 에는 이미 있는 시설 제외
+cand = [x for n, st, x, _ in fac if st not in ("existing", "candidate")]   # ALL 에는 이미 있는 시설·[v6.3] 자동 후보 제외
 if cand:
     scen.append(("ALL(후보 전체)", cand))
 
-# ── 2. 행정동 준비 (05_export.py 와 같은 방식) ─────────────
-bd = find_files(C.EXTERNAL, ["dong_boundary"], ".geojson") + find_files(C.EXTERNAL, ["dong_boundary"], ".shp")
-X, Y = b["x"], b["y"]
-which, dcode = None, []
-if bd:
-    from lib.qnetwork import points_in_polygons
-    polys = [(g, a) for g, a in iter_layer(files=bd[:1], bbox=None)]
-    ck = next(k for k in polys[0][1] if k.upper() in ("ADM_CD", "ADM_DR_CD", "ADSTRD_CD", "CODE"))
-    bx0, bx1, by0, by1 = np.nanmin(X), np.nanmax(X), np.nanmin(Y), np.nanmax(Y)
-    polys = [p for p in polys if not (p[0].GetEnvelope()[1] < bx0 or p[0].GetEnvelope()[0] > bx1 or
-                                      p[0].GetEnvelope()[3] < by0 or p[0].GetEnvelope()[2] > by1)]
-    _, which = points_in_polygons(X, Y, polys)                   # 건물마다 몇 번째 동인지 (-1 = 없음)
-    dcode = [str(a[ck]) for _, a in polys]
-    wall = np.array([b["weight"][(which == k) & U].sum() for k in range(len(polys))])   # 동 전체 주거 연면적 (경계 제외)
-
 # ── 3. 계산 ───────────────────────────────────────────────
 summ, grows, drows = [], [], []
-gx = np.floor(X / C.GRID).astype(np.int64)
-gy = np.floor(Y / C.GRID).astype(np.int64)
 ok0 = U & (node >= 0)
 REP = rep_mode() == C.BUILDING_ATTR_MODE                         # [v6.2] 연면적은 대표 방식만 (05 와 같음)
 if not rep_mode():                                               # [10/12] 정할 수 없으면 연면적·시간 값을 비움
     log("!! 대표 방식을 정할 수 없어 연면적·시간 값 칸을 비웁니다 → python check.py 뒤 python run_all.py --modes auto,all")
-DT = "medical" if "medical_hbi" in b else (targets(b)[0] if targets(b) else None)   # [v6.2] 연면적은 05 행정동 표와 같은 목적지만
+# DT (위 2-1): [v6.2] 연면적은 05 행정동 표와 같은 목적지만
 n_single = len(fac)                                              # scen 앞쪽 n_single 개 = 시설 하나씩, 그 뒤 = ALL
-in_all = [st != "existing" for _, st, _, _ in fac]               # 시설 i 가 ALL 에 들어가는지
+in_all = [st not in ("existing", "candidate") for _, st, _, _ in fac]   # 시설 i 가 ALL 에 들어가는지
+is_cand = [st == "candidate" for _, st, _, _ in fac]             # [v6.3] 자동 후보 (목적지는 DT 만)
 pre_w = {}                                                       # [v6.2] 목적지별 설치 전 휠체어 (왕복 시간, 길 길이) — 시나리오마다 같음
 R = []                                                           # 시나리오·목적지별 계산값 (연면적 가림은 모두 계산한 뒤)
 f = lambda v, d=3: round(v, d) if np.isfinite(v) else ""
 for si, (name, extra) in enumerate(scen):
     for T in tg:
+        if si < n_single and is_cand[si] and T != DT:            # [v6.3] 자동 후보는 기준 목적지만 (시간을 아끼려고)
+            continue
         te0, tfl = b[f"{T}_t_elder"], b[f"{T}_t_flat"]          # 설치 전 고령자 왕복, 평지 가정 왕복 (초)
         tw0 = b[f"{T}_t_wheel"]
         r = run_with_extra(N, e, s, dest[T], extra, wheel_dist=True)   # 설치 후 (lib/model.py)
@@ -241,7 +380,7 @@ for si, (name, extra) in enumerate(scen):
         ncut = int(cutm.sum())
         cq = [round(float(np.percentile((dw0 - dw1)[cutm], q))) for q in C.WHEEL_CUT_Q] if ncut >= C.WHEEL_CUT_MIN else [""] * len(C.WHEEL_CUT_Q)
         info = fac[si][3] if si < n_single else {"rise": "", "pass": ""}
-        R.append(dict(si=si, name=name, T=T, ben=ben, ex_hi=ex_hi, saved=saved, nb=nb, n_hi=int(ex_hi.sum()),
+        R.append(dict(si=si, name=name, T=T, ben=ben, ex_hi=ex_hi, saved=saved, nb=nb, n_hi=int(ex_hi.sum()), n_any=n_any,
                       row=[name, T, nb, None, f(float(np.mean(saved[ben])) / 60 if nb else np.nan, 2),
                            f(float(np.percentile(saved[ben], 95)) / 60 if nb >= C.QUANT_MIN else np.nan, 2), round(float(saved[ben].sum()) / 60, 1),
                            f(hb), f(ha), int(newly.sum()), int(wben.sum()), int(ex_hi.sum()), None, int(ex_mid.sum())]
@@ -266,7 +405,9 @@ DTw = "medical" if "medical_hbi" in b else (targets(b)[0] if targets(b) else Non
 if DTw in tg and getattr(C, "WAIT_SENS_S", None):
     te0, tw0 = b[f"{DTw}_t_elder"], b[f"{DTw}_t_wheel"]
     w0 = np.where(np.isfinite(tw0), tw0, np.inf)
-    for fname, _, (na, nb_, t0, ln), info in fac:
+    for fname, st_, (na, nb_, t0, ln), info in fac:
+        if st_ == "candidate":                                   # [v6.3] 자동 후보는 대기시간 비교 안 함
+            continue
         for ws in C.WAIT_SENS_S:
             t1 = t0 - info["wait"] + ws
             r = run_with_extra(N, e, s, dest[DTw], [(na, nb_, t1, ln)])
@@ -300,54 +441,35 @@ if REP and DT:
     fam = [(anaT, sm5.get("분석 건물 연면적 합(㎡)")), (anaT & hiT, sm5.get(f"HBI {C.HBI_BANDS[1]} 이상 건물의 연면적 합(㎡, 고령인구 배분용)"))] + \
           [(anaT & (add5 >= mb), sm5.get(f"왕복 추가 {mb:g}분 이상 건물의 연면적 합(㎡)")) for mb in C.MIN_BANDS]
     POOL += [np.flatnonzero(m) for m, v in fam if pub5(v)]
+    from lib.bload import risk_cell_mask
+    rc5 = risk_cell_mask(b, DT, U)                               # [v6.3] 05 독거노인 추정의 '고립 위험 격자 안 집' (연면적 비율이 드러나는 집합)
     if which is not None:
         for k, code in enumerate(dcode):
             ink, r5 = which == k, dg5.get(code, {})
             if have5 and not r5:                                 # 05 동 표에 없는 동 (분석 건물 5채 미만)
                 continue
             dfam = [(U & ink, r5.get("weight_all")), (anaT & hiT & ink, r5.get("weight_high"))] + \
-                   [(anaT & (add5 >= mb) & ink, r5.get(f"weight_{band_tag(mb)}")) for mb in C.MIN_BANDS]
+                   [(anaT & (add5 >= mb) & ink, r5.get(f"weight_{band_tag(mb)}")) for mb in C.MIN_BANDS] + \
+                   [(U & ink & rc5, r5.get("alone65_riskcell_est") if have5 else "x")]   # [v6.3] 파일이 없으면 보수적으로 넣음
             POOL += [np.flatnonzero(m) for m, v in dfam if pub5(v)]
+        # [v6.3] 05 의 종류별 집당 배분 어르신 (단독·다가구 / 공동주택): 연면적을 낸 동들의 그 종류 고립 위험 집 (연면적 비율이 드러나는 집합)
+        if C.RISK_MIN and "htype" in b and C.RISK_MIN in C.MIN_BANDS:
+            ht9 = np.nan_to_num(b["htype"]).astype(int)
+            tagR = f"weight_{band_tag(C.RISK_MIN)}"
+            pubk = np.isin(which, [k for k, code in enumerate(dcode) if (not have5) or dg5.get(code, {}).get(tagR) not in ("", None)])
+            for lab, sel in (("단독·다가구", np.isin(ht9, [1, 2])), ("공동주택", np.isin(ht9, [3, 4, 5]))):
+                key_ = next((k_ for k_ in sm5 if f"{lab} 집당 배분 어르신" in k_), None)
+                if (not have5) or (key_ and sm5[key_] not in ("", None)):
+                    POOL.append(np.flatnonzero(anaT & (add5 >= C.RISK_MIN) & pubk & sel))
     POOL = [q for q in POOL if len(q)]
 
 
 NB = len(X)
 
 
-def mask_of(S):
-    """건물 번호 배열 → 참/거짓 표시 배열 (교집합 크기를 q 길이만큼만 세려고)"""
-    m = np.zeros(NB, bool)
-    m[S] = True
-    return m
-
-
-def leak_big(nB, subs):
-    """크기 nB 인 집합에서 서로 겹치지 않는 부분집합(subs) 몇 개를 빼면 1~4채가 남는가 (lib/expose.py)"""
-    return removal_leak(nB, subs, MC)
-
-
 def publishable(S, pool=None):
-    """S 의 값을 내도 되는가: 0채면 됨, 1~4채면 안 됨, pool(기본 = 연면적 POOL)의 공개 집합과 빼서 1~4채가 남으면 안 됨"""
-    pool = POOL if pool is None else pool
-    n = len(S)
-    if n == 0:
-        return True
-    if n < MC:
-        return False
-    Sm, subs, sups = mask_of(S), [], []
-    for q in pool:
-        k = int(Sm[q].sum())
-        if k == len(q) and len(q) < n:
-            subs.append(q)
-        elif k == n and len(q) > n:
-            sups.append(q)
-    if leak_big(n, subs):
-        return False
-    for P in sups:
-        Pm = mask_of(P)
-        if leak_big(len(P), [q for q in pool if len(q) < len(P) and int(Pm[q].sum()) == len(q)] + [S]):
-            return False
-    return True
+    """S 의 값을 내도 되는가: 0채면 됨, 1~4채면 안 됨, pool(기본 = 연면적 POOL)의 공개 집합과 빼서 1~4채가 남으면 안 됨 (lib/expose.py)"""
+    return _publishable(S, POOL if pool is None else pool, NB, MC)
 
 
 wsum = lambda m: round(float(b["weight"][m].sum()))
@@ -461,6 +583,74 @@ np.savez_compressed(os.path.join(C.WORK, "intervention_sets.npz"), x=X, y=Y, nam
                     dcode=np.array(dcode, dtype=str), which=which if which is not None else np.full(len(X), -1),
                     **{f"s{it['si']}_{it['T']}_{k}": it[k] for it in R for k in ("ben", "ex_hi")})
 
+# ── 7. [v6.3] 후보·선정지 비교표 (격자 단위, 시설 양 끝 좌표 없음) ─────────────
+#  자동 후보와 사람이 넣은 시설(봉천 등)을 같은 표에: 격자 가운데·동, 격자 고립 위험 집 수(05 격자 표와 같은 값), 시설 종류·높이 차·길이·통과,
+#  지금 휠체어 길(아래 끝 → 위 끝), 기준 목적지(DT)의 수혜(고령자 30초 또는 휠체어 1분, 새 도달 포함)·휠체어 수혜·평균 단축 (summary 와 같은 가림),
+#  1억 원당 수혜 (수혜 ÷ facility_cost_eok, 수혜 1~4채면 빈 칸), 가장 가까운 기존 이동편의시설까지(50m 단위), 처방 (mapping 의 cand_* 규칙)
+EXIST = []                                                        # 기존 이동편의시설 (분석 좌표)
+for r_ in read_csv(os.path.join(C.EXTERNAL, "existing_facilities.csv")):
+    if str(r_.get("status", "")).strip().lower().startswith("existing") and fnum(r_.get("lon")) is not None and fnum(r_.get("lat")) is not None:
+        EXIST.append((fnum(r_["lon"]), fnum(r_["lat"])))
+for r_ in rows:
+    if str(r_.get("status", "")).strip().lower() == "existing":
+        EXIST.append((fnum(r_["a_lon"]), fnum(r_["a_lat"])))
+EX = np.array(transform_xy(tf, [p_[0] for p_ in EXIST], [p_[1] for p_ in EXIST])).T if EXIST else np.zeros((0, 2))
+ckey_all = gx * 10**7 + gy
+vD = (U & np.isfinite(b[f"{DT}_hbi"])) if DT else np.zeros(len(X), bool)
+addD = ((b[f"{DT}_t_elder"] - b[f"{DT}_t_flat"]) / 60) if DT else None
+RR = C.CAND_RULE
+
+
+def prescribe(n_risk, per100m, near_m):
+    if near_m is not None and near_m <= RR["radius_m"]:
+        return "기존 시설 연계"
+    if n_risk not in ("", None) and n_risk >= RR["min_risk"] and per100m is not None and per100m >= RR["min_per100m"]:
+        return "시설 검토"
+    return "난간·쉼터·계단 정비 + 방문돌봄"
+
+
+crows = []
+if DT and (CANDS or any(not c_ for c_ in is_cand)):
+    for si, (fname, st_, (na, nb_, t_, ln_), info) in enumerate(fac):
+        it = next((x for x in R if x["si"] == si and x["T"] == DT), None)
+        if it is None:
+            continue
+        c = next((x for x in CANDS if x["name"] == fname), None)
+        if c:
+            cx, cy, kd, typ = c["cx"], c["cy"], c["dong"], c["typ"]
+            wn = c["wheel_now"]
+        else:                                                    # 사람이 넣은 시설: 양 끝 노드 가운데가 든 격자
+            mx_, my_ = (nodes[na] + nodes[nb_]) / 2
+            cx, cy = (np.floor(mx_ / C.GRID) + 0.5) * C.GRID, (np.floor(my_ / C.GRID) + 0.5) * C.GRID
+            kd = -1
+            if which is not None:
+                _, wc = points_in_polygons(np.array([cx]), np.array([cy]), polys)
+                kd = int(wc[0])
+            typ = info.get("typ", "")
+            tw_, lw_ = route(N, e, s, na, nb_, mode="wheel")
+            wn = lw_ if np.isfinite(lw_) else None
+        kk = int(np.floor(cx / C.GRID)) * 10**7 + int(np.floor(cy / C.GRID))
+        incell = vD & (ckey_all == kk)
+        nbc = int(incell.sum())
+        nrk = int((incell & (addD >= C.RISK_MIN)).sum()) if (nbc >= C.MIN_COUNT and C.RISK_MIN) else ""
+        n_any = it["n_any"]
+        per = round(n_any / RR["cost_eok"], 2) if n_any >= C.MIN_COUNT else None
+        near = float(np.min(np.hypot(EX[:, 0] - cx, EX[:, 1] - cy))) if len(EX) else None
+        row = it["row"]
+        crows.append(["후보" if c else ("이미 있는 시설" if st_ == "existing" else "선정지·입력 시설"), fname,
+                      dcode[kd] if kd >= 0 else "", dname[kd] if kd >= 0 else "", cx, cy, nbc if nbc >= C.MIN_COUNT else "", nrk,
+                      typ, info["rise"], round(ln_), info["pass"], round(wn / 10) * 10 if wn is not None else "없음",
+                      row[22], row[10], row[4], per if per is not None else ("0" if n_any == 0 else ""),
+                      int(round(near / 50) * 50) if near is not None and near <= 3000 else "", prescribe(nrk, per, near)])
+    log(f"  후보·선정지 비교표: {len(crows)}줄 (처방 규칙: 고립 위험 {RR['min_risk']}채 이상 + 1억 원당 {RR['min_per100m']:g}동 이상 → 시설 검토, "
+        f"{RR['radius_m']:g}m 안 기존 시설 → 연계, 그 밖 → 난간·쉼터·계단 정비 + 방문돌봄. 시설 1곳 {RR['cost_eok']:g}억 원 가정)")
+    for r_ in crows:
+        log(f"    {r_[1]}: {r_[3] or '동 모름'}, 고립 위험 {r_[7]}채, {r_[8]} 높이 {r_[9]}m, 수혜 {r_[13]}, 1억 원당 {r_[16] or '-'} → {r_[18]}")
+write_csv(os.path.join(C.OUTPUT, "intervention_candidates.csv"),
+          ["kind", "facility", "adm_cd", "adm_nm", "cell_x", "cell_y", "n_bld_cell", f"n_risk_{C.RISK_MIN:g}m" if C.RISK_MIN else "n_risk",
+           "facility_type", "rise_m", "length_m", "pass_s", "wheel_now_m", "n_benefit_any", "wheel_benefit", "mean_saved_min",
+           "per100m", "existing_m", "prescription"], crows)
+
 write_csv(os.path.join(C.OUTPUT, "intervention_summary.csv"),
           ["facility", "target", "n_benefit", "weight_benefit", "mean_saved_min", "saved_p95_min", "sum_saved_bld_min",
            "hbi_before", "hbi_after", "wheel_newly_reachable", "wheel_benefit",
@@ -473,4 +663,5 @@ write_csv(os.path.join(C.OUTPUT, "intervention_dong.csv"),
           ["facility", "target", "adm_cd", "n_benefit", "weight_benefit", "weight_all", "weight_x_saved_min", "weight_exit_high"], drows)
 if not bd:
     log("  external/dong_boundary.geojson 없음 → intervention_dong.csv 는 머리 줄만")
-log(f"완료 → output/intervention_summary.csv ({len(summ)}행), intervention_grid.csv ({len(grows)}행), intervention_dong.csv ({len(drows)}행)")
+log(f"완료 → output/intervention_summary.csv ({len(summ)}행), intervention_grid.csv ({len(grows)}행), intervention_dong.csv ({len(drows)}행), "
+    f"intervention_candidates.csv ({len(crows)}행)")

@@ -153,11 +153,10 @@ class Graph:
                     heapq.heappush(h, (nd, int(y)))
         return dist
 
-    def dijkstra_aux(self, sources, reverse=False):
-        """[v6.2] dijkstra 와 같은 최소 비용(dist)에 더해, 그 최단(시간) 경로를 따라 간선 aux 를 더한 값.
-        예) w = 휠체어 시간, aux = 길이(m) → 휠체어가 실제로 고르는 길의 길이. 못 가면 둘 다 inf. 반환: (dist, aux 합)
-        경로 나무(각 노드의 바로 앞 노드)를 만든 뒤, 앞 노드를 두 칸·네 칸… 씩 건너뛰며 더함 (반복 log₂(깊이) 번)"""
-        assert self.aux is not None, "Graph(..., aux=길이) 로 만들어야 함"
+    def dijkstra_pred(self, sources, reverse=False):
+        """[v6.3] dijkstra 와 같은 최소 비용(dist)과 경로 나무 pred (pred[y] = 계산 방향으로 y 에 오기 직전 노드, 출발점·못 간 노드는 -1).
+        reverse=True 면 pred[x] = 원래 그래프에서 x 다음에 가는 노드 (x → … → 출발점). 09 의 후보 자동이 집들이 지나는 길을 셈.
+        (v6.2 의 dijkstra_aux 안에 있던 계산을 떼어 낸 것. 결과는 같음)"""
         n = self.n
         sources = np.unique(np.asarray(sources, np.int64))
         a, b = (self.v, self.u) if reverse else (self.u, self.v)    # 계산 방향의 간선 a → b
@@ -167,24 +166,34 @@ class Graph:
             M = csr_matrix((self.w, (a, b)), shape=(n, n))
             dist, pred, _ = dijkstra(M, directed=True, indices=sources, min_only=True, return_predecessors=True)
             pred = np.where(pred < 0, -1, pred).astype(np.int64)
-        else:
-            ptr, nb, wt = self._csr(reverse)
-            dist = np.full(n, np.inf)
-            pred = np.full(n, -1, np.int64)     # pred[y] = y 에 오기 직전 노드 (출발점·못 간 노드는 -1)
-            dist[sources] = 0.0
-            h = [(0.0, int(s)) for s in sources]
-            heapq.heapify(h)
-            while h:
-                d, x = heapq.heappop(h)
-                if d > dist[x]:
-                    continue
-                for k in range(ptr[x], ptr[x + 1]):
-                    y = nb[k]
-                    nd = d + wt[k]
-                    if nd < dist[y]:
-                        dist[y] = nd
-                        pred[y] = x
-                        heapq.heappush(h, (nd, int(y)))
+            return dist, pred
+        ptr, nb, wt = self._csr(reverse)
+        dist = np.full(n, np.inf)
+        pred = np.full(n, -1, np.int64)         # pred[y] = y 에 오기 직전 노드 (출발점·못 간 노드는 -1)
+        dist[sources] = 0.0
+        h = [(0.0, int(s)) for s in sources]
+        heapq.heapify(h)
+        while h:
+            d, x = heapq.heappop(h)
+            if d > dist[x]:
+                continue
+            for k in range(ptr[x], ptr[x + 1]):
+                y = nb[k]
+                nd = d + wt[k]
+                if nd < dist[y]:
+                    dist[y] = nd
+                    pred[y] = x
+                    heapq.heappush(h, (nd, int(y)))
+        return dist, pred
+
+    def dijkstra_aux(self, sources, reverse=False):
+        """[v6.2] dijkstra 와 같은 최소 비용(dist)에 더해, 그 최단(시간) 경로를 따라 간선 aux 를 더한 값.
+        예) w = 휠체어 시간, aux = 길이(m) → 휠체어가 실제로 고르는 길의 길이. 못 가면 둘 다 inf. 반환: (dist, aux 합)
+        경로 나무(각 노드의 바로 앞 노드)를 만든 뒤, 앞 노드를 두 칸·네 칸… 씩 건너뛰며 더함 (반복 log₂(깊이) 번)"""
+        assert self.aux is not None, "Graph(..., aux=길이) 로 만들어야 함"
+        n = self.n
+        a, b = (self.v, self.u) if reverse else (self.u, self.v)    # 계산 방향의 간선 a → b
+        dist, pred = self.dijkstra_pred(sources, reverse)
         key = a.astype(np.int64) * n + b
         o = np.argsort(key)
         has = pred >= 0

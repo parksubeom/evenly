@@ -32,6 +32,8 @@ from lib.deps import HAS_MPL
 from lib.qio import log, write_csv, write_grid_gpkg, find_files, read_csv, iter_layer
 from lib.bload import load_buildings, targets, usable, rep_mode   # [v6.2] rep_mode 는 09 도 씀
 from lib.mapping import band_tag
+from lib.expose import publishable            # [v6.3] 독거노인 추정의 연면적 비율 노출 검사 (09 와 같은 함수)
+from lib.qgraph import spearman               # [v6.3] 기준 민감도
 
 
 def band_weights(n_base, ns, ws, force=()):
@@ -104,6 +106,14 @@ for T in targets(b):                              # 목적지 종류마다 반�
     if T == DT:
         SUMW = {"n_base": int(v.sum()), "ns": ns_s, "ws": ws_s, "rows": [len(summary) - 3 * (len(C.MIN_BANDS) - j) + 2 for j in range(len(C.MIN_BANDS))],
                 "n_high": int((H[v] >= hi).sum()), "high_row": next(i for i, r in enumerate(summary) if r[0] == T and r[1].startswith(f"HBI {hi} 이상 건물의 연면적 합"))}
+        # [v6.3] 고립 위험(왕복 RISK_MIN 분 이상) 집의 종류 구성 (대표 방식만, 1~4채인 종류는 "5채 미만"). 결과 점검의 집당 배분 어르신과 함께 봄
+        if REP and C.RISK_MIN and "htype" in b:
+            from lib.battr import HTYPE_NAMES
+            rk = v & (add_min >= C.RISK_MIN)
+            ht = np.nan_to_num(b["htype"][rk]).astype(int)
+            for code, nm in HTYPE_NAMES.items():
+                n_ = int((ht == code).sum())
+                summary.append([T, f"고립 위험(왕복 +{C.RISK_MIN:g}분) 집 종류 {nm}", n_ if (n_ == 0 or n_ >= C.MIN_COUNT) else C.SMALL_LABEL])
     # ── 격자별 집계 ──
     key = gx[v] * 10**7 + gy[v]
     u, inv = np.unique(key, return_inverse=True)   # u = 격자 목록, inv = 각 건물이 몇 번째 격자인지
@@ -198,6 +208,7 @@ write_csv(os.path.join(C.OUTPUT, "run_meta.csv"), ["key", "value"], [
     ["building_attr_mode", st.get("mode", C.BUILDING_ATTR_MODE)],
     ["rep_mode", rep_mode()], ["is_rep_mode", "yes" if REP else "no"],   # [10/12] 값 칸을 낸 방식인지 (기획서는 yes 인 폴더를 씀)
     ["hbi_bands", ",".join(f"{x:g}" for x in C.HBI_BANDS)], ["extra_min_bands", ",".join(f"{x:g}" for x in C.MIN_BANDS)],   # [v6.2] 구간 문턱 (기획서가 읽음)
+    ["risk_min", f"{C.RISK_MIN:g}" if C.RISK_MIN else ""],   # [v6.3] 고립 위험 문턱(분)
     ["register_link_rate", st.get("link_rate", "")], ["register_join", st.get("register_join", "")], ["register_join_used", st.get("join_used", "")],
     ["register_rate_pnu", st.get("rate_pnu", "")], ["register_rate_pk", st.get("rate_pk", "")],
     ["ufid_match_rate", "" if st.get("rate_ufid") is None else st.get("rate_ufid")],
@@ -225,6 +236,16 @@ if bd:
     _, which = points_in_polygons(X, Y, polys)     # 건물마다 몇 번째 동에 있는지
     # 고령인구(선택): external/elderly_pop.csv 에 adm_cd, pop65 가 있으면 "HBI 1.8 이상 집에 사는 고령자 수" 추정
     pop = {r["adm_cd"]: float(r["pop65"]) for r in read_csv(os.path.join(C.EXTERNAL, "elderly_pop.csv")) if r.get("pop65")}
+    # [v6.3] 독거노인(external/alone65.csv, 서울시 동별 통계) × (고립 위험 격자 안 주거 연면적 ÷ 동 주거 연면적). 고립 위험 격자 = 05 격자와 같은 칸
+    #        (분석 건물 MIN_COUNT 이상) 중 집 절반 이상이 왕복 RISK_MIN 분 이상 더 걸리는 칸 (기획서 17장 '후보'와 같은 정의). 대표 방식만,
+    #        그 동의 '격자 안 집' 이 1~4채이거나 05 가 낸 다른 연면적과 빼서 1~4채가 남으면 빈 칸 (lib/expose.publishable, 09 와 같은 검사)
+    alone = {r["adm_cd"]: float(r["alone65"]) for r in read_csv(os.path.join(C.EXTERNAL, "alone65.csv")) if r.get("alone65")}
+    from lib.bload import risk_cell_mask
+    in_rc = risk_cell_mask(b, T, U) if REP else np.zeros(len(X), bool)
+    POOLW = []                                                # 이 표·summary 가 연면적을 낸(낼 수 있는) 건물 집합 (빼기 검사용, 보수적으로 summary 줄은 모두)
+    if REP:
+        POOLW += [np.flatnonzero(v), np.flatnonzero(v & (H >= hi))] + [np.flatnonzero(v & (add_d >= mb)) for mb in C.MIN_BANDS]
+    alone_rows, alone_tot = {}, [0, 0]
     rows, total = [], 0
     pub_high, pub_band = [], [[] for _ in C.MIN_BANDS]      # [v6.2] 연면적을 낸 동의 건물 수 (summary 와 빼기 검사용)
     for k, (g, a) in enumerate(polys):
@@ -250,14 +271,76 @@ if bd:
             extra += [n_, round(float(n_ / m.sum()), 3), w_]
             if w_ != "":
                 pub_band[j].append(n_)
+        if REP:                                               # [v6.3] 이 동에서 낸 연면적 집합 (독거노인 추정의 빼기 검사)
+            POOLW.append(np.flatnonzero((which == k) & U))
+            if wh_pub != "":
+                POOLW.append(np.flatnonzero(m & (H >= hi)))
+            POOLW += [np.flatnonzero(ge) for ge, w_ in zip(ges, wb) if w_ not in ("", 0)]
+        nrc = int(((which == k) & U & in_rc).sum())           # [v6.3] 동 안 고립 위험 격자의 집 수
+        alone_rows[len(rows)] = (k, code, nrc, wall)
         rows.append([code, str(a.get(sk, "")) if sk else "", a.get(nk, "") if nk else "", int(m.sum()), round(float(H[m].mean()), 3),
                      round(float(np.mean(H[m] >= hi)), 3), round(float(wall)) if REP else "", wh_pub, est] + extra)   # [10/12] weight_all 도 대표 방식만
+    # [v6.3] 독거노인 추정: 동마다 '고립 위험 격자 안 집' 집합의 연면적 비율 (POOLW 와 빼기 검사를 통과한 동만, 통과한 집합은 POOLW 에 더함)
+    NBW = len(X)
+    for ri, (k, code, nrc, wall) in alone_rows.items():
+        S = np.flatnonzero((which == k) & U & in_rc)
+        est_a = ""
+        if REP and code in alone and wall > 0 and nrc >= C.MIN_COUNT and publishable(S, POOLW, NBW, C.MIN_COUNT):
+            est_a = round(alone[code] * b["weight"][S].sum() / wall)
+            POOLW.append(S)
+            alone_tot[0] += est_a
+            alone_tot[1] += 1
+        rows[ri] += [nrc, est_a]
     write_csv(os.path.join(C.OUTPUT, "dong_hbi.csv"),
               ["adm_cd", "adm_cd_stat", "adm_nm", "n_bld", "hbi_mean", "share_high", "weight_all", "weight_high", "elderly_in_high_est"]
-              + [f"{p_}_{band_tag(mb)}" for mb in C.MIN_BANDS for p_ in ("n", "share", "weight")], rows)
+              + [f"{p_}_{band_tag(mb)}" for mb in C.MIN_BANDS for p_ in ("n", "share", "weight")] + ["n_riskcell", "alone65_riskcell_est"], rows)
+    if C.RISK_MIN and REP and DT == T:
+        summary += [[T, f"고립 위험 격자(집 절반 이상이 왕복 +{C.RISK_MIN:g}분) 안 독거노인 추정(명, 동 통계 × 연면적 비율, 낸 동만)", alone_tot[0] if alone else ""],
+                    [T, "고립 위험 격자 안 독거노인 추정을 낸 행정동 수", alone_tot[1] if alone else ""]]
+        # [v6.3] 집당 배분 어르신: 고립 위험 집의 어르신 추정 (65세 이상 × weight_add{R}m ÷ weight_all, 그 연면적을 낸 동만) ÷ 그 동들의 고립 위험 집 수
+        jr = C.MIN_BANDS.index(C.RISK_MIN) if C.RISK_MIN in C.MIN_BANDS else None
+        if jr is not None and pop:
+            e_, n_ = 0.0, 0
+            for r_ in rows:
+                w_ = r_[9 + 3 * jr + 2]
+                if r_[0] in pop and w_ not in ("", None) and r_[6] not in ("", None, 0) and r_[9 + 3 * jr] > 0:
+                    e_ += pop[r_[0]] * float(w_) / float(r_[6])
+                    n_ += r_[9 + 3 * jr]
+            summary += [[T, f"고립 위험(왕복 +{C.RISK_MIN:g}분) 집 어르신 추정(명, 연면적을 낸 동만)", round(e_) if n_ else ""],
+                        [T, f"고립 위험(왕복 +{C.RISK_MIN:g}분) 집당 배분 어르신(명)", round(e_ / n_, 2) if n_ else ""]]
+            # [v6.3] 종류별 (단독·다가구 / 공동주택): 같은 동들에서 그 종류의 고립 위험 집만. 집합이 1~4채이거나 낸 연면적과 빼서 1~4채가 남으면 빈 칸
+            if "htype" in b and REP:
+                pubd = {r_[0] for r_ in rows if r_[9 + 3 * jr + 2] not in ("", None)}
+                kdo = {code: k for k, (g, a) in enumerate(polys) for code in [str(a[ck])]}
+                ht = np.nan_to_num(b["htype"]).astype(int)
+                for lab, sel in (("단독·다가구", np.isin(ht, [1, 2])), ("공동주택", np.isin(ht, [3, 4, 5]))):
+                    e_t, S_t = 0.0, []
+                    for code in pubd:
+                        k = kdo.get(code)
+                        wall_k = b["weight"][(which == k) & U].sum()
+                        Sk = np.flatnonzero(v & (add_d >= C.RISK_MIN) & (which == k) & sel)
+                        if len(Sk) and code in pop and wall_k > 0:
+                            e_t += pop[code] * b["weight"][Sk].sum() / wall_k
+                            S_t.append(Sk)
+                    S_t = np.concatenate(S_t) if S_t else np.array([], np.int64)
+                    ok_t = len(S_t) >= C.MIN_COUNT and publishable(S_t, POOLW, NBW, C.MIN_COUNT)
+                    mx = getattr(C, "HOUSE_PERSONS_MAX", 5)                # 숫자를 못 내면 단독·다가구는 문턱 판정만 (결과 점검의 빨강 기준)
+                    val_t = round(e_t / len(S_t), 1) if ok_t else ((f"{mx}명 이상" if e_t / len(S_t) >= mx else f"{mx}명 미만")
+                                                                   if (lab == "단독·다가구" and len(S_t) >= C.MIN_COUNT) else "")
+                    summary.append([T, f"고립 위험(왕복 +{C.RISK_MIN:g}분) {lab} 집당 배분 어르신(명)", val_t])
+    # [v6.3] 기준 민감도: 왕복 추가 문턱(SENS_BANDS)끼리 행정동 순위상관 (분석 건물 MIN_COUNT 이상 동의 비율 share_addNm)
+    sb = [mb for mb in getattr(C, "SENS_BANDS", []) if mb in C.MIN_BANDS]
+    for i_, a_ in enumerate(sb):
+        for b_ in sb[i_ + 1:]:
+            ja, jb = C.MIN_BANDS.index(a_), C.MIN_BANDS.index(b_)
+            xa = [r_[9 + 3 * ja + 1] for r_ in rows]
+            xb = [r_[9 + 3 * jb + 1] for r_ in rows]
+            rho = spearman(xa, xb) if len(rows) >= 5 else float("nan")
+            summary.append([T, f"기준 민감도: 행정동 순위상관 왕복 +{a_:g}분 vs +{b_:g}분", round(rho, 3) if np.isfinite(rho) else ""])
     # weight_all/weight_high 를 함께 반출하므로, 고령인구 파일이 없어도 밖에서
     #   고령인구 추정 = pop65 × weight_high ÷ weight_all  로 계산할 수 있습니다
-    log(f"→ output/dong_hbi.csv (행정동 {len(rows)}개" + (f", HBI {hi} 이상 거주 고령인구 추정 약 {int(total):,}명)" if pop else ")"))
+    log(f"→ output/dong_hbi.csv (행정동 {len(rows)}개" + (f", HBI {hi} 이상 거주 고령인구 추정 약 {int(total):,}명" if pop else "")
+        + (f", 고립 위험 격자 안 독거노인 추정 약 {alone_tot[0]:,}명 ({alone_tot[1]}개 동)" if alone and REP else "") + ")")
     # [v6.2] summary 의 DT 연면적 − 공개된 동 연면적 합 = 가린 동(과 5채 미만 동) 몫. 그 건물 수가 1~4 이면 summary 쪽도 가림
     if SUMW:
         hid = SUMW["n_high"] - sum(pub_high)

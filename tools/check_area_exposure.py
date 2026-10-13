@@ -78,16 +78,40 @@ for m in MODES:
                 if col.startswith("weight_add"): add(("grid", a, c), f"{t}:{col}", m, ss, r[col])   # 있으면 안 됨
         if t == ("medical" if "medical" in tg else tg[0]):
             U = edge < 0.5
+            # [v6.3] 05 독거노인 추정 (동 × 고립 위험 격자 안 집): 값은 사람 수지만 연면적 비율이 드러나므로 공개 연면적 집합으로 넣음
+            #        고립 위험 격자 = 격자 분석 건물 5채 이상 중 집 절반 이상이 왕복 risk_min 분 이상 (lib/bload.risk_cell_mask 와 같음)
+            meta_ = {r["key"]: r["value"] for r in rd(f"{H6}/output/{m}/run_meta.csv")} if _os.path.exists(f"{H6}/output/{m}/run_meta.csv") else {}
+            rmin = fl(meta_.get("risk_min", "")) if meta_.get("risk_min") else np.nan
+            rc_cells = set()
+            if np.isfinite(rmin):
+                cnt_, rsk_ = {}, {}
+                for i in np.where(v)[0]:
+                    kc = (gx[i], gy[i]); cnt_[kc] = cnt_.get(kc, 0) + 1; rsk_[kc] = rsk_.get(kc, 0) + (add_[i] >= rmin)
+                rc_cells = {kc for kc, n_ in cnt_.items() if n_ >= MINC and rsk_[kc] / n_ >= 0.5}
             for r in D:
                 code = r["adm_cd"]; inU = {keyl[i] for i in np.where(U)[0] if dong_of.get(keyl[i]) == code}
                 inv = {k for k in sv if dong_of.get(k) == code}
                 add(("dong", code), "all", m, inU, r["weight_all"])
                 add(("dong", code), "high", m, {keyl[i] for i in np.where(v & (H >= HI))[0] if dong_of.get(keyl[i]) == code}, r["weight_high"])
+                if r.get("alone65_riskcell_est") not in ("", None):          # [v6.3]
+                    S_ = {keyl[i] for i in np.where(U)[0] if dong_of.get(keyl[i]) == code and (gx[i], gy[i]) in rc_cells}
+                    PUB.append((("dong", code), "add_alone_riskcell", m, frozenset(S_), round(sum(W[m][k] for k in S_))))
                 for col in r:
                     mm = re.match(r"weight_add([0-9_]+)m$", col)
                     if mm:
                         bnd = float(mm.group(1).replace("_", "."))
                         add(("dong", code), f"add{bnd:g}", m, {keyl[i] for i in np.where(v & (add_ >= bnd))[0] if dong_of.get(keyl[i]) == code}, r[col])
+            # [v6.3] 05 종류별 집당 배분 어르신: 고립 위험 연면적을 낸 동들의 그 종류 고립 위험 집 (연면적 비율이 드러나는 집합)
+            if np.isfinite(rmin) and "htype" in R[0]:
+                tagc = f"weight_add{rmin:g}m".replace(".", "_")
+                pubc = {r["adm_cd"] for r in D if r.get(tagc) not in ("", None)}
+                ht_ = np.array([int(fl(r["htype"]) or 0) if r["htype"] not in ("", None) else 0 for r in R])
+                for lab, codes_ in (("단독·다가구", (1, 2)), ("공동주택", (3, 4, 5))):
+                    val_ = next((vv for (tt, k), vv in S.items() if tt == t and f"{lab} 집당 배분 어르신" in k), "")
+                    if val_ in ("", None):
+                        continue
+                    S_ = {keyl[i] for i in np.where(v & (add_ >= rmin) & np.isin(ht_, codes_))[0] if dong_of.get(keyl[i]) in pubc}
+                    PUB.append((("summary",), f"add_type_{lab}", m, frozenset(S_), round(sum(W[m][k] for k in S_))))
 # [10/12] 09 결과: work/<방식>/intervention_sets.npz 의 건물 집합 + output/<방식>/intervention_*.csv 의 공개 값
 import os
 NIV = 0
@@ -136,6 +160,8 @@ for unit, L in by.items():
 part = []
 for m in MODES:
     for (unit, name, mm_, S_, val) in [p for p in PUB if p[0] == ("summary",) and p[2] == m]:
+        if ":" not in name:                                            # [v6.3] 종류별 배분 집합 (summary 줄, 동으로 나누지 않음)
+            continue
         q = name if name.startswith("iv:") else name.split(":")[1]
         if q not in ("high",) and not q.startswith("add") and not q.startswith("iv:"): continue
         dsets = [p[3] for p in PUB if p[0][0] == "dong" and p[2] == m and p[1] == q]

@@ -39,6 +39,28 @@ def norm_kind(v):
     """[v6.1] 건물 종류 값 → 정의서 코드 (예: "아파트" → BDC003)"""
     return K.to_code(BLD, "BULD_SE", v)
 
+
+# [v6.3] 집 종류 (결과 점검의 '고립 위험 집 종류 구성'): 0 모름(all 방식 등), 1 단독주택(layer 는 다가구 포함), 2 다가구주택(대장 이름이 있을 때),
+#   3 연립·다세대, 4 아파트, 5 그 밖의 공동주택(종류를 모름). 정의서 BPRP_SE: BDU001 주거용단독주택·BDU002 주거용공동주택, BULD_SE: BDC002 연립주택·BDC003 아파트
+HTYPE_NAMES = {0: "모름", 1: "단독", 2: "다가구", 3: "연립·다세대", 4: "아파트", 5: "공동 기타"}
+
+
+def htype_of(use, kind="", name=""):
+    """용도·종류 코드(와 대장·GIS 용도 이름) → 집 종류 번호"""
+    nm = str(name or "")
+    for w, t in (("다가구", 2), ("다중", 1), ("다세대", 3), ("연립", 3), ("아파트", 4), ("기숙사", 5)):
+        if w in nm:
+            return t
+    if kind == "BDC003":
+        return 4
+    if kind == "BDC002":
+        return 3
+    if use == "BDU001" or kind == "BDC001" or "단독" in nm:
+        return 1
+    if use == "BDU002" or "공동" in nm:
+        return 5
+    return 0
+
 # 건축물대장 주용도 → 수치지형도 건물 용도 코드 (BPRP_SE, 데이터정의서 별표: BDU001 주거용단독주택, BDU002 주거용공동주택,
 #   BDU003 제1종근린생활시설, BDU004 제2종근린생활시설, BDU007 판매시설, BDU009 의료시설, BDU011 노유자시설)
 #   names: 대장의 주용도 이름 (건축법 시행령 별표1 용도 이름. 다가구주택은 단독주택의 한 종류)
@@ -127,7 +149,8 @@ def _gisbld(blds, quiet=False):
         a = gis[best][1]
         fl = _num(a.get(F.get("gis_floor"))) if F.get("gis_floor") else None
         out.append((reg_use_code(str(a.get(F.get("gis_use_nm")) or "") if F.get("gis_use_nm") else "",
-                                 str(a.get(F.get("gis_use_cd")) or "") if F.get("gis_use_cd") else ""), fl))
+                                 str(a.get(F.get("gis_use_cd")) or "") if F.get("gis_use_cd") else ""), fl,
+                    str(a.get(F.get("gis_use_nm")) or "") if F.get("gis_use_nm") else ""))   # [v6.3] 용도 이름 (집 종류)
         st["연결"] += 1; ov.append(min(r, 1.0)); flags[len(out) - 1] = True
     n = len(blds)
     stats = dict(mode="gisbld", n_bld=n, n_gis_read=len(gis), linked=st["연결"], link_rate=round(st["연결"] / n, 4) if n else 0.0,
@@ -211,7 +234,8 @@ def load_register():
     for i, r in enumerate(rows):
         code = reg_use_code(r.get(cnm) if cnm else "", r.get(ccd) if ccd else "")
         R.append((code, _num(r.get(cfl)) if cfl else None, _num(r.get(car)) if car else None,
-                  (str(r.get(cmain) or "").strip().upper() in MAIN_WORDS) if cmain else True))
+                  (str(r.get(cmain) or "").strip().upper() in MAIN_WORDS) if cmain else True,
+                  str(r.get(cnm) or "") if cnm else ""))                  # [v6.3] 용도 이름 (집 종류)
         if cpk and (r.get(cpk) or "").strip():
             by_pk[r[cpk].strip()] = i
         if cpnu and (r.get(cpnu) or "").strip():
@@ -226,7 +250,7 @@ def pick(idx, R):
     main = [i for i in idx if R[i][3]] or list(idx)
     best = max(main, key=lambda i: (R[i][2] or 0.0))
     fl = [R[i][1] for i in idx if R[i][1] is not None]
-    return R[best][0], (max(fl) if fl else None)
+    return R[best][0], (max(fl) if fl else None), R[best][4]          # [v6.3] 셋째 = 용도 이름 (집 종류)
 
 
 def _register(blds, quiet=False):
@@ -316,15 +340,16 @@ def iter_buildings(save=True, quiet=False):
         n = 0
         for g, a in iter_layer("building", fields=fields):
             n += 1
-            yield g, {"use": norm_use(a.get(cu)) if cu else "", "kind": norm_kind(a.get(ck)) if ck else "",
-                      "floor": a.get(cf) if cf else None}         # [v6.1] 값이 코드든 한글 코드명이든 코드로
+            u_, k_ = (norm_use(a.get(cu)) if cu else ""), (norm_kind(a.get(ck)) if ck else "")
+            yield g, {"use": u_, "kind": k_, "floor": a.get(cf) if cf else None,   # [v6.1] 값이 코드든 한글 코드명이든 코드로
+                      "htype": htype_of(u_, k_)}                  # [v6.3]
         LAST_STATS = dict(mode="layer", n_bld=n); _save(LAST_STATS)
         return
     if m == "all":
         n = 0
         for g, a in iter_layer("building", fields=[cf] if cf else []):
             n += 1
-            yield g, {"use": C.RESIDENTIAL_USE[0], "kind": "", "floor": a.get(cf) if cf else None}
+            yield g, {"use": C.RESIDENTIAL_USE[0], "kind": "", "floor": a.get(cf) if cf else None, "htype": 0}   # [v6.3] 종류 모름
         LAST_STATS = dict(mode="all", n_bld=n); _save(LAST_STATS)
         if not quiet:
             log(f"  건물 용도 방식 all: 건물 {n:,}개를 모두 집으로 봄 (용도 미구분, 의료·노유자 건물 목적지 없음)")
@@ -348,5 +373,7 @@ def iter_buildings(save=True, quiet=False):
         if not quiet:
             log(f"  대상 구({','.join(C.TARGET_GU)}) 안 건물 연결 {lt:,}/{nt:,} ({stats['link_rate_target']:.1%})  ← 결과 점검표는 이 값으로 봄")
     LAST_STATS = stats; _save(stats)
-    for (g, _, _, a), (use, fl) in zip(blds, res):
-        yield g, {"use": use, "kind": "", "floor": fl if fl is not None else (a.get(cf) if cf else None)}
+    for (g, _, _, a), r_ in zip(blds, res):
+        use, fl = r_[0], r_[1]
+        yield g, {"use": use, "kind": "", "floor": fl if fl is not None else (a.get(cf) if cf else None),
+                  "htype": htype_of(use, "", r_[2] if len(r_) > 2 else "")}   # [v6.3] 대장·GIS 용도 이름으로 (없으면 용도 코드로)

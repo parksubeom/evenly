@@ -187,6 +187,17 @@ WHEEL_CUT_MIN = 100      # [v6.2] 휠체어 시간이 준 건물이 이보다 �
 INTERVENTION_SNAP_WARN = 50   # 시설 끝점이 길에서 이 거리(m) 넘게 떨어져 있으면 경고 (좌표 확인)
 OUT_OF_DATA_M = 500          # [v6.1a] 시설 끝(09)·구간 끝(04)·등시선 점(12)이 가장 가까운 길에서 이보다 멀면 길 자료 범위 밖으로 보고 그 줄은 건너뜀
                              #   (자료 가장자리 노드에 붙여 0분 같은 값을 만들지 않게. scipy 없는 대체 구현은 5km 넘으면 거리를 inf 로 줌)
+# [v6.3] 후보 자동 (mapping 의 auto_candidates·risk_min·cand_*): 고립 위험 집이 가장 많은 격자에서, 그 집들의 고령자 최단 경로가 가장 많이
+#   지나는 가파른 구간(계단을 먼저, 없으면 경사 CAND_STEEP 이상 링크가 이어진 묶음)의 가장 낮은 끝·가장 높은 끝에 시설을 놓아 봄
+CAND_STEEP = 1 / 12          # 가파른 링크 = 경사 이 값 이상 (휠체어 한계와 같음) 이거나 계단
+CAND_RADIUS_M = 400          # 구간은 격자 가운데에서 이 거리 안에 노드가 있어야 함 (멀리 있는 구간을 그 격자의 처방으로 보지 않게)
+CAND_MAX_LEN_M = 120         # 시설 수평 길이 상한 (경사형 엘리베이터 후암동 53m·북아현동, 대현산 모노레일 110m). 더 긴 가파른 구간은 그 안에서 높이 차가 가장 큰 부분만
+CAND_VERTICAL_MAX_M = 50     # 양 끝 수평 거리가 이 값 이하면 수직 엘리베이터(높이 차 ÷ 속도), 넘으면 경사형 엘리베이터(길이 ÷ 속도). 봉천과 같은 식
+CAND_MIN_RISE_M = 2.0        # 양 끝 높이 차가 이보다 작은 구간은 시설 후보로 보지 않음
+CAND_SEARCH = 3              # 후보를 찾을 격자 수 = auto_candidates × 이 값 (구간이 없거나 앞 후보와 같은 구간이면 다음 격자)
+SENS_BANDS = [5, 10, 15]     # [v6.3] 기준 민감도: 이 분 문턱끼리 행정동 순위상관 (extra_min_bands 에 있는 것만)
+HOUSE_PERSONS_MAX = 5        # [v6.3] 결과 점검: 고립 위험 집이 단독주택 위주(DETACHED_SHARE 이상)인데 집당 배분 어르신이 이 수 이상이면 빨강
+DETACHED_SHARE = 0.5
 
 # ────────────────────────────────────────────────────────────────────
 # 9. [v5] 점 자료 결합 (10_points_join.py) — 안심구역에서 받는 교통사고 위치 등
@@ -199,15 +210,18 @@ OUT_OF_DATA_M = 500          # [v6.1a] 시설 끝(09)·구간 끝(04)·등시선
 #   contains : {"열": "글자"} 글자가 들어 있으면 통과. 예) {"사고유형": "보행자"}
 #   [v5] 값 합계 모드: value_cols(더할 열), agg="sum", period_col(기간 열, 예: 월) → 점 수 대신 값의 기간 평균 합
 #   sep: (선택) 구분자. 비우면 자동 (SKT 파일은 "|")
+#  [v6.3] 지수 방식 (유동인구 같은 원값을 반출하지 않음): index_pop = "external 의 인구 파일(adm_cd, 두 번째 칸 = 인구)" 이면 동 값 ÷ 그 인구,
+#   index_rel = True 면 동 값 ÷ 분석 범위 동 평균. 이때 points_<이름>_dong.csv 는 adm_cd·n_bld·hbi_mean·index 만, 격자 파일은 쓰지 않고,
+#   points_summary 에는 행 수·상관만 (값 합계 줄 없음)
 #  아래 SKT 기본값은 SKT_데이터정의서.xlsx 의 실제 열: 50m 셀 중심 X_COORD·Y_COORD (UTM-K = EPSG:5179),
 #   값은 "월의 일평균" 유동인구. 연령은 10세 단위라 65세 구분이 없어 "60대 이상"(…_60GU) 을 씀. 12개월이면 월 평균
 POINT_DATA = {
     "SKT_60대이상유동인구": {"path": None, "x_col": "X_COORD", "y_col": "Y_COORD", "crs": "EPSG:5179",
                           "value_cols": ["MAN_FLOW_POP_CNT_60GU", "WMAN_FLOW_POP_CNT_60GU"], "agg": "sum", "period_col": "STD_YM",
-                          "filter": {}, "contains": {}},
+                          "filter": {}, "contains": {}, "index_pop": "pop60.csv"},   # [v6.3] 외출 지수 = 60세 이상 유동 ÷ 60세 이상 인구 (external/pop60.csv)
     "SKT_낮시간유동인구": {"path": None, "x_col": "X_COORD", "y_col": "Y_COORD", "crs": "EPSG:5179",   # seoul_flow_time.csv, 전 연령
                         "value_cols": [f"TMST_{h:02d}" for h in range(9, 18)], "agg": "sum", "period_col": "STD_YM",
-                        "filter": {}, "contains": {}},
+                        "filter": {}, "contains": {}, "index_rel": True},          # [v6.3] 상대 지수 = 동 값 ÷ 분석 범위 동 평균
 }
 
 # ────────────────────────────────────────────────────────────────────

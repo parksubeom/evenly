@@ -42,6 +42,8 @@ FIX = {
     "고위험 비율": ("경사가 지나치게 큼: DEM 단위·좌표계 확인", "config 의 DATA_ROOT_DEM, DEFAULT_CRS", "02"),
     "목적지": ("의료시설 결과가 없음: 건물 용도가 비었거나 약국 파일이 없음", "mapping.txt 의 building_attr_mode, external/pharmacy.csv", "03"),
     "선정지": ("선정지 5곳 중 계산된 곳이 없음: 대상 구 범위·좌표 확인", "mapping.txt 의 target_gu, config 의 AREA_BBOX, external/sites.csv", "04"),
+    "집당 배분 어르신": ("고립 위험 집이 단독주택 위주인데 집당 배분 어르신이 많음: 층수가 크게 잡혔거나(연면적 과대) 동 주거 연면적이 작게 잡힘",
+                   "mapping.txt 의 bld_floor·building_attr_mode, external/elderly_pop.csv 의 동 코드 (python check.py 의 층수 줄)", "03"),
 }
 
 
@@ -157,6 +159,38 @@ def report(out=None, work=None, net_work=None):
         if any(x is not None for x in sh):
             L.append(f"  · 왕복 추가 {'·'.join(f'{mb:g}' for mb in bands)}분 이상 {t}: "
                      + " / ".join("-" if x is None else f"{x:.1%}" for x in sh) + " (참고, 판정 없음)")
+    # [v6.3] 고립 위험 집 종류 구성과 집당 배분 어르신 (summary 의 의료 줄, 05 가 냄). 단독주택(다가구 포함) 위주인데 집당 HOUSE_PERSONS_MAX 명 이상이면 빨강
+    m = tg.get("medical") or (tg.get(have[0]) if have else {})
+    kinds = [(k.split(" 집 종류 ")[-1], v) for k, v in m.items() if " 집 종류 " in k]
+    if kinds:
+        num_ = lambda x: _num(x) if _num(x) is not None else (2.0 if str(x).strip() == getattr(C, "SMALL_LABEL", "5채 미만") else 0.0)   # '5채 미만' 은 2채로 어림
+        tot = sum(num_(v) for _, v in kinds)
+        known = sum(num_(v) for k, v in kinds if k != "모름")
+        det = sum(num_(v) for k, v in kinds if k in ("단독", "다가구"))
+        per = next((_num(v) for k, v in m.items() if k.endswith(" 집당 배분 어르신(명)") and "단독" not in k and "공동주택" not in k), None)
+        per_d_raw = next((v for k, v in m.items() if "단독·다가구 집당 배분 어르신" in k), "")
+        per_d = _num(per_d_raw)
+        if per_d is None and str(per_d_raw).endswith("명 이상"):            # 05 가 숫자 대신 문턱 판정만 낸 경우
+            per_d = float(getattr(C, "HOUSE_PERSONS_MAX", 5))
+        elif per_d is None and str(per_d_raw).endswith("명 미만"):
+            per_d = -1.0
+        per_a = next((_num(v) for k, v in m.items() if "공동주택 집당 배분 어르신" in k), None)
+        txt = " · ".join(f"{k} {v}" for k, v in kinds if str(v) not in ("0", "")) or "-"
+        if per is None:
+            L.append(f"  · 고립 위험 집 종류: {txt} (집당 배분 어르신: 인구 파일 없음 또는 연면적을 낸 동 없음, 판정 없음)")
+        elif known < 0.5 * max(tot, 1):
+            L.append(f"  · 고립 위험 집 종류: {txt}, 집당 배분 어르신 {per:g}명 (종류를 모르는 집이 많아 판정 없음)")
+        else:
+            share = det / known if known else 0.0
+            mx = getattr(C, "HOUSE_PERSONS_MAX", 5)
+            # 단독·다가구만 본 값이 있으면 그것으로 (단독 한 채에 어르신 mx 명 이상이면 이상), 없으면 단독 위주이면서 전체 집당 mx 명 이상
+            bad = (per_d >= mx) if per_d is not None else (share >= getattr(C, "DETACHED_SHARE", 0.5) and per >= mx)
+            gr = R if bad else G
+            part = (f", 단독·다가구 {per_d_raw}{'' if str(per_d_raw).endswith(('이상', '미만')) else '명'}" if per_d is not None else "") + (f" · 공동주택 {per_a:g}명" if per_a is not None else "")
+            L.append(f"  {gr} 집당 배분 어르신: {per:g}명{part} (고립 위험 집 {int(tot):,}채 중 단독·다가구 {share:.0%}; {txt})   "
+                     f"(단독·다가구 {mx}명 미만)")
+            if bad:
+                reds.append("집당 배분 어르신")
     sites = _csv(os.path.join(out, "validation_sites.csv"))
     pct = [(_num(r.get("percentile_circle")) or _num(r.get("percentile")), r.get("name", "")) for r in sites]
     got = [(p, n) for p, n in pct if p is not None]

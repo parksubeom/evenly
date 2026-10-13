@@ -17,6 +17,7 @@
   [v5 값 합계 모드] POINT_DATA 에 value_cols·agg="sum" 을 주면 점 수 대신 값의 합 (SKT 50m 셀 유동인구 등).
        period_col(예: STD_YM) 을 주면 기간 수로 나눠 기간 평균. 이때 n_points·per100_bld 는 "값 합계"·"건물 100개당 값"
   points_<이름>_dong.csv   : adm_cd, n_bld, hbi_mean, n_points, per100_bld
+                             [v6.3] 지수 방식(config POINT_DATA 의 index_pop·index_rel, SKT 기본)이면 adm_cd, n_bld, hbi_mean, index 만 (원값 없음, 격자 파일 없음)
   points_<이름>_grid.csv   : cell_x, cell_y, n_bld, hbi_mean, n_points, per100_bld
   points_summary.csv       : 이름별 행 수 흐름(전체 → 조건 통과 → 좌표 있음 → 범위 안 → 동·격자 합계)과 상관계수
 [해석] 상관이 있어도 인과는 아님 (예: 언덕 동네는 원래 길이 좁을 수도 있음). 기획서에는 "보조 근거"로만 씁니다.
@@ -25,7 +26,7 @@ import lib.runlog as _RL; _RL.start(globals())   # [v6.2] 기록·멈추면 메�
 import os, csv, numpy as np
 np.seterr(invalid="ignore", divide="ignore")
 import config as C
-from lib.qio import log, write_csv, transform_xy, transformer, find_files, iter_layer, read_any as read_table, safe_head
+from lib.qio import log, write_csv, read_csv, transform_xy, transformer, find_files, iter_layer, read_any as read_table, safe_head
 from lib.qgraph import spearman
 from lib.bload import load_buildings, usable, rep_mode
 REP10 = rep_mode() == C.BUILDING_ATTR_MODE        # [10/12 검토] 격자 hbi_mean 은 대표 방식만 (05 격자와 같음: 방식끼리 빼면 몇 채 HBI)
@@ -99,6 +100,16 @@ for name, cfg in todo.items():
     log(f"{name}: 인코딩 {enc}, 구분자 '{sep}', 전체 {n0:,} → 조건 통과 {n1:,} → 좌표 있음 {n2:,} → 범위 안 {n3:,}"
         + (f" (값 합계 {vsum:,.1f})" if summing else ""))
 
+    # [v6.3] 지수 방식: 원값(유동인구 합 등)을 내지 않고 동 단위 지수만
+    ipop, irel = cfg.get("index_pop"), bool(cfg.get("index_rel"))
+    idx_mode = summing and (bool(ipop) or irel)
+    popd = {}
+    if ipop:
+        pr = read_csv(os.path.join(C.EXTERNAL, ipop)) if not os.path.isabs(ipop) else read_csv(ipop)
+        pc_ = [k for k in (pr[0].keys() if pr else []) if k != "adm_cd"]
+        popd = {r["adm_cd"].strip(): fnum(r[pc_[0]]) for r in pr if pc_ and r.get("adm_cd")}
+        if not popd:
+            log(f"  !! {name}: 지수 인구 파일 external/{ipop} 가 비어 있음 → 지수 칸이 빈 칸")
     # 격자별
     kb = np.floor(X[v] / C.GRID).astype(np.int64) * 10**7 + np.floor(Y[v] / C.GRID).astype(np.int64)
     kp = np.floor(px / C.GRID).astype(np.int64) * 10**7 + np.floor(py / C.GRID).astype(np.int64)
@@ -112,7 +123,8 @@ for name, cfg in todo.items():
         n = float(pmap.get(ub[k], 0))
         grows.append([(ub[k] // 10**7 + 0.5) * C.GRID, (ub[k] % 10**7 + 0.5) * C.GRID, int(cnt[k]), round(float(hm[k]), 3) if REP10 else "",
                       round(n, 2) if summing else int(n), round(n / cnt[k] * 100, 3)])
-    write_csv(os.path.join(C.OUTPUT, f"points_{name}_grid.csv"), ["cell_x", "cell_y", "n_bld", "hbi_mean", "n_points", "per100_bld"], grows)
+    if not idx_mode:                                     # [v6.3] 지수 방식이면 격자 파일은 쓰지 않음 (격자 인구가 없어 원값만 남으므로)
+        write_csv(os.path.join(C.OUTPUT, f"points_{name}_grid.csv"), ["cell_x", "cell_y", "n_bld", "hbi_mean", "n_points", "per100_bld"], grows)
 
     # 행정동별
     drows = []
@@ -124,18 +136,41 @@ for name, cfg in todo.items():
                 continue
             n = float(val[pwhich == k].sum()) if summing else int((pwhich == k).sum())
             drows.append([code, int(m.sum()), round(float(H[m].mean()), 3), round(n, 2) if summing else n, round(n / m.sum() * 100, 3)])
-    write_csv(os.path.join(C.OUTPUT, f"points_{name}_dong.csv"), ["adm_cd", "n_bld", "hbi_mean", "n_points", "per100_bld"], drows)
+    ng, nd = sum(r[4] for r in grows), sum(r[3] for r in drows)
+    if idx_mode:                                         # [v6.3] 동 값 → 지수 (인구 대비 또는 동 평균 대비). n_points·per100_bld 칸 없음
+        mean_ = float(np.mean([r[3] for r in drows])) if drows else 0.0
+        for r in drows:
+            if ipop:
+                pp = popd.get(r[0])
+                r[3] = round(r[3] / pp, 3) if pp and np.isfinite(pp) and pp > 0 else ""
+            else:
+                r[3] = round(r[3] / mean_, 3) if mean_ > 0 else ""
+            del r[4]
+        drows = [r for r in drows]
+        write_csv(os.path.join(C.OUTPUT, f"points_{name}_dong.csv"), ["adm_cd", "n_bld", "hbi_mean", "index"], drows)
+        log(f"  지수 방식: {'60세 이상 유동 ÷ 60세 이상 인구 (external/' + ipop + ')' if ipop else '동 값 ÷ 분석 범위 동 평균'} → 동 {len(drows)}개, 원값·격자 파일은 내지 않음")
+    else:
+        write_csv(os.path.join(C.OUTPUT, f"points_{name}_dong.csv"), ["adm_cd", "n_bld", "hbi_mean", "n_points", "per100_bld"], drows)
 
     # 상관과 4분위 비교 (동 기준)
-    ng, nd = sum(r[4] for r in grows), sum(r[3] for r in drows)
     rho = lo = hi = np.nan
-    if len(drows) >= 5:
-        hh = np.array([r[2] for r in drows]); rate = np.array([r[4] for r in drows])
+    vi = 3 if idx_mode else 4                             # 비교 값 칸: 지수 / 건물 100개당
+    dv = [r for r in drows if r[vi] != ""]
+    if len(dv) >= 5:
+        hh = np.array([r[2] for r in dv]); rate = np.array([float(r[vi]) for r in dv])
         rho = spearman(hh, rate)
         q1, q3 = np.quantile(hh, [0.25, 0.75])
         lo, hi = float(rate[hh <= q1].mean()), float(rate[hh >= q3].mean())
     f = lambda x: round(float(x), 3) if np.isfinite(x) else ""
     unit = "값 합계" if summing else "점 수"
+    if idx_mode:                                         # [v6.3] 원값 합계 줄 없이 행 수·상관·지수 4분위 평균만
+        summary += [[name, "전체 행 수", n0], [name, "조건 통과", n1], [name, "좌표 있음", n2], [name, "분석 범위 안", n3],
+                    [name, "지수", "60세 이상 유동 ÷ 60세 이상 인구" if ipop else "동 값 ÷ 분석 범위 동 평균"],
+                    [name, "지수를 낸 행정동 수", len(dv)],
+                    [name, "동별 HBI 평균 vs 지수: 스피어만", f(rho)],
+                    [name, "HBI 하위 25% 동 평균 지수", f(lo)], [name, "HBI 상위 25% 동 평균 지수", f(hi)]]
+        log(f"  지수를 낸 동 {len(dv)}개, 스피어만 {f(rho)}")
+        continue
     summary += [[name, "전체 행 수", n0], [name, "조건 통과", n1], [name, "좌표 있음", n2], [name, "분석 범위 안", n3],
                 [name, f"분석 범위 안 {unit}", round(vsum, 2)],
                 [name, f"격자 합계(건물 {C.MIN_COUNT}개 이상 격자, {unit})", round(ng, 2)], [name, f"행정동 합계(건물 {C.MIN_COUNT}개 이상 동, {unit})", round(nd, 2)],

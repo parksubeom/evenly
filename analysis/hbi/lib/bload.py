@@ -35,3 +35,21 @@ def rep_mode():
     # [10/12 검토] 방식 폴더(output/<방식>)인데 --modes 기억이 없으면(방식 없이 run_all 을 친 뒤 단독 실행 등) 대표 방식을 모름 → ""
     #   (예전에는 그 방식을 대표로 봐서 다른 방식 폴더와 함께 값이 나갈 수 있었음). auto 인데 check 가 고른 방식이 비어도 ""
     return ch if ch in modes else (modes[0] if modes else "")
+
+
+def risk_cell_mask(b, T, U):
+    """[v6.3] 건물마다 '고립 위험 격자' 안인가 (참/거짓 배열): 05 격자와 같은 칸(목적지 T 의 분석 건물 MIN_COUNT 이상) 중
+    집 절반 이상이 왕복 RISK_MIN 분 이상 더 걸리는 칸 (기획서 17장 '후보'와 같은 정의). 05 독거노인 추정·09 연면적 검사·노출 검사 도구가 같이 씀"""
+    out = np.zeros(len(b["x"]), bool)
+    if not getattr(C, "RISK_MIN", None) or not T or f"{T}_hbi" not in b:
+        return out
+    v = np.isfinite(b[f"{T}_hbi"]) & U
+    add = (b[f"{T}_t_elder"] - b[f"{T}_t_flat"]) / 60
+    key = np.floor(b["x"] / C.GRID).astype(np.int64) * 10**7 + np.floor(b["y"] / C.GRID).astype(np.int64)
+    uk, ik = np.unique(key[v], return_inverse=True)
+    if not len(uk):
+        return out
+    nk = np.bincount(ik)
+    rk = np.bincount(ik, (add[v] >= C.RISK_MIN).astype(float))
+    keep = uk[(nk >= C.MIN_COUNT) & (rk / np.maximum(nk, 1) >= 0.5)]
+    return np.isin(key, keep) if len(keep) else out

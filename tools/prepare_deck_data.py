@@ -19,7 +19,8 @@ tools/prepare_deck_data.py ─ 반출 결과 파일 → 기획서에 넣을 값(
 import argparse, datetime, json, math, os, re, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from evenly_common import (ROOT, TARGET_GU, TARGET_LABEL, FAKE_MARKER, RAW_EXPORT, is_fake_dir, source_of, PUBLIC_REHEARSAL, load_dongs, dong_of, read_csv, num, truthy, to5186)
+from evenly_common import (ROOT, TARGET_GU, TARGET_LABEL, FAKE_MARKER, RAW_EXPORT, is_fake_dir, source_of, PUBLIC_REHEARSAL, load_dongs, dong_of, read_csv, num, truthy, to5186,
+                           load_sites, point_in_rings)   # [v6.3] 지도의 선정지
 
 HI, LO = 1.8, 1.3
 # 19장 KCB 중첩 방향. v5 기본 KCB 값 "KCB_60세이상_월200만원이하비율" = C1~C3 인원 ÷ C1~C22 인원
@@ -784,14 +785,17 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         mins = sorted(float(x) for x in (rm.get("extra_min_bands") or "").split(",") if x.strip()) or mins
     except ValueError:
         pass
-    RM = max(mins) if mins else 10.0                             # 고립 위험 = 가장 큰 왕복 추가 문턱
+    try:                                                         # [v6.3] 고립 위험 = run_meta 의 risk_min (v6.3 에서 15분을 더해 '가장 큰 문턱'과 갈라짐)
+        RM = float(rm.get("risk_min") or "")
+    except ValueError:
+        RM = max(mins) if mins else 10.0                         # v6.2 까지: 가장 큰 왕복 추가 문턱
     SM = 5.0 if 5.0 in mins else (mins[len(mins) // 2] if mins else 5.0)   # (min 비교판의 부담 문턱)
     tag_r, tag_s = f"add{RM:g}m".replace(".", "_"), f"add{SM:g}m".replace(".", "_")
     b_hbi = bands in ("mix", "hbi")                              # 체감 부담을 HBI 로
     r_min = bands in ("mix", "min")                              # 고립 위험을 왕복 추가 분으로
     M = r_min
     P("V6.hb", "체감 부담 HBI 문턱", ["run_meta.csv (hbi_bands)"], f"{hb:g}", optional=True)
-    P("V6.rmin", "고립 위험 왕복 추가 문턱(분)", ["run_meta.csv (extra_min_bands)"], f"{RM:g}", optional=True)
+    P("V6.rmin", "고립 위험 왕복 추가 문턱(분)", ["run_meta.csv (risk_min, 없으면 extra_min_bands 의 가장 큰 값)"], f"{RM:g}", optional=True)
     P("V6.bands", "구간 기준", [], {"mix": f"체감 부담 HBI {hb:g} · 고립 위험 왕복 {RM:g}분", "hbi": f"HBI {hb:g}·{HI:g}", "min": f"왕복 추가 {SM:g}분·{RM:g}분"}[bands], optional=True)
     cv = lambda g, k: num(g.get(k))
     gT = [g for g in grid if g["target"] == T0]
@@ -832,7 +836,9 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
             masked += 1
             continue
         est = (est or 0) + p65 * wx / wa
-    P("V6.14.elderly", "고립 위험 건물 거주 고령인구 추정", ["dong_hbi_with_elderly.csv (tools/outside_elderly.py)"], f"약 {f_about(est)}명" if est is not None else None)
+    if est is None and M:                     # [v6.3] 밖 도구 결과가 없으면 05 가 안에서 같은 식으로 낸 값 (summary, 연면적을 낸 동만)
+        est = next((num(v) for k, v in m0.items() if k.startswith(f"고립 위험(왕복 +{RM:g}분) 집 어르신 추정")), None)
+    P("V6.14.elderly", "고립 위험 건물 거주 고령인구 추정", ["dong_hbi_with_elderly.csv (tools/outside_elderly.py) 또는 summary.csv (05, v6.3)"], f"약 {f_about(est)}명" if est is not None else None)
     P("V6.14.elderly_note", "고령인구 추정에서 뺀 동", [], f"연면적을 가린 동 {masked}곳은 뺀 값" if masked else None, optional=True)
     best = None
     for r in rows_d:
@@ -990,6 +996,40 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     # ── 22 교통·보행 ──
     gB = [g for g in grid if g["target"] == "bus"]
     okB = bool(gB) and (b_hbi or f"share_{tag_s}" in gB[0])
+    # ── [v6.3] 17장 후보·선정지 비교표 (09 intervention_candidates.csv), 21장 격자 안 독거노인, 14장 집 종류·집당 배분, 부록 3 기준 민감도 ──
+    crs = R("intervention_candidates.csv") or []
+    if crs:
+        rk_ = next((k for k in crs[0] if k.startswith("n_risk")), "n_risk")
+        tn = {"vertical": "수직", "elevator": "경사형", "monorail": "모노레일", "ramp": "경사로"}
+        trows = []
+        for r in crs:
+            loc = " ".join((r.get("adm_nm") or "").split()[1:]) or "-"
+            trows.append({"kind": r.get("kind", ""), "name": r.get("facility", ""), "loc": loc, "n_risk": r.get(rk_, ""),
+                          "fac": f"{tn.get(r.get('facility_type'), r.get('facility_type') or '-')} · 높이 {r.get('rise_m') or '-'}m · {r.get('length_m') or '-'}m",
+                          "benefit": r.get("n_benefit_any", ""), "per100m": r.get("per100m", ""), "rx": r.get("prescription", ""),
+                          "wheel_now": r.get("wheel_now_m", ""), "saved": r.get("mean_saved_min", "")})
+        B.table("V6.17.cand", "후보·선정지 비교표 (09 후보 자동, 격자 단위)", ["intervention_candidates.csv (v6.3)"], trows)
+        n_fac = sum(1 for r in crs if r.get("kind") == "후보" and r.get("prescription") == "시설 검토")
+        P("V6.17.n_facility", "자동 후보 중 '시설 검토' 수", ["intervention_candidates.csv (v6.3)"], f"{n_fac}곳")
+    else:
+        B.table("V6.17.cand", "후보·선정지 비교표 (09 후보 자동, 격자 단위)", ["intervention_candidates.csv (v6.3)"], None)
+        P("V6.17.n_facility", "자동 후보 중 '시설 검토' 수", ["intervention_candidates.csv (v6.3)"], None)
+    m3 = sm.get(T0, {})
+    ac = next((v for k, v in m3.items() if k.startswith("고립 위험 격자(") and "독거노인 추정" in k), None)
+    acn = m3.get("고립 위험 격자 안 독거노인 추정을 낸 행정동 수")
+    P("V6.21.alone_cells", "고립 위험 격자 안 독거노인 추정 (동 통계 × 연면적 비율)", ["summary.csv (05, v6.3)"],
+      f"약 {f_about(num(ac))}명" if num(ac) is not None and num(ac) > 0 else None)
+    P("V6.21.alone_cells_n", "독거노인 추정을 낸 동 수", ["summary.csv (05, v6.3)"], f"{int(num(acn))}개 동" if num(acn) else None, optional=True)
+    kinds = [(k.split(" 집 종류 ")[-1], v) for k, v in m3.items() if " 집 종류 " in k]
+    nk_ = lambda v: num(v) if num(v) is not None else 0
+    tot_ = sum(nk_(v) for _, v in kinds)
+    mix = " · ".join(f"{k} {nk_(v) / tot_:.0%}" for k, v in kinds if k != "모름" and nk_(v) > 0) if tot_ else ""
+    per_h = next((v for k, v in m3.items() if "집당 배분 어르신" in k), None)
+    P("V6.14.house_mix", "고립 위험 집 종류 구성", ["summary.csv (05, v6.3)"], mix or None, optional=True)
+    P("V6.14.per_house", "집당 배분 어르신", ["summary.csv (05, v6.3)"], f"집당 {num(per_h):g}명" if num(per_h) is not None else None, optional=True)
+    rhos = [(k.split("왕복 ")[-1], v) for k, v in m3.items() if k.startswith("기준 민감도: 행정동 순위상관")]
+    P("V6.29.band_rho", "기준 민감도: 5·10·15분 동 순위상관", ["summary.csv (05, v6.3)"],
+      " · ".join(f"{k.replace(' vs ', '↔').replace('+', '')} ρ = {num(v):.2f}" for k, v in rhos if num(v) is not None) or None)
     P("V6.22.bus", "정류장까지 체감 부담인 격자 수 (버스정류장 기준)", ["grid_hbi.csv (목적지 bus)"], f"{sum(1 for g in gB if burden(g))}곳" if okB else None)
     lg = next((f for f in (os.listdir(S("")) if os.path.isdir(S("")) else []) if f.startswith("legal_") and f.endswith(".csv") and "사고" in f and f != "legal_summary.csv"), None)
     acc = None
@@ -1065,7 +1105,10 @@ def v6_plots(B, grid, T0, bands, R):
         mins = sorted(float(x) for x in (rm.get("extra_min_bands") or "").split(",") if x.strip())
     except ValueError:
         mins = []
-    RM = max(mins) if mins else 10.0
+    try:                                                         # [v6.3] risk_min (위와 같음)
+        RM = float(rm.get("risk_min") or "")
+    except ValueError:
+        RM = max(mins) if mins else 10.0
     SM = 5.0 if 5.0 in mins else (mins[len(mins) // 2] if mins else 5.0)
     tr, ts = f"share_add{RM:g}m".replace(".", "_"), f"share_add{SM:g}m".replace(".", "_")
     cells = [g for g in grid if g["target"] == T0]
@@ -1107,6 +1150,52 @@ def v6_plots(B, grid, T0, bands, R):
         cap = "250m 격자 평균 언덕 부담 지수(HBI)"
     ax.add_collection(pc)
     ax.add_collection(LineCollection([r for d in tgt for r in d["rings"]], colors="#6B7370", linewidths=0.4))
+    # [v6.3] 구 경계(굵게) = 대상 구 동 다각형을 합친 바깥선 (GDAL 이 있을 때. 동 경계 꼭짓점이 이웃끼리 맞지 않아 변 세기로는 안쪽 선이 남음),
+    #        동 이름, 서울시 선정지, 09 자동 후보 격자 (번호 = 17장 표 순서)
+    import matplotlib.patheffects as pe
+    halo = [pe.withStroke(linewidth=1.6, foreground="white")]
+    try:
+        from osgeo import ogr as _ogr
+        for gu_ in gus:
+            mp = _ogr.Geometry(_ogr.wkbMultiPolygon)
+            for d in tgt:
+                if d["gu"] != gu_:
+                    continue
+                pg = _ogr.Geometry(_ogr.wkbPolygon)
+                for r in d["rings"]:
+                    lr = _ogr.Geometry(_ogr.wkbLinearRing)
+                    for x_, y_ in r:
+                        lr.AddPoint_2D(x_, y_)
+                    pg.AddGeometry(lr)
+                mp.AddGeometry(pg.Buffer(0.5))                 # 꼭짓점 어긋남(수십 cm)을 메움
+            u = mp.UnionCascaded()
+            parts = [u] if u.GetGeometryName() == "POLYGON" else [u.GetGeometryRef(k) for k in range(u.GetGeometryCount())]
+            for pg in parts:
+                ring = pg.GetGeometryRef(0)
+                ax.plot([ring.GetX(k) for k in range(ring.GetPointCount())], [ring.GetY(k) for k in range(ring.GetPointCount())], color="#1C2321", lw=0.9, zorder=3)
+    except Exception:                                          # GDAL 이 없으면 구 경계는 생략 (동 경계는 위에서 그림)
+        pass
+    cand = [r for r in (R("intervention_candidates.csv") or []) if r.get("kind") == "후보"]
+    lab_dongs = {d["adm_cd"] for d in tgt} if len(tgt) <= 30 else {r.get("adm_cd") for r in cand}
+    for d in tgt:
+        if d["adm_cd"] not in lab_dongs:
+            continue
+        ring = max(d["rings"], key=len)
+        cx_ = sum(x for x, _ in ring) / len(ring); cy_ = sum(y for _, y in ring) / len(ring)
+        ax.text(cx_, cy_, (d["adm_nm"] or "").split()[-1], fontsize=4.2, color="#4A524F", ha="center", va="center", zorder=4, path_effects=halo)
+    for st_ in load_sites():
+        if any(point_in_rings(st_["x"], st_["y"], d["rings"]) for d in tgt):
+            ax.scatter([st_["x"]], [st_["y"]], marker="*", s=46, color="#1C2321", zorder=6, edgecolors="white", linewidths=0.4)
+            ax.text(st_["x"] - 120, st_["y"] - 40, "서울시 선정지 " + st_["name"].split()[-1], fontsize=5.5, color="#1C2321", zorder=7,
+                    fontweight="bold", ha="right", va="top", path_effects=halo)
+    for i_, r in enumerate(cand, 1):
+        cxx, cyy = num(r.get("cell_x")), num(r.get("cell_y"))
+        if cxx is None or cyy is None:
+            continue
+        ax.add_patch(Rectangle((cxx - 125, cyy - 125), 250, 250, fill=False, edgecolor="#1C2321", linewidth=0.9, zorder=5))
+        ax.text(cxx, cyy, f"{i_}", fontsize=5.2, color="#1C2321", fontweight="bold", ha="center", va="center", zorder=7, path_effects=halo)
+    if cand:
+        leg.append(Rectangle((0, 0), 1, 1, fill=False, edgecolor="#1C2321", linewidth=0.9, label="자동 후보 격자 (번호 = 17장)"))
     ax.legend(handles=leg, loc="lower left", fontsize=7, frameon=False, borderaxespad=0.6)
     ax.text(x1 - 200, y1 - 200, cap + f" · 목적지 {TARGET_LABEL.get(T0, T0)}", fontsize=7, color="#6B7370", ha="right", va="top")
     ax.plot([x1 - 1400, x1 - 400], [y0 + 350, y0 + 350], color="#1C2321", lw=1.6)

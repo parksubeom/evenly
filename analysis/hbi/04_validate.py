@@ -12,6 +12,7 @@
   2) 구간 재현    → validation_routes.csv  ([v6.1a] 끝점이 길에서 OUT_OF_DATA_M(500m) 넘게 먼 구간은 길 자료 범위 밖으로 보고 건너뜀)
      external/od_pairs.csv 의 출발·도착 사이 경로 길이·시간. 대현산배수지공원 휠체어 우회(서울시 발표 약 770m)
      와 비교하고, 현장실측 시간(measured_min)이 있으면 성인 속도 예측(adult_min)과 상관계수 계산
+     [v6.3] od_pairs 에 measured_slow_min(천천히 걷기 = 어르신 속도 흉내) 칸이 있으면 validation_routes 맨 뒤에 그대로, 3개 이상이면 고령자 예측과 상관
      [v5] 실측 3구간 이상이면 상관계수를 validation_measured.csv (n, r_adult_pred_vs_measured) 로도 저장
   3) 기여도       → validation_ablation.csv
      데이터를 하나씩 뺐을 때 결과가 얼마나 달라지는지 (DEM 제외 / 계단 제외 / 큰 격자로 집계 / DEM 1m)
@@ -128,9 +129,9 @@ if rows:
         tf_, lf = route(N, e, s, oi[k], di[k], "flat")                 # 평지 가정 (최단거리와 같음)
         f = lambda v, d=1: round(v, d) if v == v else ""               # NaN 이면 빈 칸 (NaN != NaN 인 성질 이용)
         res.append([r["name"], round(float(np.hypot(ox[k] - dx[k], oy[k] - dy[k]))), f(lf, 0), f(te / 60), f(ta / 60),
-                    f(lw, 0), f(tf_ / 60), r.get("measured_min", "")])
+                    f(lw, 0), f(tf_ / 60), r.get("measured_min", ""), r.get("measured_slow_min", "")])   # [v6.3] 천천히 걷기(어르신 속도 흉내) 잰 분
     write_csv(os.path.join(C.OUTPUT, "validation_routes.csv"),
-              ["name", "straight_m", "net_m", "elder_min", "adult_min", "wheel_path_m", "flat_min", "measured_min"], res)
+              ["name", "straight_m", "net_m", "elder_min", "adult_min", "wheel_path_m", "flat_min", "measured_min", "measured_slow_min"], res)
     # 열 뜻: straight_m 직선거리 / net_m 길 따라 최단거리 / wheel_path_m 휠체어 실제 경로 길이 / *_min 분
     log("구간 재현:")
     for r in res:
@@ -141,7 +142,12 @@ if rows:
         rr = float(np.corrcoef(a[:, 0], a[:, 1])[0, 1])
         log(f"실측 vs 예측(성인 기준) 상관 r={rr:.3f}, n={len(a)}")
         # [v5] 로그뿐 아니라 파일로도 저장 (반출 대상, 기획서 17장)
-        write_csv(os.path.join(C.OUTPUT, "validation_measured.csv"), ["n", "r_adult_pred_vs_measured"], [[len(a), round(rr, 3)]])
+        ms = [(float(r[3]), float(r[8])) for r in res if r[3] != "" and str(r[8]).strip()]   # [v6.3] 고령자 예측 vs 천천히 걷기 실측
+        rs = float(np.corrcoef(np.array(ms)[:, 0], np.array(ms)[:, 1])[0, 1]) if len(ms) >= 3 else None
+        if rs is not None:
+            log(f"천천히 걷기 실측 vs 예측(고령자 기준) 상관 r={rs:.3f}, n={len(ms)}")
+        write_csv(os.path.join(C.OUTPUT, "validation_measured.csv"), ["n", "r_adult_pred_vs_measured", "n_slow", "r_elder_pred_vs_slow"],
+                  [[len(a), round(rr, 3), len(ms), round(rs, 3) if rs is not None else ""]])
 
 # ── 3) 기여도 분석 ─────────────────────────────────────────
 ab = []
