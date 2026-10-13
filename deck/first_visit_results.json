@@ -1,0 +1,14 @@
+{
+ "_설명": "대비책 판(npm run build:fallback)에 쓰는 1차 방문(10/2) 반출 결과. 숫자는 docs/1차방문_반출결과.md 의 '1차 결과' 표에 있는 것만 (반출 심사를 거친 runlog·사용자 메모). 새 숫자를 추정해 넣지 않는다",
+ "source": "first_visit_export",
+ "visit_date": "2026-10-02",
+ "code": "v5 번들 (대상 구로 거르지 않음, 걸을 수 없는 길을 빼지 않음)",
+ "area": "관악 일대 1:5,000 11도엽 (옆 구 일부 포함, 행정동 52개)",
+ "building_mode": "all (모든 건물을 집으로 봄)",
+ "destination": "의료 = 약국만",
+ "hbi_median": 1.09,
+ "share_hbi_13_18": 0.08,
+ "share_hbi_18_up": 0.001,
+ "bongcheon_site_percentile": 78.7,
+ "n_dong": 52
+}

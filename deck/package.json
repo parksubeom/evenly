@@ -4,6 +4,7 @@
   "scripts": {
     "build": "node build_v6.js",
     "build:fake": "node py.js ../tools/make_fake_results.py && node py.js ../tools/prepare_deck_data.py --src ../results/fake_export --expect fake && node build_v6.js --expect fake",
+    "build:fallback": "node py.js ../tools/prepare_fallback_deck.py && node build_v6.js --expect fallback",
     "build:real": "node py.js ../tools/prepare_deck_data.py --src ../results/raw_export --expect real && node build_v6.js --expect real",
     "build:rehearsal": "node py.js ../tools/prepare_deck_data.py --src ../results/public_rehearsal/${REHEARSAL:-gwanak_v62f} --expect rehearsal --bands ${BANDS:-mix} && node build_v6.js --expect rehearsal",
     "build:rehearsal:ab": "BANDS=hbi npm run build:rehearsal && BANDS=min npm run build:rehearsal",

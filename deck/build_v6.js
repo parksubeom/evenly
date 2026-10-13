@@ -21,6 +21,11 @@ if (EXPECT && R.source !== EXPECT) {     // real 빌드가 가짜·공개 대역
   process.exit(1);
 }
 const FAKE = R.source === 'fake', REH = R.source === 'rehearsal', REAL = R.source === 'real';
+// [10/13] 대비책 판: 1차 반출(10/2) 결과만 (tools/prepare_fallback_deck.py). 제출 후보라 검토 표시 없음.
+//   1차 숫자로 못 채우는 결과 칸은 "2차 분석 결과 반영 예정" (missing 에 '대체'), 팀명·방문일이 비면 그대로 누락
+const FALLBACK = R.source === 'fallback';
+const FB_TEXT = '2차 분석 결과 반영 예정';
+const INPUT_KEYS = new Set(['team_name', 'team_display', 'V6.13.visit2', 'V6.13.visit3']);
 const BANDS = R.bands || 'mix', MINB = BANDS === 'min';
 const HB = () => Q('V6.hb', '1.3'), RMIN = () => Q('V6.rmin', '10');   // 체감 부담 HBI 문턱, 고립 위험 왕복 추가 분 (결과의 run_meta = mapping 한 곳)
 
@@ -63,7 +68,8 @@ function fb(key, used) {
 function V(key, blank = '___') {
   const f = R.fields[key];
   if (f && f.value !== null && f.value !== undefined && f.value !== '') return String(f.value);
-  if (REH && f && f.later) { LATER.add(f.later); fb(key, f.later); return f.later; }
+  if ((REH || FALLBACK) && f && f.later) { LATER.add(f.later); fb(key, f.later); return f.later; }
+  if (FALLBACK && !INPUT_KEYS.has(key)) { LATER.add(FB_TEXT); fb(key, FB_TEXT); return FB_TEXT; }
   if (f && f.optional) { fb(key, blank); return blank; }
   miss(key, f || { label:key, need:[] }); pending.push({ key, page });
   return blank;
@@ -74,12 +80,14 @@ function IMG(key) {
   const m = R.images[key];
   if (m && m.path && fs.existsSync(m.path)) return m.path;
   if (REH && m && m.later) { fb('img:' + key, m.later); return null; }
+  if (FALLBACK) { fb('img:' + key, FB_TEXT); return null; }
   miss('img:' + key, m || { label:key, need:[] }); pending.push({ key:'img:' + key, page });
   return null;
 }
 function TBL(key) {
   const t = R.tables[key];
   if (t && t.rows && t.rows.length) return t.rows;
+  if (FALLBACK) { fb('tbl:' + key, FB_TEXT); return null; }
   miss('tbl:' + key, t || { label:key, need:[] });
   return null;
 }
@@ -107,7 +115,7 @@ function reviewTag(s, dark) {
   T(s, txt, { x:7.90, y:0.16, w:1.60, h:0.25, fontSize:9, bold:true, color:col, align:'center', valign:'middle' });
 }
 const tsize = t => t.length > 34 ? 19 : t.length > 27 ? 21 : 24;
-const SCOPE = REH ? `${Q('V6.scope', '관악구')}(공개 대역)` : '5개 구';      // 14·17 장의 범위 표현 (공개 대역 판에서만 바뀜)
+const SCOPE = REH ? `${Q('V6.scope', '관악구')}(공개 대역)` : FALLBACK ? '관악 일대(1차 반출)' : '5개 구';      // 14·17 장의 범위 표현 (공개 대역·대비책 판에서만 바뀜)
 // title 에 결과 값(V)이 들어가면 함수로 넘김: 장 번호를 올린 뒤에 값을 읽어야 누락이 이 장에 적힘
 function base(kicker, title, o={}) {
   const s = pres.addSlide(); page++;
@@ -129,6 +137,7 @@ function stat(s, x, y, w, label, value, o={}) {
 }
 // 자리 상자. key(그림 결과 키)를 주면 그 그림이 빠진 자리: 연한 주황(FFF7F2, check_deck 이 빈칸으로 봄) + 이름표
 function slot(s, x, y, w, h, label, key) {
+  if (key && FALLBACK) { key = undefined; label = label.split('\n')[0] + '\n' + FB_TEXT; }   // [10/13] 대비책 판: 빈칸이 아니라 예정 자리
   const t = key ? take(0, ['img:' + key]) : undefined;
   s.addShape(pres.shapes.RECTANGLE, Object.assign({ x, y, w, h, fill:{color: key ? 'FFF7F2' : C.white}, line:{color: key ? C.acc : C.muted, width:1, dashType:'dash'} }, t ? { objectName:t } : {}));
   T(s, label, { x:x+0.1, y, w:w-0.2, h, fontSize:11, color: key ? C.accD : C.muted, align:'center', valign:'middle', _keys:t });
@@ -316,7 +325,9 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
   src(s, '방문일은 실제 일자로 기입'); }
 
 // ── 14 결과 ① 사각지대 ──
-{ const s = base('분석 결과 · 사각지대' + (REH ? ' · ' + SCOPE : ''), () => `평지 지도에서 "가까운 동네"의 ${V('V6.14.near_burden')}%가 실제로는 ${Math.round((Number(HB()) - 1) * 100)}% 넘게 더 걸립니다`, { tsize:19 });
+{ const s = base('분석 결과 · 사각지대' + ((REH || FALLBACK) ? ' · ' + SCOPE : ''), () => FALLBACK
+    ? `관악 일대 건물의 약 ${V('V6.fb.share13')}%가 평지보다 ${Math.round((Number(HB()) - 1) * 100)}% 넘게 더 걸립니다`   // [10/13] 대비책 판: 1차 HBI 1.3 이상 비율
+    : `평지 지도에서 "가까운 동네"의 ${V('V6.14.near_burden')}%가 실제로는 ${Math.round((Number(HB()) - 1) * 100)}% 넘게 더 걸립니다`, { tsize:19 });
   const m = IMG('V6.map');
   if (m) s.addImage({ path:m, x:0.6, y:1.42, w:5.3, h:3.53 });
   else slot(s, 0.6, 1.42, 5.3, 3.53, `결과 지도 자리\n${SCOPE} 250m 격자 · 언덕 부담 지수`, 'V6.map');
@@ -327,13 +338,17 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
   stat(s, 6.25, 3.39, 3.2, '부담이 가장 큰 동', V('V6.14.top_dong'), { size:17 });
   bar(s, 6.25, 4.38, 0.6); T(s, '거리만 보는 지도에서는 이 동네들이 "가깝다"고 나옵니다.', { x:6.45, y:4.38, w:3.0, h:0.6, fontSize:12, bold:true, color:C.ink, valign:'middle' });
   const nt = has('V6.14.elderly_note') ? ` (${R.fields['V6.14.elderly_note'].value})` : '';
-  src(s, (REH ? '공개 대역(리허설) 값 · ' : '') + `어르신은 행정동 65세 이상을 주거 연면적으로 배분한 추정${nt}`); }
+  src(s, FALLBACK ? `제목: ${Q('V6.fb.limits', '1차 반출(10/2) 값')} / 지도·건물·어르신·동 = 2차 분석 결과 반영 예정`
+    : (REH ? '공개 대역(리허설) 값 · ' : '') + `어르신은 행정동 65세 이상을 주거 연면적으로 배분한 추정${nt}`); }
 
 // ── 15 현장실측 ──
 { const s = base('현장실측 · 관악구', '직접 걸어서 확인했습니다');
   ['봉천동 선정지 계단','봉천역 → 언덕 오르막','도림천 산책로 (평지)','낙성대역 → 언덕'].forEach((p, i) => { const x = 0.6 + (i%2)*2.25, y = 1.45 + Math.floor(i/2)*1.6; slot(s, x, y, 2.1, 1.45, '사진 자리\n' + p); });
   const rn = ['계단 · 봉천 선정지','오르막 · 봉천역','평지 · 도림천','오르막 · 낙성대'];   // 10/12 청사진: prepare 의 V6.15.<i> 도 관악 네 구간 (현장실측①~④)
-  etable(s, [['구간','지도앱','실측','모델']].concat(rn.map((n, i) => [B(n), V(`V6.15.${i}.app`), V(`V6.15.${i}.meas`), V(`V6.15.${i}.model`)])), { x:5.25, w:4.15, colW:[1.6,0.85,0.85,0.85], rowH:[0.36,0.44,0.44,0.44,0.44] });
+  const r15 = rn.map((n, i) => [V(`V6.15.${i}.app`), V(`V6.15.${i}.meas`), V(`V6.15.${i}.model`)]);
+  etable(s, [['구간','지도앱','실측','모델']].concat(rn.map((n, i) => FALLBACK && r15[i].every(v => v === FB_TEXT)
+      ? [B(n), { text:FB_TEXT, options:{ colspan:3, align:'center' } }]          // [10/13] 대비책 판: 세 칸을 하나로
+      : [B(n)].concat(r15[i]))), { x:5.25, w:4.15, colW:[1.6,0.85,0.85,0.85], rowH:[0.36,0.44,0.44,0.44,0.44] });
   bar(s, 5.25, 3.95, 0.95);
   T(s, [{ text:'봉천 선정지 계단: 오름 3회 · 내림 1회', options:{ bold:true, color:C.ink, breakLine:true } }, { text:'성인이 평소 걸음으로 측정, 고도계 앱으로 높이 차 기록', options:{ color:C.muted } }], { x:5.47, y:3.95, w:3.95, h:0.95, fontSize:12, valign:'middle' });
   src(s, `관악 실측 기록지 기준 / 측정일 ${V('V6.15.date', '2026.10.___')} / 사람 얼굴·집 안·번지 표지는 찍지 않음`); }
@@ -346,11 +361,12 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
   [['높이(DEM 5m)를 빼면 바뀌는 상위 10%', V('V6.16.dem_top10')], ['보행 판단 속성 (자동차전용·단독/공동 구분)', '공개판에 없음'], ['공개데이터 대조 (공개 도보망 + 30m 지형)', V('V6.16.pub_miss')]].forEach((r, i) => { stat(s, 5.3, 1.95+i*0.8, 4.1, r[0], r[1], { size:18, color:C.acc }); });
   takeaway(s, '5m 높이와 보행 판단용 현행 속성은 LX 데이터에 있습니다. 공개 연속수치지형도에는 자동차전용 칸이 없습니다.', 4.55);
   const notes16 = [has('V6.16.wheel_note') ? R.fields['V6.16.wheel_note'].value : null, has('V6.16.daehyun_note') ? R.fields['V6.16.daehyun_note'].value : null].filter(Boolean).join(' · ');
-  src(s, (REH ? '공개 대역(리허설) 값 · ' : '') + `선정지 백분위: 반경 300m 원 평균 비교 · 계단을 빼면 휠체어 시간 과소 계산 ${V('V6.16.stairs')}` + (notes16 ? ' · ' + notes16 : '')); }
+  src(s, FALLBACK ? `선정지 백분위: ${Q('V6.fb.limits', '1차 반출(10/2) 값')}`
+    : (REH ? '공개 대역(리허설) 값 · ' : '') + `선정지 백분위: 반경 300m 원 평균 비교 · 계단을 빼면 휠체어 시간 과소 계산 ${V('V6.16.stairs')}` + (notes16 ? ' · ' + notes16 : '')); }
 
 // ── 17 우선 검토 후보 ──
 const NCAND = () => V('V6.17.n_cand');
-{ const s = base('정책 제안' + (REH ? ' · ' + SCOPE : ''), () => `어디부터 무엇을: 우선 검토 후보 ${NCAND()}곳`);
+{ const s = base('정책 제안' + ((REH || FALLBACK) ? ' · ' + SCOPE : ''), () => FALLBACK ? '어디부터 무엇을: 우선 검토 후보' : `어디부터 무엇을: 우선 검토 후보 ${NCAND()}곳`);
   // 10/12: 열 = 위치, 고립 위험 건물 수, 왕복 추가 시간 중앙값, 500m 안 기존 시설, 처방 방향 (규칙). 1억 원당 수혜는 20장(시뮬레이션한 시설)만
   const rows = [['위치', Q('V6.17.n_head', '고립 위험 건물'), '왕복 추가 (중앙값)', '500m 안 기존 시설', '처방 방향']];
   const cw = [2.35, 1.35, 1.45, 1.6, 2.05];
@@ -360,13 +376,16 @@ const NCAND = () => V('V6.17.n_cand');
       rows.push([B(r.loc, o), { text: r.n === null || r.n === undefined ? V('V6.17.n') : r.n, options:o }, { text: r.med === null || r.med === undefined ? V('V6.17.med') : r.med, options:o },
                  { text:r.fac, options:o }, B(r.rx, r.meets ? { color:C.teal } : { color:C.muted, bold:false })]); });
     etable(s, rows, { colW:cw, rowH:[0.36].concat(t.map(() => 0.4)), fontSize:10.5 });
+  } else if (FALLBACK) {                          // [10/13] 대비책 판: 후보 표는 2차 분석에서
+    rows.push([{ text:FB_TEXT, options:{ color:C.muted } }, '', '', '', '']);
+    etable(s, rows, { colW:cw, rowH:[0.36,0.4], fontSize:10.5 });
   } else {
     for (let i = 0; i < 5; i++) rows.push(['___','___','___','___','___']);
     etable(s, rows, { colW:cw, rowH:[0.36,0.4,0.4,0.4,0.4,0.4], fontSize:10.5 }, 'tbl:V6.17.rows');
   }
   bar(s, 0.6, 4.15, 0.85);
   T(s, [{ text:'처방 규칙  ', options:{ bold:true, color:C.ink } }, { text:'고립 위험이 몰려 있고 500m 안 시설 없음 → 이동편의시설 검토 / 흩어져 있음 → 방문돌봄·계단 정비 / 시설 있음 → 기존 시설 연계 확인', options:{ color:C.text } }], { x:0.82, y:4.15, w:8.6, h:0.85, fontSize:11.5, valign:'middle' });
-  src(s, (REH ? '공개 대역(리허설) 값 · ' : '') + '후보 = 250m 격자 · 시설 효과는 실제로 시뮬레이션한 선정지(20장)에서만 계산'); }
+  src(s, (REH ? '공개 대역(리허설) 값 · ' : '') + '후보 = 250m 격자 · 시설 효과는 실제로 시뮬레이션한 선정지(20장)에서만 계산' + (FALLBACK ? ' / 후보 표는 2차 분석 결과 반영 예정' : '')); }
 
 // ── 18 활용 개요 ──
 { const s = base('활용 방안', '언덕 부담 지도 하나로, 다섯 가지 결정을 돕습니다');
@@ -381,7 +400,8 @@ const NCAND = () => V('V6.17.n_cand');
 
 // ── 19 활용 ① 시설 입지 ──
 { const s = base('활용 · 이동편의시설 입지', '후보 발굴부터 예산 효과까지 한 번에 비교합니다', { tsize:21 });
-  [['후보 발굴',`부담 상위 지역을 계단 기준 밖까지 포함해 찾음 → 후보 ${NCAND()}곳 (${(sc => /^[가-힣]{1,3}구$/.test(sc) ? sc.slice(0, -1) : sc)(Q('V6.scope', '관악구'))})`],['설치 여지','후보 주변 필지의 도로·공원 비율로 1차 거르기'],['효과 비교','시설 1기당 수혜 가구, 평균 단축 분, 휠체어 신규 도달'],['예산 검토','1억 원당 수혜 건물(고령자·휠체어)로 우선순위']].forEach((t, i) => {
+  [['후보 발굴', FALLBACK ? '부담 상위 지역을 계단 기준 밖까지 포함해 찾음 → 후보는 2차 분석 결과 반영 예정'
+                  : `부담 상위 지역을 계단 기준 밖까지 포함해 찾음 → 후보 ${NCAND()}곳 (${(sc => /^[가-힣]{1,3}구$/.test(sc) ? sc.slice(0, -1) : sc)(Q('V6.scope', '관악구'))})`],['설치 여지','후보 주변 필지의 도로·공원 비율로 1차 거르기'],['효과 비교','시설 1기당 수혜 가구, 평균 단축 분, 휠체어 신규 도달'],['예산 검토','1억 원당 수혜 건물(고령자·휠체어)로 우선순위']].forEach((t, i) => {
     const y = 1.45 + i*0.78; if (i) hr(s, 0.6, y-0.07, 4.7);
     T(s, String(i+1), { x:0.6, y, w:0.4, h:0.62, fontSize:20, bold:true, color: i==2 ? C.acc : C.ink, valign:'middle' });
     T(s, t[0], { x:1.05, y, w:1.25, h:0.62, fontSize:13, bold:true, color: i==2 ? C.acc : C.ink, valign:'middle' });
@@ -435,7 +455,7 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
   T(s, '돌봄 수요(독거노인·장애인) ↑', { x:0.6, y:4.43, w:2.2, h:0.25, fontSize:10, color:C.muted });
   T(s, '언덕 부담(HBI) →', { x:2.75, y:4.43, w:2.1, h:0.25, fontSize:10, color:C.muted, align:'right' });
   const sk21 = V('V6.21.skt'), kc21 = V('V6.21.kcb');      // 10/12 청사진: 외출(SKT)·소득(KCB)을 한 칸에 (둘 다 같은 대체 문구면 하나만)
-  const rk21 = has('V6.21.risk_dongs') ? R.fields['V6.21.risk_dongs'].value + '곳' : '-';   // 선택 키 (고위험 동 = 값이 0 보다 큰 동 중 상위 25%)
+  const rk21 = has('V6.21.risk_dongs') ? R.fields['V6.21.risk_dongs'].value + '곳' : (FALLBACK ? V('V6.21.risk_dongs') : '-');   // 선택 키 (고위험 동 = 값이 0 보다 큰 동 중 상위 25%)
   [[`고립 위험(왕복 +${RMIN()}분) 건물이 많은 동`, rk21],['고립 위험 상위 3개 동의 독거노인 수 (합, 공개 통계)', V('V6.21.alone_top3')],['외출(SKT)·소득(KCB)과 겹치는 동', sk21 === kc21 ? sk21 : `${sk21} · ${kc21}`]].forEach((r, i) => { if (i) hr(s, 5.3, 1.45+i*0.88-0.08, 4.1); stat(s, 5.3, 1.45+i*0.88, 4.1, r[0], r[1], { size:18, laterInk:true }); });
   bar(s, 5.3, 4.2, 0.55); T(s, '보건소 방문건강관리, 돌봄SOS, 방문 약료의 대상 선정에 씁니다', { x:5.52, y:4.2, w:3.9, h:0.55, fontSize:12, bold:true, color:C.ink, valign:'middle' });
   src(s, (has('V6.21.alone_top3_dongs') ? `고립 위험 상위 3개 동: ${R.fields['V6.21.alone_top3_dongs'].value} (독거노인: 서울시 동별 통계) / ` : '') + '외출·소득은 행정동 단위 보조 지표이며 상관 관찰입니다 / SKT는 60세 이상 기준'); }
@@ -521,10 +541,11 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
 if (pending.length) { console.error('!! 빈칸으로 그려지지 않은 누락 key: ' + pending.map(p => p.page + '장 ' + p.key).join(', ')); process.exitCode = 1; }
 if (page > 30) { console.error(`!! 슬라이드 ${page}장 — 30장 제한 초과`); process.exit(1); }
 const OUT = arg('--out') || (REAL ? '../deliverables/언덕위우리동네_기획서_final.pptx'
+          : FALLBACK ? '../deliverables/언덕위우리동네_기획서_대비책.pptx'
           : FAKE ? '../deliverables/_test_기획서_v6.pptx'
           : REH ? `../deliverables/_rehearsal_기획서_v6${BANDS === 'mix' ? '' : (MINB ? '_B' : '_A')}.pptx`
           : '../deliverables/_blank_기획서_v6.pptx');
-const MISS = arg('--missing') || path.join('data', REH ? `missing_v6${BANDS === 'mix' ? '' : (MINB ? '_B' : '_A')}.txt` : 'missing.txt');   // 공개 대역은 A·B 판을 나란히 보려고 따로
+const MISS = arg('--missing') || path.join('data', REH ? `missing_v6${BANDS === 'mix' ? '' : (MINB ? '_B' : '_A')}.txt` : FALLBACK ? 'missing_fallback.txt' : 'missing.txt');   // 공개 대역은 A·B 판을 나란히 보려고 따로
 const lines = [`# 기획서 v6 누락 목록 — source=${R.source}${R.src ? ', src=' + R.src : ''}, bands=${R.bands || 'hbi'}, ${new Date().toISOString().slice(0, 19)}`,
   `# 출력: ${OUT.replace('../', '')} (${page}장)`,
   ...missing.map(m => `누락: ${m.page}장, ${m.label}, ${m.need.join(' / ') || '-'}  [${m.key}]`),
