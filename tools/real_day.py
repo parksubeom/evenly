@@ -9,7 +9,7 @@ tools/real_day.py ─ [10/22 반출 결과 받은 날] 받은 반출 파일 → 
   1. 놓기: zip 이면 풀고, 방식 폴더(layer·register·gisbld·all)가 든 층을 찾아 그 안을 results/raw_export/ 로 복사.
      results/raw_export 에 이미 있던 것은 results/raw_export_old/<시각>/ 로 옮김 (지우지 않음). 받은 파일은 그대로 둠
   2. 점검: run_summary.txt (판 번호·멈춘 곳·방식별 빨강), 대표 방식(run_meta is_rep_mode), 결과 점검표 빨강, 대표 방식의 파일
-  3. 밖 도구: outside_elderly(고령인구) → outside_join_dong(독거노인) → public_baseline(공개 대조군, 분석한 구만)
+  3. 밖 도구: outside_elderly(고령인구) → outside_join_dong(독거노인) → public_baseline(공개 대조군, 분석한 구만) → [v6.3] outing_compare(SKT 지수가 있을 때)
   4. prepare_deck_data --expect real → prep_photos(15장 사진) → build_v6.js --expect real → check_deck → render_deck (_render/final)
      → deliverables/언덕위우리동네_기획서_final.pptx · .pdf (PDF 는 렌더링으로 확인한 그 파일)
   5. 판정 줄: 실제판 후보 / inputs.json 채우고 다시 / --later-ok 로 다시 / 대비책 판
@@ -34,7 +34,8 @@ STATIONS = os.path.join(ROOT, "data_public", "subway_stations.csv")
 # 대표 방식 폴더에 있어야 기획서 칸이 차는 파일 (없으면 그 칸이 누락으로 나옴)
 NEED = ["summary.csv", "grid_hbi.csv", "dong_hbi.csv", "run_meta.csv", "result_check.txt", "validation_sites.csv",
         "validation_routes.csv", "validation_ablation.csv", "intervention_summary.csv", "intervention_wait.csv", "sensitivity.csv"]
-OPT = ["isochrone_summary.csv", "siting_summary.csv", "dong_context.csv", "parcel_summary.csv", "validation_new_candidates.csv"]
+OPT = ["isochrone_summary.csv", "siting_summary.csv", "dong_context.csv", "parcel_summary.csv", "validation_new_candidates.csv",
+       "intervention_candidates.csv"]                     # [v6.3] 09 후보 자동 (17장)
 INPUT_RE = re.compile(r"^(team_name|team_display|V6\.13\.visit\d)$")          # deck/inputs.json 에서 꼭 채울 칸 (팀명·방문일)
 SURVEY_IN_RE = re.compile(r"^V6\.15\.(\d\.app|date)$")                                # 실측을 했으면 inputs.json (mapapp_min·survey_date)
 LATER_OK_RE = re.compile(r"^V6\.15\.\d\.(app|meas|model)$|^V6\.15\.date$|^V6\.16\.meas_r$|^V6\.21\.(skt|kcb)$|^V6\.22\.acc$")   # build_v6.js 와 같게
@@ -221,6 +222,10 @@ def main():
     else:
         say("\n── 공개 대조군: 도보 네트워크 파일 또는 grid_hbi.csv 없음 → 16장 공개데이터 칸이 누락으로 나옴")
         soft.append("공개 대조군 건너뜀")
+
+    if os.path.exists(os.path.join(rd, "points_SKT_60대이상유동인구_dong.csv")):   # [v6.3] 외출 비교 그림 (SKT 지수·KCB, 동 단위)
+        ok, _ = run("외출 비교 (outing_compare)", [py, os.path.join(ROOT, "tools", "outing_compare.py"), "--src", RAW])
+        ok or soft.append("outing_compare")
 
     # 4. 기획서
     say("\n[4] 기획서 (prepare → build → check_deck → 렌더링)")

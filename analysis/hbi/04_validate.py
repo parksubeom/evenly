@@ -158,7 +158,8 @@ top = v & (te >= np.nanquantile(te[v], 0.9))       # 경사 반영 시 가장 �
 ftop = v & (tf >= np.nanquantile(tf[v], 0.9))      # 평지 기준 상위 10%
 ab.append(["DEM 제외(평지 가정)", "경사 반영 상위10% 취약건물 중 평지 기준으로는 상위10%가 아닌 비율",
            round((top & ~ftop).sum() / max(top.sum(), 1), 3)])
-ab.append(["DEM 제외(평지 가정)", "그 건물 수 (평지 지도가 놓친 취약 건물)", int((top & ~ftop).sum()) if REP4 else ""])   # [v6.3] 기획서 16장 평지 지도가 놓친 ○○채
+_nm = int((top & ~ftop).sum())
+ab.append(["DEM 제외(평지 가정)", "그 건물 수 (평지 지도가 놓친 취약 건물)", (C.SMALL_LABEL if 0 < _nm < C.MIN_COUNT else _nm) if REP4 else ""])   # [v6.3] 기획서 16장 평지 지도가 놓친 ○○채
 ab.append(["DEM 제외(평지 가정)", "경사 반영 vs 평지 소요시간 순위상관(Spearman)", round(spearman(te[v], tf[v]), 3)])
 hi = v & (H >= C.HBI_BANDS[1])
 ab.append(["DEM 제외(평지 가정)", "HBI 1.8 이상 건물 중 평지 기준 소요시간이 중앙값 이하('양호')인 비율",

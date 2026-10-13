@@ -878,7 +878,7 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     P("V6.16.pub_miss", "공개데이터만 쓰면 놓치는 체감 부담 구간", ["results/public_baseline/compare_station.csv (실제 LX 결과와 비교)"], gv("ABL.pub_miss"), later="실제 결과 후")
     dmiss = next((r.get("value") for r in (R("validation_ablation.csv") or []) if r.get("metric", "").startswith("그 건물 수 (평지 지도가 놓친")), None)
     P("V6.16.dem_missed", "평지 지도가 놓친 취약 건물 수 (경사 반영 상위 10% 중 평지 기준 상위 10% 밖)", ["validation_ablation.csv (04, v6.3)"],
-      f"{f_int(num(dmiss))}채" if num(dmiss) is not None else None, optional=True)
+      f"{f_int(num(dmiss))}채" if num(dmiss) is not None else (dmiss or None), optional=True)
     P("V6.16.dem_top10", "높이(DEM)를 빼면 바뀌는 상위 10%", ["validation_ablation.csv"], gv("ABL.dem_top10"))
     st_ = (extra.get("abl") or {}).get(("계단 레이어 제외", "계단을 통행가능으로 잘못 가정할 때 휠체어 시간 과소추정 비율(평균)"))
     P("V6.16.stairs", "계단을 빼면 휠체어 시간 과소 계산", ["validation_ablation.csv"], f"평균 {f_pct(st_, 1)}" if st_ is not None else None)
