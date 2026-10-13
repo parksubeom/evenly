@@ -814,7 +814,7 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     P("V6.risk_def", "고립 위험 정의", [], f"격자 집 절반 이상이 왕복 {RM:g}분 이상 더" if r_min else f"격자 평균 HBI {HI:g} 이상", optional=True)
 
     # ── 14 사각지대 ──
-    pct = None
+    pct = med = None
     if ok_grid:
         fl = sorted(cv(g, "flat_min") for g in gT if cv(g, "flat_min") is not None)
         if fl:
@@ -822,6 +822,8 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
             near = [g for g in gT if cv(g, "flat_min") is not None and cv(g, "flat_min") <= med]
             pct = sum(1 for g in near if burden(g)) / len(near) if near else None
     P("V6.14.near_burden", '평지 기준 "가까운"(평지 왕복 중앙값 이하) 격자 중 부담 구간 비율', need_g, f"{pct * 100:.0f}" if pct is not None else None)
+    # [v6.3] '가까운 동네' 정의: 평지 기준 왕복 ○분 (격자 평지 왕복 중앙값의 중앙값) 안에 병원·약국이 있는 격자
+    P("V6.14.near_min", '"가까운 동네" 문턱: 평지 기준 왕복 분 (격자 중앙값)', need_g, f"{med:.0f}" if med is not None else None, optional=True)
     m0 = sm.get(T0, {})
     n_, sh_ = (m0.get(f"왕복 추가 {RM:g}분 이상 건물 수"), m0.get(f"왕복 추가 {RM:g}분 이상 비율")) if M else (m0.get(f"HBI {HI} 이상 건물 수"), m0.get(f"HBI {HI} 이상 비율"))
     P("V6.14.risk_bld", "고립 위험 건물 수·주거 비율", ["summary.csv"], f"{f_int(n_)}채 · 주거의 {sh_ * 100:.1f}%" if n_ is not None and sh_ is not None else None)
@@ -874,6 +876,9 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     gv = lambda k: (B.fields.get(k) or {}).get("value")
     P("V6.16.meas_r", "현장실측 예측 vs 실측 r", ["validation_routes.csv (measured_min 3개 이상)"], f"r = {gv('VALID.meas_r')}" if gv("VALID.meas_r") else None, later="실측 후")
     P("V6.16.pub_miss", "공개데이터만 쓰면 놓치는 체감 부담 구간", ["results/public_baseline/compare_station.csv (실제 LX 결과와 비교)"], gv("ABL.pub_miss"), later="실제 결과 후")
+    dmiss = next((r.get("value") for r in (R("validation_ablation.csv") or []) if r.get("metric", "").startswith("그 건물 수 (평지 지도가 놓친")), None)
+    P("V6.16.dem_missed", "평지 지도가 놓친 취약 건물 수 (경사 반영 상위 10% 중 평지 기준 상위 10% 밖)", ["validation_ablation.csv (04, v6.3)"],
+      f"{f_int(num(dmiss))}채" if num(dmiss) is not None else None, optional=True)
     P("V6.16.dem_top10", "높이(DEM)를 빼면 바뀌는 상위 10%", ["validation_ablation.csv"], gv("ABL.dem_top10"))
     st_ = (extra.get("abl") or {}).get(("계단 레이어 제외", "계단을 통행가능으로 잘못 가정할 때 휠체어 시간 과소추정 비율(평균)"))
     P("V6.16.stairs", "계단을 빼면 휠체어 시간 과소 계산", ["validation_ablation.csv"], f"평균 {f_pct(st_, 1)}" if st_ is not None else None)
@@ -1007,9 +1012,16 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
             trows.append({"kind": r.get("kind", ""), "name": r.get("facility", ""), "loc": loc, "n_risk": r.get(rk_, ""),
                           "fac": f"{tn.get(r.get('facility_type'), r.get('facility_type') or '-')} · 높이 {r.get('rise_m') or '-'}m · {r.get('length_m') or '-'}m",
                           "benefit": r.get("n_benefit_any", ""), "per100m": r.get("per100m", ""), "rx": r.get("prescription", ""),
-                          "wheel_now": r.get("wheel_now_m", ""), "saved": r.get("mean_saved_min", "")})
+                          "wheel_now": r.get("wheel_now_m", ""), "saved": r.get("mean_saved_min", ""), "elder30": r.get("n_saved_30s", "")})
         B.table("V6.17.cand", "후보·선정지 비교표 (09 후보 자동, 격자 단위)", ["intervention_candidates.csv (v6.3)"], trows)
         n_fac = sum(1 for r in crs if r.get("kind") == "후보" and r.get("prescription") == "시설 검토")
+        try:                                                     # [v6.3] 처방 규칙 (05 run_meta 의 cand_rule = 고립 위험 채, 1억 원당, 억 원, m)
+            mr, mp, ce, ra = (rm.get("cand_rule") or "").split(",")
+            P("V6.17.cand_rule", "처방 규칙 문구", ["run_meta.csv (cand_rule, v6.3)"],
+              f"{float(ra):g}m 안 기존 시설 → 기존 시설 연계 / 고립 위험 {int(float(mr))}채 이상이고 1억 원당 수혜 {float(mp):g}채 이상 → 시설 검토 / "
+              f"그 밖 → 난간·쉼터·계단 정비 + 방문돌봄 (시설 1곳 {float(ce):g}억 원 가정)", optional=True)
+        except ValueError:
+            pass
         P("V6.17.n_facility", "자동 후보 중 '시설 검토' 수", ["intervention_candidates.csv (v6.3)"], f"{n_fac}곳")
     else:
         B.table("V6.17.cand", "후보·선정지 비교표 (09 후보 자동, 격자 단위)", ["intervention_candidates.csv (v6.3)"], None)
@@ -1028,6 +1040,9 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     P("V6.14.house_mix", "고립 위험 집 종류 구성", ["summary.csv (05, v6.3)"], mix or None, optional=True)
     P("V6.14.per_house", "집당 배분 어르신", ["summary.csv (05, v6.3)"], f"집당 {num(per_h):g}명" if num(per_h) is not None else None, optional=True)
     rhos = [(k.split("왕복 ")[-1], v) for k, v in m3.items() if k.startswith("기준 민감도: 행정동 순위상관")]
+    rr10 = [(k, num(v)) for k, v in rhos if f"+{RM:g}분" in k and num(v) is not None]
+    P("V6.29.band_rho_short", f"고립 위험 문턱 {RM:g}분 대비 다른 문턱의 동 순위상관", ["summary.csv (05, v6.3)"],
+      " · ".join(f"{[x for x in re.findall(r'[+]([0-9.]+)분', k) if float(x) != RM][0]}분 {v:.2f}" for k, v in rr10) or None)
     P("V6.29.band_rho", "기준 민감도: 5·10·15분 동 순위상관", ["summary.csv (05, v6.3)"],
       " · ".join(f"{k.replace(' vs ', '↔').replace('+', '')} ρ = {num(v):.2f}" for k, v in rhos if num(v) is not None) or None)
     P("V6.22.bus", "정류장까지 체감 부담인 격자 수 (버스정류장 기준)", ["grid_hbi.csv (목적지 bus)"], f"{sum(1 for g in gB if burden(g))}곳" if okB else None)

@@ -1,4 +1,4 @@
-# 언덕 위 우리동네 – 분석 코드 따라하기 안내서 (v6)
+# 언덕 위 우리동네 – 분석 코드 따라하기 안내서 (v6, 판 v6.3)
 
 > **이 문서만 보고 따라 하면 됩니다.** 파이썬을 처음 써도 괜찮습니다.
 > 각 코드 파일 맨 위에도 "이 파일이 뭘 하는지, 결과를 어떻게 보는지"가 적혀 있습니다.
@@ -26,6 +26,13 @@ python run_all.py                ← 분석. 멈추면 고친 뒤 python run_all
 - **대상 구** (`target_gu`): 출발점(집)은 대상 구 안 건물만. 옆 구(`neighbor_gu`)는 길·목적지로만 씀. 비우면 v5 와 같이 자료 전체
 - [v6.2] 모든 명령(setup·check·run_all·01~14)은 화면 글자를 `work/logs/` 에 저장 (**반출하지 않음**, `lib/runlog.py`. 가장 최근 것은 `notepad work\logs\마지막.log`). `run_all.py` 는 단계별 요약 한 장을 `output/run_summary.txt` 에(값 없음), 자료 구조를 `output/schema/schema.txt` 에 저장. 멈추면 화면에 **메모 카드 다섯 줄**(오류 번호·단계·오류 종류·내용·할 일)이 나옴 → 그 다섯 줄만 손으로 적어 오면 됨 (반출하지 않아도 됨). 카드·오류 글자의 값은 모양만 (`<한글 3자>`)
 - `output/run_meta.csv`: 대상 구, 건물 용도 방식, 건축물대장 연결률, AREA_BBOX 와 이유. [v6.2] `hbi_bands`(체감 부담·고위험 HBI 문턱)·`extra_min_bands`(왕복 추가 분 문턱) — 기획서 생성기가 이 값을 읽어 구간을 적음
+
+- [v6.3] 바뀐 것 (mapping 새 키는 setup 이 기본값으로 적음):
+  - **후보 자동** (`auto_candidates` = 5, 0 이면 안 함): 09 가 고립 위험 집(왕복 `risk_min` = 10분 이상 더)이 가장 많은 격자 K곳에서, 그 집들의 고령자 최단 경로가 가장 많이 지나는 가파른 구간(계단 먼저, 경사 1/12 이상, 수평 120m 상한)의 양 끝에 수직·경사형 엘리베이터를 놓아 봄 (봉천과 같은 시간 식, 목적지는 의료만, ALL 에는 넣지 않음). 결과 `output/intervention_candidates.csv` (격자 단위: 동·격자 가운데·격자 고립 위험 집 수·시설 종류·높이 차·길이·지금 휠체어 길·수혜·1억 원당·처방). **시설 양 끝 좌표는 반출하지 않음** (`work/intervention_candidates_ends.csv` 에만). 처방 규칙: 500m(`existing_radius_m`) 안 기존 이동편의시설(`external/existing_facilities.csv`) → 기존 시설 연계 / 고립 위험 30채(`cand_min_risk`) 이상이고 1억 원당 수혜 1동(`cand_min_per100m`) 이상 → 시설 검토 / 그 밖 → 난간·쉼터·계단 정비 + 방문돌봄 (시설 1곳 `facility_cost_eok` = 40억 원 가정). 시설 좌표가 하나도 없어도 09 를 돎
+  - `extra_min_bands` 기본 3,5,10,**15** (기준 민감도), 고립 위험 문턱은 `risk_min` (가장 큰 값이 아님)
+  - 05 summary: 고립 위험 집 종류 구성(단독·다가구·연립·다세대·아파트·공동 기타, 1~4채 종류는 "5채 미만"), 집 어르신 추정·집당 배분 어르신(전체, 단독·다가구, 공동주택. 종류별은 빼기 검사를 통과할 때만 숫자, 못 하면 단독·다가구는 "5명 이상/미만" 판정만), 고립 위험 격자 안 독거노인 추정 합, 기준 민감도(5·10·15분 행정동 순위상관). dong_hbi 맨 뒤 `n_riskcell`·`alone65_riskcell_est` (독거노인 × 격자 안 주거 연면적 ÷ 동 주거 연면적, 1~4채이거나 낸 연면적과 빼서 1~4채가 남으면 빈 칸). 결과 점검표 `집당 배분 어르신` (단독·다가구 집당 5명 이상이면 빨강 → 층수·용도 방식 확인). `external/elderly_pop.csv`·`alone65.csv`·`pop60.csv` 는 채워서 반입
+  - 10·14 **SKT 는 지수만** (원값 합계를 내지 않음): 60세 이상 = 유동 ÷ 60세 이상 인구(`external/pop60.csv`), 낮 시간 = 동 평균 대비. `points_SKT_*_dong.csv` 는 adm_cd·n_bld·hbi_mean·index, 격자 파일 없음. dong_context 의 SKT 칸은 skt_res_share(주거 칸 몫)·skt_res_index
+  - 04: od_pairs 의 `measured_slow_min`(천천히 걷기 = 어르신 걸음 흉내 잰 분)이 있으면 validation_routes 맨 뒤, 3개 이상이면 고령자 예측과 상관 (validation_measured)
 
 아래 v5 설명(단계별 파일)은 그대로 유효합니다.
 
@@ -200,6 +207,7 @@ python 01_inspect.py
 - [ ] `dong_hbi.csv` — 행정동 결과 (weight_all·weight_high 열 포함 → 밖에서 고령인구 추정). [v6.2] 맨 뒤 `n_addNm`·`share_addNm`·`weight_addNm`. 연면적(weight_high·weight_addNm)은 1~4채 몫이 드러나면 빈 칸, weight_addNm 은 check 가 고른 방식 폴더에만
 - [ ] `validation_sites.csv`, `validation_routes.csv`, `validation_new_candidates.csv`, `validation_ablation.csv` (17·18장). [10/12] 선정지 원 안 건물이 1~4채면 hbi_mean·share_high·백분위 빈 칸
 - [ ] `validation_measured.csv` — [v5] 실측 vs 예측 상관계수 (실측 3구간 이상일 때, 17장)
+- [ ] `intervention_candidates.csv` — [v6.3] 후보 자동·선정지 비교표 (17장). 격자 단위, 시설 양 끝 좌표 없음. 반출 설명: "후보 위치는 250m 격자 가운데·행정동만, 시설 양 끝 좌표·건물 단위 정보 없음 (수혜 건물 1~4채는 '5채 미만')"
 - [ ] `intervention_summary.csv`, `intervention_grid.csv`, `intervention_dong.csv` — [v5] 시설 설치 효과 (22·23장). 맨 뒤 열 n_exit_high·weight_exit_high·n_exit_mid (summary), weight_exit_high (dong) = 설치 후 HBI 1.8(1.3) 아래로 내려온 주거 건물 (연면적은 MIN_COUNT 개 미만이면 빈 칸). [v6.2] summary 맨 뒤에 n_saved_30s·n_saved_60s(고령자 왕복 30초·60초 이상 단축), wheel_cut_n·wheel_cut_p25_m·p50_m·p75_m(휠체어 시간이 준 건물의 휠체어 길 길이 감소 m. 음수 = 설치 후 길이 더 김(설치 전 길이 짧지만 가파른 길). 100채(`WHEEL_CUT_MIN`) 미만이면 빈 칸), rise_m·pass_s(시설 높이 차·통과 초). [v6.2] `intervention_wait.csv` = 시설마다 대기 30·60·90초(config `WAIT_SENS_S`)로 바꿔 다시 계산한 의료 목적지 수혜 건물 수(n_benefit·n_saved_30s·wheel_benefit, 수만, 연면적 없음). 기획서 29장 '엘리베이터 설정' 칸. 연면적 칸은 의료·대표 방식만, 1~4채이거나 05·09 의 다른 연면적과 빼서(겹치지 않는 여럿의 합 포함) 1~4채가 남으면 빈 칸. [10/12] summary 의 `max_saved_min`(최대 단축, 늘 한 건물 값) → `saved_p95_min`(95% 분위 단축, 수혜 100채 미만이면 빈 칸). 맨 뒤 `n_benefit_any` = 고령자 왕복 30초 이상(`ANY_ELDER_S`) 또는 휠체어 왕복 1분 이상(새로 도달 포함) 준 건물 수 (기획서 20장 '1억 원당 수혜'). [10/12 판정] **시설 단위 건물 수가 1~4 면 "5채 미만"** (summary 의 n_benefit·wheel_newly_reachable·wheel_benefit·n_exit_high·n_exit_mid·n_saved_30s·n_saved_60s·wheel_cut_n·n_benefit_any, intervention_wait 의 세 수. 0 은 그대로). 시설 하나 줄에서 가린 칸은 ALL 줄의 같은 칸도 빈 칸 (ALL − 다른 시설로 되살아나지 않게). 시간 값(mean_saved_min·saved_p95_min·sum_saved_bld_min·hbi_before·hbi_after, 격자의 mean_saved_min)도 대표 방식에서만 내고, 수혜 1~4채이거나 같은 목적지의 다른 시간 값(05 격자·동 HBI 평균 포함)과 빼서 1~4채가 남으면 빈 칸
 - [ ] `points_summary.csv`, `points_*_dong.csv`, `points_*_grid.csv` — [v5] 점 자료 결합 (개수·값 합계만, 좌표 없음). [10/12] 격자의 hbi_mean 은 대표 방식만
 - [ ] `legal_summary.csv`, `legal_*.csv` — [v5] 법정동별 교통사고 건수 (행 단위 사고 없음)
@@ -223,10 +231,13 @@ python 01_inspect.py
 | 파일 | 내용 | 상태 |
 |---|---|---|
 | `sites.csv` | 서울시 2025 선정지 5곳 좌표 (lon=경도, lat=위도) | 입력됨 (근사 좌표, note 열 참고. 화곡동은 수정 권장) |
-| `od_pairs.csv` | 검증 구간 출발·도착 좌표, `measured_min` = 실측 분 | 대현산배수지공원(서울시 발표 휠체어 약 770m 우회)과 [v6.2] 봉천 선정지 계단(서울시 발표 계단을 피해 200m 이상 우회) 입력됨. [v6.2] 관악 현장실측 ①~④ 는 좌표 입력됨(관악 실측 기록지와 같은 값), measured_min 은 실측 뒤 직접 입력. ⑤(강서)는 좌표 비어 있음 |
+| `od_pairs.csv` | 검증 구간 출발·도착 좌표, `measured_min` = 실측 분, [v6.3] `measured_slow_min` = 천천히 걷기 실측 분 (열 순서: 이름, 출발 경도·위도, 도착 경도·위도, 잰 분, 천천히 잰 분, 메모) | 대현산배수지공원(서울시 발표 휠체어 약 770m 우회)과 [v6.2] 봉천 선정지 계단(서울시 발표 계단을 피해 200m 이상 우회) 입력됨. [v6.2] 관악 현장실측 ①~④ 는 좌표 입력됨(관악 실측 기록지와 같은 값), measured_min 은 실측 뒤 직접 입력. ⑤(강서)는 좌표 비어 있음 |
 | `dong_boundary.geojson` | 서울 행정동 경계 426개 (ADM_CD = 행안부 10자리, ADM_CD_STAT = 통계청 8자리) | 입력됨 |
 | `pharmacy.csv` | 약국 `name, lon, lat` | 비어 있음 (없어도 의료시설 기준으로 분석됨) |
-| `elderly_pop.csv` | 행정동 코드 `adm_cd`, 65세 이상 인구 `pop65` | 비어 있음 → 반출 후 밖에서 `tools/outside_elderly.py` 로 추정 |
+| `elderly_pop.csv` | 행정동 코드 `adm_cd`, 65세 이상 인구 `pop65` | [v6.3] 채워 넣음 (행정안전부 주민등록 2026-08-31, `tools/prep_elderly_pop.py`). 05 가 고령인구 추정·집당 배분을 냄 |
+| `alone65.csv` | [v6.3] 행정동 코드 `adm_cd`, 독거노인 `alone65` (서울시 동별 독거노인 현황, `tools/prep_alone65.py`) | 채워 넣음 (421개 동) |
+| `pop60.csv` | [v6.3] 행정동 코드 `adm_cd`, 60세 이상 인구 `pop60` (SKT 외출 지수 분모) | 채워 넣음 |
+| `existing_facilities.csv` | [v6.3] 기존 이동편의시설 (서울시 공개 자료, 좌표 근거 칸 포함). 09 처방의 '500m 안 기존 시설' (status 가 existing 으로 시작하는 줄만) | 채워 넣음 (15곳 중 좌표 12곳) |
 | `pharmacy.csv` 만들기 | 공개 약국 파일 → `python tools/prep_public.py pharmacy 원본.csv [EPSG:5174]` (반입 전, 밖에서) | [v5] 서울·영업 중만 남김 |
 | `subway_elevators.csv` | [v5] 엘리베이터 있는 지하철역 출입구 `name, lon, lat` → 목적지 `station_ev` (휠체어 결과 기준). `python tools/prep_public.py elevator 원본.csv` 로 만듦 | 머리 줄만 (반입 전 채우기) |
 | `interventions.csv` | [v5] 설치 효과를 볼 시설: `name, type(elevator/monorail/vertical/ramp), a_lon, a_lat(아래), b_lon, b_lat(위), wait_s, speed, status(planned/existing), note`. wait_s·speed 를 비우면 `config.FACILITY` 기본값. [v6.2] 수직 엘리베이터(vertical) 시간 = 대기 + a·b 높이 차 ÷ speed(오르내리는 속도, 기본 1m/s) + 끝점 걷기. 높이 차는 09 가 DEM 에서 재므로 적지 않음 (v6.1 까지는 직선거리 ÷ speed) | 대현산 모노레일 + 2025 선정지 5곳 입력됨. [10/12] **봉천동 비안어린이공원 인근 줄은 a·b 를 미리 넣음** (수직 엘리베이터, 관악 실측 기록지 2쪽 예시와 같은 값: 연속수치지형도 계단 길 양 끝, 서울시 위치도와 같은 띠) → 관악 자료면 run_all 이 09·13 을 자동으로 돌림. 현장에서 다르면 고침. 나머지 양 끝 좌표는 현장실측 후 입력. 13_siting.py 도 이 좌표를 씀 |

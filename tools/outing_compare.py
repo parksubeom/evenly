@@ -157,7 +157,7 @@ def main():
             axs = np.atleast_1d(axs)
             for ax, t in zip(axs, ts):
                 m = tiers == t
-                strip(ax, [ox[m & ~hi], ox[m & hi]], ["낮음", "높음"])
+                strip(ax, [ox[m & ~hi], ox[m & hi]], [f"부담 낮음\n({(m & ~hi).sum()})", f"부담 높음\n({(m & hi).sum()})"])
                 pv = next(s_[6] for s_ in summ if s_[0] == t)
                 ax.set_title(f"{t}\np = {pv}", fontsize=8)
             axs[0].set_ylabel("외출 지수", fontsize=9)

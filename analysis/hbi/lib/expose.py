@@ -98,11 +98,11 @@ def removal_leak(nB, subs, mc, budget=50000):
     return bool(r[max(1, nB - mc + 1):nB].any())
 
 
-def publishable(S, pool, nb, mc):
+def publishable(S, pool, nb, mc, strict=False):
     """[v6.3] 집합 S(건물 번호 배열)의 값을 내도 되는가 (09 안에 있던 것을 05 도 쓰게 옮김. 계산은 같음)
     pool: 이미 공개한(또는 공개할 수 있는) 값의 건물 집합들, nb: 건물 전체 수, mc: MIN_COUNT
       0채면 됨, 1 ~ mc-1 채면 안 됨, S 에서 S 안의 공개 집합 몇 개를 빼거나, S 를 품는 공개 집합에서 S 와 다른 공개 집합을 빼서
-      1 ~ mc-1 채가 남으면 안 됨"""
+      1 ~ mc-1 채가 남으면 안 됨. [v6.3] strict = 겹치지만 서로 포함하지 않는 공개 집합과 양쪽 차이가 모두 1 ~ mc-1 채여도 안 됨 (05 의 새 비율 값)"""
     n = len(S)
     if n == 0:
         return True
@@ -120,6 +120,8 @@ def publishable(S, pool, nb, mc):
             subs.append(q)
         elif k == n and len(q) > n:
             sups.append(q)
+        elif strict and 0 < k and 0 < n - k < mc and 0 < len(q) - k < mc:
+            return False                         # [v6.3 검토] 겹치지만 포함하지 않는 집합: 양쪽 차이가 모두 1~4채면 W(S) − W(q) = W(S\q) − W(q\S) 로 몇 채 몫의 경계가 좁게 나옴
     if removal_leak(n, subs, mc):
         return False
     for P in sups:

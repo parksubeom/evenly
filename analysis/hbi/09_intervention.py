@@ -185,10 +185,13 @@ if bd:
 #     넘으면 경사형 엘리베이터(대기 + 길이 ÷ 속도). 봉천(사람이 넣은 시설)과 같은 식. 높이 = 02 의 노드 높이(DEM 5m)
 #  ④ 다른 시설과 같은 계산 (목적지는 DT 만, ALL 에는 넣지 않음). 양 끝 좌표는 반출하지 않음 (work/intervention_candidates_ends.csv 만)
 DT = "medical" if "medical_hbi" in b else (targets(b)[0] if targets(b) else None)
+REP = rep_mode() == C.BUILDING_ATTR_MODE                         # [v6.2] 연면적·시간 값은 대표 방식만. [v6.3 검토] 후보 자동·건물 수 칸도 대표 방식만
 gx = np.floor(X / C.GRID).astype(np.int64)
 gy = np.floor(Y / C.GRID).astype(np.int64)
 CANDS = []                                                       # 후보마다 정보 (반출 표·화면용)
-if C.AUTO_CANDIDATES > 0 and DT in dest and C.RISK_MIN:
+if C.AUTO_CANDIDATES > 0 and DT in dest and C.RISK_MIN and not REP:
+    log(f"  후보 자동: 대표 방식({rep_mode() or '정할 수 없음'})에서만 함 (방식끼리 같은 칸의 수를 빼서 몇 채가 드러나지 않게) → 이 방식은 건너뜀")
+if C.AUTO_CANDIDATES > 0 and DT in dest and C.RISK_MIN and REP:
     from lib.model import directed, elder_time
     from lib.qgraph import Graph
     addT = (b[f"{DT}_t_elder"] - b[f"{DT}_t_flat"]) / 60
@@ -239,6 +242,7 @@ if C.AUTO_CANDIDATES > 0 and DT in dest and C.RISK_MIN:
         rr["h"].add(h)
         rr["st"] = rr["st"] or any(STEEP.get(min(x0, x1) * N + max(x0, x1), False) for x0, x1 in zip(sub[:-1], sub[1:]))
     used_nodes = set()
+    cand_mids = [(nodes[f0] + nodes[f1]) / 2 for f0, f1 in fac_nodes]   # 사람이 넣은 시설·앞 후보의 가운데점
     for nr, nc, k in cells:
         if len(CANDS) >= C.AUTO_CANDIDATES:
             break
@@ -270,6 +274,9 @@ if C.AUTO_CANDIDATES > 0 and DT in dest and C.RISK_MIN:
                 continue
             if any(min(np.hypot(*(nodes[na_] - nodes[f0])), np.hypot(*(nodes[nb2] - nodes[f1]))) < 30 for f0, f1 in fac_nodes):
                 continue                                         # 사람이 넣은 시설(봉천 등)과 같은 자리
+            mid = (nodes[na_] + nodes[nb2]) / 2
+            if any(np.hypot(*(mid - m0)) < C.CAND_MIN_GAP_M for m0 in cand_mids):
+                continue                                         # [v6.3 검토] 앞 후보와 같은 길의 이웃 구간 (수혜 집이 겹침)
             score = (rr["st"], nh_, rise)                        # 계단이 든 구간 먼저, 지나는 집이 많은 순, 높이 차 큰 순
             if best is None or score > best[0]:
                 best = (score, na_, nb2, rise, rr["nodes"], nh_)
@@ -284,6 +291,7 @@ if C.AUTO_CANDIDATES > 0 and DT in dest and C.RISK_MIN:
         t = base["wait_s"] + (rise / base["speed"] if typ == "vertical" else straight / base["speed"])
         tw, lw = route(N, e, s, na_, nb2, mode="wheel")         # 지금 휠체어로 아래 끝 → 위 끝 (시간 최소 길의 길이)
         used_nodes |= set(nds.tolist())
+        cand_mids.append((nodes[na_] + nodes[nb2]) / 2)
         nm = f"후보{len(CANDS) + 1}"
         kd = -1
         if which is not None:
@@ -291,7 +299,8 @@ if C.AUTO_CANDIDATES > 0 and DT in dest and C.RISK_MIN:
             kd = int(wc[0])
         CANDS.append(dict(name=nm, cx=cx, cy=cy, n_bld=nc, n_risk=nr, stair=bool(isst), houses=nh, typ=typ, rise=rise, straight=straight,
                           t=t, wheel_now=(lw if np.isfinite(lw) else None), a=na_, b=nb2, dong=kd))
-        fac.append((nm, "candidate", (na_, nb2, float(t), straight), {"rise": round(rise, 1), "pass": round(float(t), 1), "wait": float(base["wait_s"]), "typ": typ}))
+        fac.append((nm, "candidate", (na_, nb2, float(t), straight), {"rise": int(round(rise)), "pass": int(round(t, -1)), "wait": float(base["wait_s"]), "typ": typ}))
+        # [v6.3 검토] 반출 칸은 높이 1m·길이 10m·통과 10초 단위 (0.1 단위면 공개 길·지형으로 양 끝 노드를 좁힐 수 있어서). 화면(work/logs)은 그대로
         log(f"  {nm}: 격자 ({cx:.0f}, {cy:.0f}){' ' + dname[kd] if kd >= 0 else ''} 고립 위험 집 {nr}채 → 그 집들의 길이 가장 많이 지나는 "
             f"{'계단' if isst else '경사'} 구간 (지나는 집 {nh}채), 높이 차 {rise:.1f}m · 수평 {straight:.0f}m → "
             f"{'수직' if typ == 'vertical' else '경사형'} 엘리베이터 통과 {t / 60:.1f}분, 지금 휠체어 길 "
@@ -577,6 +586,17 @@ for w_ in wrows:                                                 # 대기시간 
             cblank += 1
 if cblank:
     log(f"  건물 수 가림: {cblank}칸을 '{C.SMALL_LABEL}' 또는 빈 칸으로 (시설 단위 건물 수 1~4)")
+if not REP:                                                      # [v6.3 검토] 대표 방식 밖: 건물 수 칸도 비움 (방식끼리 같은 시설·칸의 수를 빼면 1~4채가 드러남)
+    for it in R:
+        for c in CNT_COLS:
+            it["row"][c] = ""
+    for w_ in wrows:
+        w_[4] = w_[5] = w_[6] = ""
+    for g_ in grows:
+        g_[4] = ""
+    for d_ in drows:
+        d_[3] = ""
+    log(f"  대표 방식({rep_mode() or '정할 수 없음'})이 아니라 건물 수 칸을 비움 (시설 높이·통과만)")
 np.savez_compressed(os.path.join(C.WORK, "intervention_sets.npz"), x=X, y=Y, names=np.array([n for n, _ in scen]),   # [v6.2] 노출 검사용 (work, 반출 안 함)
                     rowkey=np.array([f"{it['si']}|{it['T']}" for it in R]),                                           # summary 줄 순서
                     drowkey=np.array([f"{it['si']}|{it['T']}|{k}" for it in R for k in it.get("dkeys", [])]),         # 동 표 줄 순서 (k = 동 번호)
@@ -632,23 +652,23 @@ if DT and (CANDS or any(not c_ for c_ in is_cand)):
         kk = int(np.floor(cx / C.GRID)) * 10**7 + int(np.floor(cy / C.GRID))
         incell = vD & (ckey_all == kk)
         nbc = int(incell.sum())
-        nrk = int((incell & (addD >= C.RISK_MIN)).sum()) if (nbc >= C.MIN_COUNT and C.RISK_MIN) else ""
+        nrk = int((incell & (addD >= C.RISK_MIN)).sum()) if (nbc >= C.MIN_COUNT and C.RISK_MIN and REP) else ""
         n_any = it["n_any"]
-        per = round(n_any / RR["cost_eok"], 2) if n_any >= C.MIN_COUNT else None
+        per = round(n_any / RR["cost_eok"], 2) if (n_any >= C.MIN_COUNT and REP) else None
         near = float(np.min(np.hypot(EX[:, 0] - cx, EX[:, 1] - cy))) if len(EX) else None
         row = it["row"]
         crows.append(["후보" if c else ("이미 있는 시설" if st_ == "existing" else "선정지·입력 시설"), fname,
                       dcode[kd] if kd >= 0 else "", dname[kd] if kd >= 0 else "", cx, cy, nbc if nbc >= C.MIN_COUNT else "", nrk,
-                      typ, info["rise"], round(ln_), info["pass"], round(wn / 10) * 10 if wn is not None else "없음",
-                      row[22], row[10], row[4], per if per is not None else ("0" if n_any == 0 else ""),
-                      int(round(near / 50) * 50) if near is not None and near <= 3000 else "", prescribe(nrk, per, near)])
+                      typ, info["rise"], (int(round(ln_, -1)) if c else round(ln_)), info["pass"], round(wn / 10) * 10 if wn is not None else "없음",
+                      row[22], row[14], row[10], row[4], per if per is not None else ("0" if (n_any == 0 and REP) else ""),
+                      int(round(near / 50) * 50) if near is not None and near <= 3000 else "", prescribe(nrk, per, near) if REP else ""])
     log(f"  후보·선정지 비교표: {len(crows)}줄 (처방 규칙: 고립 위험 {RR['min_risk']}채 이상 + 1억 원당 {RR['min_per100m']:g}동 이상 → 시설 검토, "
         f"{RR['radius_m']:g}m 안 기존 시설 → 연계, 그 밖 → 난간·쉼터·계단 정비 + 방문돌봄. 시설 1곳 {RR['cost_eok']:g}억 원 가정)")
     for r_ in crows:
-        log(f"    {r_[1]}: {r_[3] or '동 모름'}, 고립 위험 {r_[7]}채, {r_[8]} 높이 {r_[9]}m, 수혜 {r_[13]}, 1억 원당 {r_[16] or '-'} → {r_[18]}")
+        log(f"    {r_[1]}: {r_[3] or '동 모름'}, 고립 위험 {r_[7]}채, {r_[8]} 높이 {r_[9]}m, 수혜 {r_[13]} (고령자 30초 {r_[14]}), 1억 원당 {r_[17] or '-'} → {r_[19] or '-'}")
 write_csv(os.path.join(C.OUTPUT, "intervention_candidates.csv"),
           ["kind", "facility", "adm_cd", "adm_nm", "cell_x", "cell_y", "n_bld_cell", f"n_risk_{C.RISK_MIN:g}m" if C.RISK_MIN else "n_risk",
-           "facility_type", "rise_m", "length_m", "pass_s", "wheel_now_m", "n_benefit_any", "wheel_benefit", "mean_saved_min",
+           "facility_type", "rise_m", "length_m", "pass_s", "wheel_now_m", "n_benefit_any", "n_saved_30s", "wheel_benefit", "mean_saved_min",
            "per100m", "existing_m", "prescription"], crows)
 
 write_csv(os.path.join(C.OUTPUT, "intervention_summary.csv"),

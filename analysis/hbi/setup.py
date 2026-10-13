@@ -276,6 +276,9 @@ def main():
     root = os.path.abspath(root)
     old = M.read_raw()
     vals = dict(old)                      # mapping.txt 에 사람이 적은 값(대상 구 등)은 그대로 둠
+    if (vals.get("extra_min_bands") or "").replace(" ", "") == "3,5,10":   # [v6.3] v6.2 기본값이 남은 mapping → v6.3 기본값 (15분 더함)
+        vals["extra_min_bands"] = M.DEFAULTS["extra_min_bands"][0]
+        print(f"  [v6.3] mapping.txt 의 extra_min_bands = 3,5,10 (v6.2 기본값) → {vals['extra_min_bands']} 로 바꿈 (기준 민감도)")
     cfg = {}
 
     hr("1. 폴더 훑기")

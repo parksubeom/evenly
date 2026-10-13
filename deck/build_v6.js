@@ -335,6 +335,9 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
   T(s, '예시: 김순자 할머니의 귀갓길 (편도)', { x:5.3, y:2.62, w:4.1, h:0.3, fontSize:11.5, bold:true, color:C.muted });
   T(s, [{ text:'14.3분', options:{ color:C.acc, bold:true } }, { text:'  ÷  9.4분  =  ', options:{ color:C.ink } }, { text:'1.52배', options:{ color:C.acc, bold:true } }], { x:5.3, y:2.95, w:4.1, h:0.55, fontSize:20, valign:'middle' });
   T(s, '"분"이라 누구나 이해하고, 시설 설치 전후를 같은 잣대로 비교할 수 있습니다. 비율이라 보행속도 가정에도 덜 흔들립니다.', { x:5.3, y:3.6, w:4.1, h:1.1, fontSize:12, color:C.text, lineSpacingMultiple:1.12 });
+  // [v6.3] 고립 위험 문턱의 근거 (5장 420m 와 같은 출처, 고령자 속도 0.8m/s = 모델 기본값)
+  T(s, [{ text:`왕복 +${RMIN()}분의 근거  `, options:{ bold:true, color:C.ink } }, { text:'후기고령자 평균 이동거리 420m ÷ 어르신 걸음 0.8m/s ≈ 편도 9분. 왕복 10분이 더 걸리면 하루에 감당하는 거리를 한 번 더 걷는 셈입니다.', options:{ color:C.text } }],
+    { x:0.6, y:3.62, w:4.3, h:0.95, fontSize:11, lineSpacingMultiple:1.12 });
   src(s, `체감 부담은 HBI(배수), 고립 위험은 왕복 추가 시간(분)으로 판정 / 문턱(${HB()}·${RMIN()}분)은 실제 관악 결과로 확정`); }
 
 // ── 13 안심구역 ──
@@ -399,7 +402,27 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
 
 // ── 17 우선 검토 후보 ──
 const NCAND = () => V('V6.17.n_cand');
-{ const s = base('정책 제안' + ((REH || FALLBACK) ? ' · ' + SCOPE : ''), () => FALLBACK ? '어디부터 무엇을: 우선 검토 후보' : `어디부터 무엇을: 우선 검토 후보 ${NCAND()}곳`);
+// [v6.3] 09 후보 자동 결과(intervention_candidates.csv)가 있으면 후보·선정지 비교표 (후보별 수혜·1억 원당·규모별 처방), 없으면 v6.2 격자 표
+const CANDT = (R.tables['V6.17.cand'] && R.tables['V6.17.cand'].rows && R.tables['V6.17.cand'].rows.length) ? R.tables['V6.17.cand'].rows : null;
+if (CANDT) {
+  const s = base('정책 제안' + ((REH || FALLBACK) ? ' · ' + SCOPE : ''), () => `어디부터 무엇을: 자동 후보 ${CANDT.filter(r => r.kind === '후보').length}곳 중 시설 검토 ${V('V6.17.n_facility')}`);
+  const rows = [['위치', '고립 위험 집', '시설 (자동 배치)', '수혜 (고령자)', '1억 원당', '처방']];
+  const cw = [1.75, 0.95, 2.1, 1.25, 0.85, 1.9];
+  const unit = v => (v === '' || v === null || v === undefined) ? '-' : (/^[0-9.]+$/.test(String(v)) ? `${v}채` : String(v));
+  CANDT.forEach(r => {
+    const site = r.kind !== '후보', fac = r.rx === '시설 검토';
+    const o = site ? { color:C.muted } : {};
+    rows.push([B(site ? `선정지 · ${r.name.split(' ')[0]}` : `${r.name.replace('후보', '후보 ')} · ${r.loc.split(' ').pop()}`, o), { text:unit(r.n_risk), options:o },
+               { text:r.fac, options:Object.assign({ fontSize:9.5 }, o) }, { text:unit(r.benefit) + ((r.elder30 !== '' && r.elder30 !== undefined && r.elder30 !== null) ? ` (${r.elder30})` : ''), options:o },
+               { text:(r.per100m === '' || r.per100m === null) ? '-' : `${Number(r.per100m).toFixed(1)}채`, options:o },
+               B({ '난간·쉼터·계단 정비 + 방문돌봄':'정비 + 방문돌봄' }[r.rx] || r.rx, fac ? { color:C.teal } : { color:C.muted, bold:false })]);
+  });
+  etable(s, rows, { colW:cw, rowH:[0.34].concat(CANDT.map(() => 0.36)), fontSize:10.5 });
+  bar(s, 0.6, 4.25, 0.75);
+  T(s, [{ text:'처방 규칙  ', options:{ bold:true, color:C.ink } }, { text:Q('V6.17.cand_rule', '500m 안 기존 시설 → 기존 시설 연계 / 고립 위험 30채 이상이고 1억 원당 1채 이상 → 시설 검토 / 그 밖 → 난간·쉼터·계단 정비 + 방문돌봄 (시설 1곳 40억 원 가정)'), options:{ color:C.text } }],
+    { x:0.82, y:4.25, w:8.6, h:0.75, fontSize:10.5, valign:'middle' });
+  src(s, (REH ? '공개 대역(리허설) 값 · ' : '') + '후보 = 고립 위험 집이 가장 많은 250m 격자에서 그 집들의 길이 가장 많이 지나는 가파른 구간에 시설을 자동 배치 · 수혜 = 고령자 왕복 30초 또는 휠체어 1분 이상 단축(의료), 괄호 = 그중 고령자 30초 이상 · 시설 양 끝 좌표는 반출하지 않음');
+} else { const s = base('정책 제안' + ((REH || FALLBACK) ? ' · ' + SCOPE : ''), () => FALLBACK ? '어디부터 무엇을: 우선 검토 후보' : `어디부터 무엇을: 우선 검토 후보 ${NCAND()}곳`);
   // 10/12: 열 = 위치, 고립 위험 건물 수, 왕복 추가 시간 중앙값, 500m 안 기존 시설, 처방 방향 (규칙). 1억 원당 수혜는 20장(시뮬레이션한 시설)만
   const rows = [['위치', Q('V6.17.n_head', '고립 위험 건물'), '왕복 추가 (중앙값)', '500m 안 기존 시설', '처방 방향']];
   const cw = [2.35, 1.35, 1.45, 1.6, 2.05];
@@ -489,9 +512,11 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
   T(s, '언덕 부담(HBI) →', { x:2.75, y:4.43, w:2.1, h:0.25, fontSize:10, color:C.muted, align:'right' });
   const sk21 = V('V6.21.skt'), kc21 = V('V6.21.kcb');      // 10/12 청사진: 외출(SKT)·소득(KCB)을 한 칸에 (둘 다 같은 대체 문구면 하나만. 둘 다 ___ 면 빈칸 둘: 누락 key 가 둘)
   const rk21 = has('V6.21.risk_dongs') ? R.fields['V6.21.risk_dongs'].value + '곳' : (FALLBACK ? V('V6.21.risk_dongs') : '-');   // 선택 키 (고위험 동 = 값이 0 보다 큰 동 중 상위 25%)
-  [[`고립 위험(왕복 +${RMIN()}분) 건물이 많은 동`, rk21],['고립 위험 상위 3개 동의 독거노인 수 (합, 공개 통계)', V('V6.21.alone_top3')],['외출(SKT)·소득(KCB)과 겹치는 동', (sk21 === kc21 && !runs(sk21)) ? sk21 : `${sk21} · ${kc21}`]].forEach((r, i) => { if (i) hr(s, 5.3, 1.45+i*0.88-0.08, 4.1); stat(s, 5.3, 1.45+i*0.88, 4.1, r[0], r[1], { size:18, laterInk:true }); });
+  [[`고립 위험(왕복 +${RMIN()}분) 건물이 많은 동`, rk21],(has('V6.21.alone_cells') || !has('V6.21.alone_top3')) ? ['고립 위험 격자 안 혼자 사는 어르신 (추정)', V('V6.21.alone_cells')]   // [v6.3] 동 통계 × 격자 안 주거 연면적 비율
+      : ['고립 위험 상위 3개 동의 독거노인 수 (합, 공개 통계)', V('V6.21.alone_top3')],['외출(SKT)·소득(KCB)과 겹치는 동', (sk21 === kc21 && !runs(sk21)) ? sk21 : `${sk21} · ${kc21}`]].forEach((r, i) => { if (i) hr(s, 5.3, 1.45+i*0.88-0.08, 4.1); stat(s, 5.3, 1.45+i*0.88, 4.1, r[0], r[1], { size:18, laterInk:true }); });
   bar(s, 5.3, 4.2, 0.55); T(s, '보건소 방문건강관리, 돌봄SOS, 방문 약료의 대상 선정에 씁니다', { x:5.52, y:4.2, w:3.9, h:0.55, fontSize:12, bold:true, color:C.ink, valign:'middle' });
-  src(s, (has('V6.21.alone_top3_dongs') ? `고립 위험 상위 3개 동: ${R.fields['V6.21.alone_top3_dongs'].value} (독거노인: 서울시 동별 통계) / ` : '') + '외출·소득은 행정동 단위 보조 지표이며 상관 관찰입니다 / SKT는 60세 이상 기준'); }
+  src(s, (has('V6.21.alone_cells') ? `혼자 사는 어르신 = 서울시 동별 독거노인 × 고립 위험 격자 안 주거 연면적 비율 (${Q('V6.21.alone_cells_n', '추정을 낸 동')}) / `
+         : (has('V6.21.alone_top3_dongs') ? `고립 위험 상위 3개 동: ${R.fields['V6.21.alone_top3_dongs'].value} (독거노인: 서울시 동별 통계) / ` : '')) + '외출·소득은 행정동 단위 보조 지표이며 상관 관찰입니다 / SKT는 60세 이상 기준'); }
 
 // ── 22 활용 ③ 교통·보행 ──
 { const s = base('활용 · 교통·보행', '정류장과 계단, 어디부터 손볼지 정합니다', { tsize:22 });
@@ -561,8 +586,8 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
   src(s, 'Tobler 보행함수 v = 6·exp(−3.5·|s+0.05|) km/h / 휠체어 경사 기준: 장애인·노인·임산부 등의 편의증진 보장에 관한 법률 시행규칙'); }
 { const s = base('부록 3', '가정을 바꿔도 결론이 유지되는가');
   const r = (a,b,c2,d) => [B(a), b, c2, d];
-  etable(s, [['가정','값','근거','바꿨을 때 (순위상관)'], r('고령자 보행속도','0.8m/s','가정 (민감도로 점검)',V('V6.29.speed')), r('내리막 부담','오르막의 50%','가정 (0%·100% 비교)',V('V6.29.down')), r('계단','최소 25% 경사, 1.2배','가정 (1.5배 비교)',V('V6.29.stair')), r('휠체어 경사 한계','1/12 (8.3%)','법정 경사로 기준','해당 없음 (법정)'), r('엘리베이터 대기',`${Q('V6.29.facility_w', '30·60·90초')} 비교`,'서울시 발표 + 실측',{ text:V('V6.29.facility'), options:{ fontSize:9 } }), r('반출 최소 건물 수','5채','비식별 기준','해당 없음')],
-    { colW:[2.2,2.1,2.6,1.9], rowH:[0.36,0.44,0.44,0.44,0.44,0.44,0.44] });
+  etable(s, [['가정','값','근거','바꿨을 때 (순위상관)'], r('고령자 보행속도','0.8m/s','가정 (민감도로 점검)',V('V6.29.speed')), r('내리막 부담','오르막의 50%','가정 (0%·100% 비교)',V('V6.29.down')), r('계단','최소 25% 경사, 1.2배','가정 (1.5배 비교)',V('V6.29.stair')), r('휠체어 경사 한계','1/12 (8.3%)','법정 경사로 기준','해당 없음 (법정)'), r(`고립 위험 문턱`,`왕복 +${RMIN()}분`,'420m ÷ 0.8m/s ≈ 편도 9분',Q('V6.29.band_rho_short', '실제 결과 후')), r('엘리베이터 대기',`${Q('V6.29.facility_w', '30·60·90초')} 비교`,'서울시 발표 + 실측',{ text:V('V6.29.facility'), options:{ fontSize:9 } }), r('반출 최소 건물 수','5채','비식별 기준','해당 없음')],
+    { colW:[2.2,2.1,2.6,1.9], rowH:[0.34,0.4,0.4,0.4,0.4,0.4,0.4,0.4] });
   src(s, '순위상관이 0.9 이상이면 "누가 더 취약한가"의 순서가 가정에 크게 흔들리지 않는다는 뜻'); }
 { const s = base('부록 4', '경사 비용 계산 (발췌)');
   const code = ['def tobler(s):                       # 경사 s → 보행속도 km/h','    return 6.0 * np.exp(-3.5 * np.abs(s + 0.05))','FLAT = tobler(0.0)','','def elder_time(length, s, stair):    # 고령자 링크 통과 시간(초)','    s = np.where(stair, np.sign(s + 1e-9) * np.maximum(np.abs(s), 0.25), s)','    up = FLAT / tobler(np.abs(s))','    down = 1 + C.DOWNHILL_WEIGHT * (up - 1)   # 내리막은 오르막 부담의 일부','    factor = np.where(s >= 0, FLAT / tobler(s), down)','    t = length / C.ELDER_SPEED * factor','    return np.where(stair, t * C.STAIR_FACTOR, t)','','def wheel_time(length, s, stair):    # 휠체어: 1/12 초과는 사실상 회피, 계단 불가','    up = np.maximum(s, 0)','    t = length / (C.WHEEL_SPEED * np.maximum(0.4, 1 - 5 * up))','    t = np.where(np.abs(s) > C.WHEEL_LIMIT, t * C.WHEEL_STEEP_PENALTY, t)','    return np.where(stair, np.inf, t)'].join('\n');

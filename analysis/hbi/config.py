@@ -193,6 +193,7 @@ CAND_STEEP = 1 / 12          # 가파른 링크 = 경사 이 값 이상 (휠체�
 CAND_RADIUS_M = 400          # 구간은 격자 가운데에서 이 거리 안에 노드가 있어야 함 (멀리 있는 구간을 그 격자의 처방으로 보지 않게)
 CAND_MAX_LEN_M = 120         # 시설 수평 길이 상한 (경사형 엘리베이터 후암동 53m·북아현동, 대현산 모노레일 110m). 더 긴 가파른 구간은 그 안에서 높이 차가 가장 큰 부분만
 CAND_VERTICAL_MAX_M = 50     # 양 끝 수평 거리가 이 값 이하면 수직 엘리베이터(높이 차 ÷ 속도), 넘으면 경사형 엘리베이터(길이 ÷ 속도). 봉천과 같은 식
+CAND_MIN_GAP_M = 200         # [v6.3 검토] 후보 구간 가운데끼리(사람이 넣은 시설 포함) 이 거리 안이면 다음 구간 (같은 길의 이웃 구간은 수혜 집이 겹침)
 CAND_MIN_RISE_M = 2.0        # 양 끝 높이 차가 이보다 작은 구간은 시설 후보로 보지 않음
 CAND_SEARCH = 3              # 후보를 찾을 격자 수 = auto_candidates × 이 값 (구간이 없거나 앞 후보와 같은 구간이면 다음 격자)
 SENS_BANDS = [5, 10, 15]     # [v6.3] 기준 민감도: 이 분 문턱끼리 행정동 순위상관 (extra_min_bands 에 있는 것만)
@@ -211,7 +212,7 @@ DETACHED_SHARE = 0.5
 #   [v5] 값 합계 모드: value_cols(더할 열), agg="sum", period_col(기간 열, 예: 월) → 점 수 대신 값의 기간 평균 합
 #   sep: (선택) 구분자. 비우면 자동 (SKT 파일은 "|")
 #  [v6.3] 지수 방식 (유동인구 같은 원값을 반출하지 않음): index_pop = "external 의 인구 파일(adm_cd, 두 번째 칸 = 인구)" 이면 동 값 ÷ 그 인구,
-#   index_rel = True 면 동 값 ÷ 분석 범위 동 평균. 이때 points_<이름>_dong.csv 는 adm_cd·n_bld·hbi_mean·index 만, 격자 파일은 쓰지 않고,
+#   index_rel = True 면 동 값 ÷ 분석 범위 동 평균 (둘 다 유효숫자 2자리). 이때 points_<이름>_dong.csv 는 adm_cd·n_bld·hbi_mean·index 만, 격자 파일은 쓰지 않고,
 #   points_summary 에는 행 수·상관만 (값 합계 줄 없음)
 #  아래 SKT 기본값은 SKT_데이터정의서.xlsx 의 실제 열: 50m 셀 중심 X_COORD·Y_COORD (UTM-K = EPSG:5179),
 #   값은 "월의 일평균" 유동인구. 연령은 10세 단위라 65세 구분이 없어 "60대 이상"(…_60GU) 을 씀. 12개월이면 월 평균

@@ -10,13 +10,13 @@
   3. [SKT 경로가 config.POINT_DATA 에 있을 때만] SKT 50m 셀을 10_points_join.py 와 같은 규칙으로 읽어서
        - 모든 셀 합계 : 10 의 행정동 값과 같아야 함 (화면에서 대조 = 가드. [v6.3] 지수끼리 대조)
        - "주거 칸" 합계: 셀 중심 25m 안에 주거 건물이 있고, 근린생활·상업 건물이 없는 셀만
-       [v6.3] 원값(유동 합)은 내지 않고 skt_res_share(주거 칸 몫 = 주거 칸 합 ÷ 모든 셀 합), skt_res_index(주거 칸 합 ÷ 60세 이상 인구)
+       [v6.3] 원값(유동 합)은 내지 않고 skt_res_share(주거 칸 몫 = 주거 칸 합 ÷ 모든 셀 합, 유효숫자 2자리)만. 10 과의 대조는 화면에서만
      → 상점가를 지나가는 사람을 빼고 "집 근처에서 움직이는 사람" 만 보려는 것
   JS로 치면: 건물 배열을 행정동별로 groupBy 해서 용도별 count·sum 을 구하고, 셀도 조건으로 filter 한 뒤 합치는 것
 [결과] (output/ → 반출 대상. 기획서 19장 통제 변수)
   dong_context.csv : 행정동(건물 MIN_COUNT 개 이상)마다
       adm_cd, n_bld_all, n_share_<용도>, w_share_<용도>(연면적 비율), mean_floors, n_station, n_bus_stop, link_km_per_km2,
-      skt_res_share, skt_res_index, n_cells_res, n_cells_all (SKT 가 없으면 빈 칸. [v6.3] 앞 두 칸은 원값 대신 비율·지수)
+      skt_res_share, n_cells_res, n_cells_all (SKT 가 없으면 빈 칸. [v6.3] 원값 두 칸 대신 주거 칸 몫 한 칸)
   개별 건물·셀 좌표는 저장하지 않습니다.
 [결과 보는 법]
   - n_share_·w_share_ 는 각각 더하면 1.0
@@ -179,14 +179,14 @@ for k, code in enumerate(dcode):
         pm = pw == k
         # [v6.3] 원값(유동 합)은 내지 않음: 주거 칸 몫 = 주거 칸 합 ÷ 모든 셀 합, 주거 칸 지수 = 주거 칸 합 ÷ 60세 이상 인구 (10 의 지수와 같은 분모)
         rs_, as_ = float(val[pm & isr].sum()), float(val[pm].sum())
-        pp = POP60.get(code)
-        row += [round(rs_ / as_, 3) if as_ > 0 else "", round(rs_ / pp, 3) if pp else "", int((pm & isr).sum()), int(pm.sum())]
+        pp = POP60.get(code) if "60" in skt[0] else None        # [v6.3 검토] 60세 이상 자료일 때만 60세 이상 인구로 나눔 (낮 시간 자료는 10 이 동 평균 대비)
+        row += [float(f"{rs_ / as_:.2g}") if as_ > 0 else "", int((pm & isr).sum()), int(pm.sum())]   # 주거 칸 몫 (유효숫자 2자리)만
         check.append((code, as_ / pp if pp else None))
     else:
-        row += ["", "", "", ""]
+        row += ["", "", ""]
     out.append(row)
 head = (["adm_cd", "n_bld_all"] + [f"n_share_{c}" for c in ORDER] + [f"w_share_{c}" for c in ORDER]
-        + ["mean_floors", "n_station", "n_bus_stop", "link_km_per_km2", "skt_res_share", "skt_res_index", "n_cells_res", "n_cells_all"])
+        + ["mean_floors", "n_station", "n_bus_stop", "link_km_per_km2", "skt_res_share", "n_cells_res", "n_cells_all"])
 write_csv(os.path.join(C.OUTPUT, "dong_context.csv"), head, out)
 
 # ── 5. 가드: skt_all_sum 이 10 의 행정동 합과 같은가 ────────────
@@ -196,6 +196,6 @@ if skt:
         log(f"  SKT 대조: output/points_{skt[0]}_dong.csv 의 지수가 없어 대조 못 함 (10_points_join.py 먼저, 인구 파일 external/pop60.csv)")
     else:
         common = [(c, s) for c, s in check if c in ten and s is not None]
-        bad = [(c, s, ten[c]) for c, s in common if abs(round(s, 3) - ten[c]) > 0.0011]
+        bad = [(c, s, ten[c]) for c, s in common if abs(float(f"{s:.2g}") - ten[c]) > 1e-9]   # 10 과 같은 유효숫자 2자리로 견줌
         log(f"  SKT 대조: 10 과 같은 행정동 {len(common)}곳 중 " + ("모두 같음" if not bad else f"!! {len(bad)}곳 다름 {bad[:3]} → 읽는 규칙 확인"))
 log(f"완료 → output/dong_context.csv ({len(out)}행, 건물·셀 좌표는 저장하지 않음)")

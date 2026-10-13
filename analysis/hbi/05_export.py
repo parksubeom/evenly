@@ -111,9 +111,15 @@ for T in targets(b):                              # 목적지 종류마다 반�
             from lib.battr import HTYPE_NAMES
             rk = v & (add_min >= C.RISK_MIN)
             ht = np.nan_to_num(b["htype"][rk]).astype(int)
+            cnts = {code: int((ht == code).sum()) for code in HTYPE_NAMES}
+            small_ = [c_ for c_, n_ in cnts.items() if 0 < n_ < C.MIN_COUNT]
+            if len(small_) == 1:                          # [v6.3 검토] 하나만 가리면 '왕복 추가 N분 이상 건물 수' − 나머지로 되살아남 → 다음으로 작은 종류도
+                rest = sorted((n_, c_) for c_, n_ in cnts.items() if n_ >= C.MIN_COUNT)
+                if rest:
+                    small_.append(rest[0][1])
             for code, nm in HTYPE_NAMES.items():
-                n_ = int((ht == code).sum())
-                summary.append([T, f"고립 위험(왕복 +{C.RISK_MIN:g}분) 집 종류 {nm}", n_ if (n_ == 0 or n_ >= C.MIN_COUNT) else C.SMALL_LABEL])
+                n_ = cnts[code]
+                summary.append([T, f"고립 위험(왕복 +{C.RISK_MIN:g}분) 집 종류 {nm}", C.SMALL_LABEL if code in small_ else n_])
     # ── 격자별 집계 ──
     key = gx[v] * 10**7 + gy[v]
     u, inv = np.unique(key, return_inverse=True)   # u = 격자 목록, inv = 각 건물이 몇 번째 격자인지
@@ -209,6 +215,8 @@ write_csv(os.path.join(C.OUTPUT, "run_meta.csv"), ["key", "value"], [
     ["rep_mode", rep_mode()], ["is_rep_mode", "yes" if REP else "no"],   # [10/12] 값 칸을 낸 방식인지 (기획서는 yes 인 폴더를 씀)
     ["hbi_bands", ",".join(f"{x:g}" for x in C.HBI_BANDS)], ["extra_min_bands", ",".join(f"{x:g}" for x in C.MIN_BANDS)],   # [v6.2] 구간 문턱 (기획서가 읽음)
     ["risk_min", f"{C.RISK_MIN:g}" if C.RISK_MIN else ""],   # [v6.3] 고립 위험 문턱(분)
+    ["auto_candidates", str(C.AUTO_CANDIDATES)],             # [v6.3] 09 후보 자동 수와 처방 규칙 (기획서 17장 규칙 문구가 읽음)
+    ["cand_rule", f"{C.CAND_RULE['min_risk']},{C.CAND_RULE['min_per100m']:g},{C.CAND_RULE['cost_eok']:g},{C.CAND_RULE['radius_m']:g}"],
     ["register_link_rate", st.get("link_rate", "")], ["register_join", st.get("register_join", "")], ["register_join_used", st.get("join_used", "")],
     ["register_rate_pnu", st.get("rate_pnu", "")], ["register_rate_pk", st.get("rate_pk", "")],
     ["ufid_match_rate", "" if st.get("rate_ufid") is None else st.get("rate_ufid")],
@@ -285,12 +293,12 @@ if bd:
     for ri, (k, code, nrc, wall) in alone_rows.items():
         S = np.flatnonzero((which == k) & U & in_rc)
         est_a = ""
-        if REP and code in alone and wall > 0 and nrc >= C.MIN_COUNT and publishable(S, POOLW, NBW, C.MIN_COUNT):
+        if REP and code in alone and wall > 0 and nrc >= C.MIN_COUNT and publishable(S, POOLW, NBW, C.MIN_COUNT, strict=True):
             est_a = round(alone[code] * b["weight"][S].sum() / wall)
             POOLW.append(S)
             alone_tot[0] += est_a
             alone_tot[1] += 1
-        rows[ri] += [nrc, est_a]
+        rows[ri] += [nrc if REP else "", est_a]                 # [v6.3 검토] 대표 방식 밖은 고립 위험 격자를 정하지 않아 빈 칸
     write_csv(os.path.join(C.OUTPUT, "dong_hbi.csv"),
               ["adm_cd", "adm_cd_stat", "adm_nm", "n_bld", "hbi_mean", "share_high", "weight_all", "weight_high", "elderly_in_high_est"]
               + [f"{p_}_{band_tag(mb)}" for mb in C.MIN_BANDS for p_ in ("n", "share", "weight")] + ["n_riskcell", "alone65_riskcell_est"], rows)
@@ -313,6 +321,8 @@ if bd:
                 pubd = {r_[0] for r_ in rows if r_[9 + 3 * jr + 2] not in ("", None)}
                 kdo = {code: k for k, (g, a) in enumerate(polys) for code in [str(a[ck])]}
                 ht = np.nan_to_num(b["htype"]).astype(int)
+                allR = np.flatnonzero(v & (add_d >= C.RISK_MIN) & np.isin(which, [kdo[c_] for c_ in pubd if c_ in kdo]))
+                rest_n = int((~np.isin(ht[allR], [1, 2, 3, 4, 5])).sum())   # [v6.3 검토] 두 종류 밖(모름) 고립 위험 집: 전체 − 두 종류 로 그 몫이 드러나지 않게
                 for lab, sel in (("단독·다가구", np.isin(ht, [1, 2])), ("공동주택", np.isin(ht, [3, 4, 5]))):
                     e_t, S_t = 0.0, []
                     for code in pubd:
@@ -323,7 +333,9 @@ if bd:
                             e_t += pop[code] * b["weight"][Sk].sum() / wall_k
                             S_t.append(Sk)
                     S_t = np.concatenate(S_t) if S_t else np.array([], np.int64)
-                    ok_t = len(S_t) >= C.MIN_COUNT and publishable(S_t, POOLW, NBW, C.MIN_COUNT)
+                    ok_t = len(S_t) >= C.MIN_COUNT and (rest_n == 0 or rest_n >= C.MIN_COUNT) and publishable(S_t, POOLW, NBW, C.MIN_COUNT, strict=True)
+                    if ok_t:
+                        POOLW.append(S_t)
                     mx = getattr(C, "HOUSE_PERSONS_MAX", 5)                # 숫자를 못 내면 단독·다가구는 문턱 판정만 (결과 점검의 빨강 기준)
                     val_t = round(e_t / len(S_t), 1) if ok_t else ((f"{mx}명 이상" if e_t / len(S_t) >= mx else f"{mx}명 미만")
                                                                    if (lab == "단독·다가구" and len(S_t) >= C.MIN_COUNT) else "")

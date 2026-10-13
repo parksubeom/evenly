@@ -139,12 +139,13 @@ for name, cfg in todo.items():
     ng, nd = sum(r[4] for r in grows), sum(r[3] for r in drows)
     if idx_mode:                                         # [v6.3] 동 값 → 지수 (인구 대비 또는 동 평균 대비). n_points·per100_bld 칸 없음
         mean_ = float(np.mean([r[3] for r in drows])) if drows else 0.0
+        sig2 = lambda x: float(f"{x:.2g}") if x > 0 else 0.0     # [v6.3 검토] 유효숫자 2자리 (지수 × 공개 인구 = 원값을 ±5% 안으로만)
         for r in drows:
             if ipop:
                 pp = popd.get(r[0])
-                r[3] = round(r[3] / pp, 3) if pp and np.isfinite(pp) and pp > 0 else ""
+                r[3] = sig2(r[3] / pp) if pp and np.isfinite(pp) and pp > 0 else ""
             else:
-                r[3] = round(r[3] / mean_, 3) if mean_ > 0 else ""
+                r[3] = sig2(r[3] / mean_) if mean_ > 0 else ""
             del r[4]
         drows = [r for r in drows]
         write_csv(os.path.join(C.OUTPUT, f"points_{name}_dong.csv"), ["adm_cd", "n_bld", "hbi_mean", "index"], drows)
