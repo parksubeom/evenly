@@ -309,7 +309,7 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
   bar(s, 0.6, 3.55, 1.25); T(s, '상호제공데이터 (가점)', { x:0.82, y:3.55, w:3.9, h:0.3, fontSize:12.5, bold:true, color:C.acc });
   T(s, [{ text:'SKT 60세 이상 유동인구 · KCB 행정동 소득 · 도로교통공단 교통사고', options:{ bold:true, breakLine:true, color:C.ink } }, { text:'외출·소득·안전과 언덕 부담의 관계 (보조 관찰)', options:{ color:C.muted } }], { x:0.82, y:3.88, w:3.9, h:0.95, fontSize:12, lineSpacingMultiple:1.12 });
   bar(s, 5.2, 3.55, 1.25, C.ink); T(s, '공공데이터', { x:5.42, y:3.55, w:4, h:0.3, fontSize:12.5, bold:true, color:C.ink });
-  T(s, [{ text:'건축물대장(건물 용도·층수), 약국·지하철 엘리베이터 위치', options:{ bold:true, breakLine:true, color:C.ink } }, { text:'고령·장애인·독거노인 인구, 서울 도보 네트워크(대조군)', options:{ color:C.muted } }], { x:5.42, y:3.88, w:4.0, h:0.95, fontSize:12, lineSpacingMultiple:1.12 });
+  T(s, [{ text:'건축물대장(건물 용도·층수), 약국·지하철 엘리베이터 위치', options:{ bold:true, breakLine:true, color:C.ink } }, { text:'고령·장애인·독거노인 인구, 서울 생활인구, 보행노인 사고다발지, 도보 네트워크(대조군)', options:{ color:C.muted } }], { x:5.42, y:3.88, w:4.0, h:0.95, fontSize:12, lineSpacingMultiple:1.12 });
   src(s, '전체 목록과 기간은 부록 1'); }
 
 // ── 11 방법 ──
@@ -517,22 +517,26 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
     T(s, v[3], { x:v[0]+0.15, y:v[1]+0.6, w:1.85, h:0.7, fontSize:11.5, color: v[4] ? C.white : C.muted }); });
   T(s, '돌봄 수요(독거노인·장애인) ↑', { x:0.6, y:4.43, w:2.2, h:0.25, fontSize:10, color:C.muted });
   T(s, '언덕 부담(HBI) →', { x:2.75, y:4.43, w:2.1, h:0.25, fontSize:10, color:C.muted, align:'right' });
-  const sk21 = V('V6.21.skt'), kc21 = V('V6.21.kcb');      // 10/12 청사진: 외출(SKT)·소득(KCB)을 한 칸에 (둘 다 같은 대체 문구면 하나만. 둘 다 ___ 면 빈칸 둘: 누락 key 가 둘)
+  const pub21 = !has('V6.21.skt') && has('V6.21.outing_pub');   // [10/13] SKT 가 없으면 공개 서울 생활인구(65세 이상) 외출 지수
+  const sk21 = pub21 ? '' : V('V6.21.skt'), kc21 = (pub21 && !has('V6.21.kcb')) ? '' : V('V6.21.kcb');   // 장에 안 쓰는 칸은 대체 목록에도 넣지 않음      // 10/12 청사진: 외출(SKT)·소득(KCB)을 한 칸에 (둘 다 같은 대체 문구면 하나만. 둘 다 ___ 면 빈칸 둘: 누락 key 가 둘)
   const rk21 = has('V6.21.risk_dongs') ? R.fields['V6.21.risk_dongs'].value + '곳' : (FALLBACK ? V('V6.21.risk_dongs') : '-');   // 선택 키 (고위험 동 = 값이 0 보다 큰 동 중 상위 25%)
   [[`고립 위험(왕복 +${RMIN()}분) 건물이 많은 동`, rk21],(has('V6.21.alone_cells') || !has('V6.21.alone_top3')) ? ['고립 위험 격자 안 혼자 사는 어르신 (추정)', V('V6.21.alone_cells')]   // [v6.3] 동 통계 × 격자 안 주거 연면적 비율
-      : ['고립 위험 상위 3개 동의 독거노인 수 (합, 공개 통계)', V('V6.21.alone_top3')],['외출(SKT)·소득(KCB)과 겹치는 동', (sk21 === kc21 && !runs(sk21)) ? sk21 : `${sk21} · ${kc21}`]].forEach((r, i) => { if (i) hr(s, 5.3, 1.45+i*0.88-0.08, 4.1); stat(s, 5.3, 1.45+i*0.88, 4.1, r[0], r[1], { size:18, laterInk:true }); });
+      : ['고립 위험 상위 3개 동의 독거노인 수 (합, 공개 통계)', V('V6.21.alone_top3')],
+      pub21 ? (has('V6.21.kcb') ? ['외출(생활인구)·소득(KCB)과 겹치는 동', `${V('V6.21.outing_pub')} · ${kc21}`] : ['외출이 적은(생활인구) 고립 위험 동', V('V6.21.outing_pub')])
+            : ['외출(SKT)·소득(KCB)과 겹치는 동', (sk21 === kc21 && !runs(sk21)) ? sk21 : `${sk21} · ${kc21}`]].forEach((r, i) => { if (i) hr(s, 5.3, 1.45+i*0.88-0.08, 4.1); stat(s, 5.3, 1.45+i*0.88, 4.1, r[0], r[1], { size:18, laterInk:true }); });
   bar(s, 5.3, 4.2, 0.55); T(s, '보건소 방문건강관리, 돌봄SOS, 방문 약료의 대상 선정에 씁니다', { x:5.52, y:4.2, w:3.9, h:0.55, fontSize:12, bold:true, color:C.ink, valign:'middle' });
   src(s, (has('V6.21.alone_cells') ? `혼자 사는 어르신 = 서울시 동별 독거노인 × 고립 위험 격자 안 주거 연면적 비율 (${Q('V6.21.alone_cells_n', '추정을 낸 동')}) / `
-         : (has('V6.21.alone_top3_dongs') ? `고립 위험 상위 3개 동: ${R.fields['V6.21.alone_top3_dongs'].value} (독거노인: 서울시 동별 통계) / ` : '')) + '외출·소득은 행정동 단위 보조 지표이며 상관 관찰입니다 / SKT는 60세 이상 기준'); }
+         : (has('V6.21.alone_top3_dongs') ? `고립 위험 상위 3개 동: ${R.fields['V6.21.alone_top3_dongs'].value} (독거노인: 서울시 동별 통계) / ` : '')) + '외출·소득은 행정동 단위 보조 지표이며 상관 관찰입니다 / ' + (pub21 ? R.fields['V6.21.outing_src'].value : 'SKT는 60세 이상 기준')); }
 
 // ── 22 활용 ③ 교통·보행 ──
 { const s = base('활용 · 교통·보행', '정류장과 계단, 어디부터 손볼지 정합니다', { tsize:22 });
-  [[0.6,'마을버스 정류장','정류장까지 부담이 큰 주거지를 찾아 정류장 신설·이전 검토 지역으로 제시합니다.','정류장 검토 지역 (버스정류소 기준)',V('V6.22.bus'),'도로 폭·회차 공간은 교통 부서가 함께 확인',C.ink],[5.3,'보행로·계단 정비','부담 큰 경로가 지나는 계단·급경사 구간에 난간·쉼터·미끄럼 방지·열선 순위를 매깁니다.','사고가 겹치는 고부담 법정동',V('V6.22.acc'),'사고 자료: 도로교통공단 (법정동 단위)',C.acc]].forEach(c => {
+  const pub22 = !has('V6.22.acc') && has('V6.22.acc_pub');   // [10/13] 상호제공 교통사고가 없으면 공개 보행노인 사고다발지 (격자 단위)
+  [[0.6,'마을버스 정류장','정류장까지 부담이 큰 주거지를 찾아 정류장 신설·이전 검토 지역으로 제시합니다.','정류장 검토 지역 (버스정류소 기준)',V('V6.22.bus'),'도로 폭·회차 공간은 교통 부서가 함께 확인',C.ink],[5.3,'보행로·계단 정비','부담 큰 경로가 지나는 계단·급경사 구간에 난간·쉼터·미끄럼 방지·열선 순위를 매깁니다.',...(pub22 ? ['보행노인 사고다발지 200m 안 체감 부담 격자', V('V6.22.acc_pub'), R.fields['V6.22.acc_pub_src'].value] : ['사고가 겹치는 고부담 법정동',V('V6.22.acc'),'사고 자료: 도로교통공단 (법정동 단위)']),C.acc]].forEach(c => {
     hr(s, c[0], 1.5, 4.1, c[6], 2);
     T(s, c[1], { x:c[0], y:1.62, w:4.1, h:0.36, fontSize:15, bold:true, color:c[6] });
     T(s, c[2], { x:c[0], y:2.05, w:4.1, h:0.75, fontSize:12, color:C.text, lineSpacingMultiple:1.12 });
     stat(s, c[0], 2.95, 4.1, c[3], c[4], { size:22, laterInk:true });
-    T(s, c[5], { x:c[0], y:3.75, w:4.1, h:0.3, fontSize:11, color:C.muted }); });
+    T(s, c[5], { x:c[0], y:3.75, w:4.1, h:0.6, fontSize:11, color:C.muted, valign:'top' }); });
   vr(s, 4.95, 1.5, 2.6);
   takeaway(s, '큰 공사 전에, 작은 개선으로 줄일 수 있는 부담부터 찾습니다.', 4.45); }
 

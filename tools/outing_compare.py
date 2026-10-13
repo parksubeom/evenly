@@ -7,6 +7,8 @@ tools/outing_compare.py ─ [안심구역 밖, v6.3] "언덕 부담이 큰 동�
   dong_hbi.csv                     : share_add<R>m (고립 위험 비율, R = run_meta 의 risk_min, 없으면 10)
   points_SKT_60대이상유동인구_dong.csv : index = 60세 이상 유동 ÷ 60세 이상 인구 (외출 지수, 10_points_join 지수 방식)
   join_KCB_60세이상_월200만원이하비율.csv : 60세 이상 중 월 200만원 이하 비율 (07)
+  [10/13] --outing living: SKT 대신 공개 자료 data_public/living65_outing.csv (tools/prep_living_pop.py, 서울 생활인구 65세 이상,
+          외출 지수 = 1 − 낮 10~17시 ÷ 새벽 3~5시, 관악구 동만). --outing auto(기본) = SKT 가 있으면 SKT, 없으면 생활인구. --weekday 면 평일 값
 [하는 일]
   1. 세 표를 adm_cd 로 붙임 (외출 지수가 있는 동만)
   2. 부담 높음 / 낮음: 고립 위험 비율이 동 중앙값보다 큰 동 / 나머지 (중앙값이 0 이면 0 보다 큰 동 / 0 인 동)
@@ -65,6 +67,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--src", default=os.path.join(ROOT, "results", "raw_export"))
     ap.add_argument("--out", default=os.path.join(ROOT, "results", "outing"))
+    ap.add_argument("--outing", choices=["auto", "skt", "living"], default="auto")
+    ap.add_argument("--living", default=os.path.join(ROOT, "data_public", "living65_outing.csv"))
+    ap.add_argument("--weekday", action="store_true", help="생활인구 평일 값 (outing_index_wd)")
     a = ap.parse_args()
     d = rep_dir(os.path.abspath(a.src))
     meta = {r["key"]: r["value"] for r in read(os.path.join(d, "run_meta.csv")) if r.get("key")}
@@ -74,8 +79,19 @@ def main():
     skt = {r["adm_cd"]: num(r.get("index")) for r in read(os.path.join(d, f"points_{SKT}_dong.csv"))}
     if skt and all(not np.isfinite(v) for v in skt.values()):
         skt = {}
+    src_lab, ylab = "SKT 60세 이상 (유동 ÷ 거주)", "외출 지수 (60세 이상 유동 ÷ 거주)"
+    if a.outing == "living" or (a.outing == "auto" and not skt):
+        col_l = "outing_index_wd" if a.weekday else "outing_index"
+        lv = read(a.living)
+        skt = {r["adm_cd"]: num(r.get(col_l)) for r in lv}
+        ym = lv[0].get("base_ym", "") if lv else ""
+        src_lab = f"서울 생활인구 {ym[:4]}.{ym[4:]} 65세 이상{' 평일' if a.weekday else ''} (1 − 낮 10~17시 ÷ 새벽 3~5시)"
+        ylab = "외출 지수 (65세 이상, 1 - 낮 ÷ 새벽)"
+        if not skt:
+            raise SystemExit(f"!! {os.path.relpath(a.living, ROOT)} 가 없습니다 → python3 tools/prep_living_pop.py")
     if not skt:
-        raise SystemExit(f"!! {os.path.relpath(d, ROOT)}/points_{SKT}_dong.csv 의 외출 지수(index)가 없습니다 → v6.3 10_points_join 의 지수 방식 결과가 필요")
+        raise SystemExit(f"!! {os.path.relpath(d, ROOT)}/points_{SKT}_dong.csv 의 외출 지수(index)가 없습니다 → v6.3 10_points_join 의 지수 방식 결과가 필요 (공개 자료로는 --outing living)")
+    print(f"외출 지수: {src_lab} · 고립 위험: {os.path.relpath(d, ROOT)}/dong_hbi.csv {col}")
     kcb = {r["adm_cd"]: num(r.get(KCB)) for r in read(os.path.join(d, f"join_{KCB}.csv"))}
     rows = []
     for cd, ix in skt.items():
@@ -117,6 +133,7 @@ def main():
             comp(t, tiers == t)
     with open(os.path.join(a.out, "outing_summary.csv"), "w", encoding="utf-8-sig", newline="") as f:
         w = csv.writer(f)
+        w.writerow(["# 외출 지수", src_lab])
         w.writerow(["묶음", "부담 높음 동 수", "부담 낮음 동 수", "부담 높음 외출 지수 중앙값", "부담 낮음 외출 지수 중앙값", "차이(높음 − 낮음)", "순열 검정 p"])
         w.writerows(summ)
     for s_ in summ:
@@ -146,7 +163,7 @@ def main():
                 ax.spines[sp].set_visible(False)
         fig, ax = plt.subplots(figsize=(4.6, 3.4), dpi=200)
         strip(ax, [ox[~hi], ox[hi]], [f"부담 낮음\n({(~hi).sum()}개 동)", f"부담 높음\n({hi.sum()}개 동)"])
-        ax.set_ylabel("외출 지수 (60세 이상 유동 ÷ 거주)", fontsize=9)
+        ax.set_ylabel(ylab, fontsize=9)
         ax.set_title(f"고립 위험(왕복 +{float(R):g}분) 비율로 나눈 두 묶음 · p = {summ[0][6]}", fontsize=9)
         fig.tight_layout()
         fig.savefig(os.path.join(a.out, "outing_groups.png"))

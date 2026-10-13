@@ -16,6 +16,8 @@
 | [2차 반입용] 약국 위치 | 지방행정인허가 건강_약국 (서울) | `analysis/hbi/tools/prep_public.py pharmacy` → `external/pharmacy.csv` | 받음 9/29, v5 번들에 5,859행 (EPSG:5174, 구 일치 99.91%) |
 | AWS Terrain Tiles (terrarium z15) | 자동 다운로드 | `tools/public_baseline.py` (캐시: `raw/terrain_cache/`) | 자동 |
 | 기설치·예정 이동편의시설 15곳 | 서울시 보도자료 등 | `existing_facilities.csv` (feat/field-survey) | 정리됨 |
+| 서울 생활인구 (행정동, 내국인) `LOCAL_PEOPLE_DONG_202607.zip` | 서울 열린데이터광장 | `tools/prep_living_pop.py` → `living65_outing.csv` (관악구 21개 동: 새벽 3~5시·낮 10~17시 65세 이상 평균, 외출 지수 = 1 − 낮 ÷ 새벽, 전체·평일) | 받음 10/13 (2026.7, 31일 × 24시간). 행정동코드 8자리 = 경계 ADM_CD 앞 8자리. 2016년 기준 코드라 서울 424개 중 강북 번1~3·수유1~3동, 구로 항동, 강남 개포3동, 강동 상일1·2동(경계 쪽 10개, 생활인구 쪽 8개)이 안 맞음. **관악구 21개 동은 모두 맞음**. 새벽 65세 이상 ÷ 주민등록 65세 이상 = 0.32~1.38 (동마다 큼) → 주민등록을 분모로 쓰지 않고 같은 자료 안의 낮 ÷ 새벽 |
+| 교통사고다발지역 `한국도로교통공단_교통사고다발지역.csv` | 공공데이터포털 (한국도로교통공단) | `tools/prep_acc_hotspots.py` → `acc_elder_ped_seoul.csv` (점, 폴리곤 칸 뺌)·`acc_elder_ped_dong.csv` (동별) | 받음 10/13 (데이터기준일 2025-09-24, 사고연도 2012~2024). 유형 '보행노인' + 서울만 1,483행, 100m 안 같은 자리를 묶으면 907곳, 반경 200m 원. 동은 가운데 점으로 붙임 (구 이름과 다른 동에 떨어지는 51행은 모두 그 구 경계 360m 안). 관악구 이름 86행·49곳 |
 
 ## 밖 도구 (레포 최상위 `tools/`)
 
@@ -27,6 +29,8 @@
 | `outside_elderly.py` | 반출 `dong_hbi.csv` + `elderly_pop.csv` | 같은 폴더 `dong_hbi_with_elderly.csv` (+ pop65, base_ym) | **밖에서는 이 파일을 씀.** `analysis/hbi/tools/outside_elderly.py`(번들 안)는 예전 인구 형식용이라 쓰지 않음 |
 | `merge_exports.py` | 1차 방문 구역별 반출 폴더 A~D | `results/raw_export` + `merge_notes.txt` | 대상 구 안 격자·동만 합치고 선정지 백분위·신규 후보는 다시 계산 (docs/1차방문_안내서.md) |
 | `prep_elderly_pop.py` | 행안부 연령별 인구 CSV(형식 A) 또는 주민등록 고령 인구현황 CSV(형식 B) | `elderly_pop.csv` (adm_cd, pop65). `--min-age 60` 이면 `pop60.csv` (형식 A 만) | 동 단위 행만. 구 단위 파일이면 저장하지 않음 |
+| `prep_living_pop.py` | 서울 생활인구 `LOCAL_PEOPLE_DONG_YYYYMM` (zip 그대로) | `living65_outing.csv` | `--prefix 1162`(관악) 안 동 코드가 경계와 하나라도 안 맞으면 멈춤. 기획서 21장(SKT 가 없을 때)·`outing_compare.py --outing living` |
+| `prep_acc_hotspots.py` | 도로교통공단 교통사고다발지역 CSV | `acc_elder_ped_seoul.csv`, `acc_elder_ped_dong.csv` | 보행노인·서울만. 기획서 22장(상호제공 교통사고가 없을 때): 체감 부담 격자 중 다발지 가운데 200m 안 격자 수, 전체 해와 최근(2020~) 둘 다 |
 
 실행 환경: 일반 Python 3 + numpy. `public_baseline.py` 는 osgeo(QGIS Python) 또는 pyproj + Pillow 가 필요합니다
 (`--backend auto` 가 실제로 한 번 변환·이미지 읽기를 해 보고 되는 쪽을 고름).

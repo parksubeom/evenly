@@ -997,6 +997,22 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     kq = sorted(kc.values())
     poor = {c for c, v in kc.items() if len(kq) >= 4 and v >= kq[int(len(kq) * 0.75)]} if KCB_HIGH_IS_POOR else set()
     P("V6.21.kcb", "저소득(KCB)과 겹치는 고위험 동", ["join_KCB_*.csv (07)"], f"{len(hi_d & poor)}곳" if kc else None, later="상호제공데이터 확보 시")
+    # [10/13] 공개 자료판 외출: 서울 생활인구 65세 이상 (data_public/living65_outing.csv, tools/prep_living_pop.py, 관악구 동만).
+    #   외출 지수 = 1 − 낮(10~17시) ÷ 새벽(3~5시). SKT 가 없을 때 21장 칸에 씀. 외출이 적은 = 지수가 붙은 동 중 하위 25%
+    lvp = os.path.join(ROOT, "data_public", "living65_outing.csv")
+    lvr = read_csv(lvp) if os.path.exists(lvp) else []
+    lv = {r["adm_cd"]: num(r.get("outing_index")) for r in lvr or []}
+    lv = {c: v for c, v in lv.items() if v is not None and rk.get(c) is not None}
+    lv_txt = lv_src = None
+    if len(lv) >= 4:
+        lq = sorted(lv.values())
+        lowl = {c for c, v in lv.items() if v <= lq[int(len(lq) * 0.25)]}
+        rho_l = spearman([rk[c] for c in lv], [lv[c] for c in lv]) if len(lv) >= 5 else None
+        lv_txt = f"{len(hi_d & lowl)}곳" + (f" (ρ = {f_num(rho_l)})" if rho_l is not None else "")
+        ym_ = (lvr[0].get("base_ym") or "") if lvr else ""
+        lv_src = f"외출 = 서울 생활인구 {ym_[:4]}.{ym_[4:]} 65세 이상, 1 − 낮(10~17시) ÷ 새벽(3~5시), {len(lv)}개 동 (ρ = 고립 위험 비율과 순위상관)"
+    P("V6.21.outing_pub", "외출이 적은(생활인구) 고위험 동", ["data_public/living65_outing.csv (tools/prep_living_pop.py)", "dong_hbi.csv"], lv_txt, optional=True)
+    P("V6.21.outing_src", "생활인구 외출 지수 설명", ["data_public/living65_outing.csv"], lv_src, optional=True)
 
     # ── 22 교통·보행 ──
     gB = [g for g in grid if g["target"] == "bus"]
@@ -1057,6 +1073,24 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
             acc = sum(1 for h_, a_ in lr if h_ >= hq and a_ >= aq and a_ > 0)
     P("V6.22.acc", "고령 보행자 사고가 겹치는 고부담 법정동 (HBI·사고 모두 상위 25%)", ["legal_<교통사고>.csv (11_legal_dong_join, 상호제공 교통사고)"],
       f"{acc}곳" if acc is not None else None, later="상호제공데이터 확보 시")
+    # [10/13] 공개 자료판 사고: 도로교통공단 보행노인 사고다발지 (data_public/acc_elder_ped_seoul.csv, tools/prep_acc_hotspots.py, 서울만, 반경 200m 원).
+    #   상호제공 교통사고(legal_*)가 없을 때 22장 칸에 씀: 고른 목적지(T0) 체감 부담 격자 중 가운데가 다발지 가운데에서 200m 안인 격자 수.
+    #   전체 해(2012~)와 최근(recent_from~) 둘 다 셈 (한쪽만 고르지 않게)
+    hp_ = os.path.join(ROOT, "data_public", "acc_elder_ped_seoul.csv")
+    hsr = read_csv(hp_) if os.path.exists(hp_) else []
+    acc_pub = acc_pub_src = None
+    if hsr and gT:
+        dl_ = read_csv(os.path.join(ROOT, "data_public", "acc_elder_ped_dong.csv")) or []
+        rf_ = int(num(dl_[0].get("recent_from")) or 2020) if dl_ else 2020
+        yrs_ = sorted({int(num(h["year"])) for h in hsr})
+        pts_ = [(int(num(h["year"])),) + tuple(to5186(num(h["lon"]), num(h["lat"]))) for h in hsr]
+        bur_ = [(cv(g, "cell_x"), cv(g, "cell_y")) for g in gT if burden(g) and cv(g, "cell_x") is not None]
+        near = lambda c, y0: any(yy >= y0 and math.hypot(c[0] - px, c[1] - py) <= 200 for yy, px, py in pts_)
+        n_all, n_rec = sum(1 for c in bur_ if near(c, yrs_[0])), sum(1 for c in bur_ if near(c, rf_))
+        acc_pub = f"{n_all}곳 / {len(bur_)}곳"
+        acc_pub_src = (f"사고 자료: 도로교통공단 보행노인 사고다발지 {yrs_[0]}~{yrs_[-1]} (반경 200m, 공개). 최근 {rf_}~{yrs_[-1]} 만 보면 {n_rec}곳")
+    P("V6.22.acc_pub", "보행노인 사고다발지 200m 안 체감 부담 격자 (공개 자료)", ["data_public/acc_elder_ped_seoul.csv (tools/prep_acc_hotspots.py)", "grid_hbi.csv"], acc_pub, optional=True)
+    P("V6.22.acc_pub_src", "보행노인 사고다발지 설명", ["data_public/acc_elder_ped_seoul.csv"], acc_pub_src, optional=True)
 
     # ── 13 방문일 (deck/inputs.json, SAFE.day* 와 같은 값. v6 는 글자로 넣어서 키를 따로 둠) ──
     for i in (2, 3):

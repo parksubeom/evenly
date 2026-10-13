@@ -9,7 +9,7 @@ tools/real_day.py ─ [10/22 반출 결과 받은 날] 받은 반출 파일 → 
   1. 놓기: zip 이면 풀고, 방식 폴더(layer·register·gisbld·all)가 든 층을 찾아 그 안을 results/raw_export/ 로 복사.
      results/raw_export 에 이미 있던 것은 results/raw_export_old/<시각>/ 로 옮김 (지우지 않음). 받은 파일은 그대로 둠
   2. 점검: run_summary.txt (판 번호·멈춘 곳·방식별 빨강), 대표 방식(run_meta is_rep_mode), 결과 점검표 빨강, 대표 방식의 파일
-  3. 밖 도구: outside_elderly(고령인구) → outside_join_dong(독거노인) → public_baseline(공개 대조군, 분석한 구만) → [v6.3] outing_compare(SKT 지수가 있을 때)
+  3. 밖 도구: outside_elderly(고령인구) → outside_join_dong(독거노인) → public_baseline(공개 대조군, 분석한 구만) → [v6.3] outing_compare(SKT 지수, 없으면 공개 생활인구)
   4. prepare_deck_data --expect real → prep_photos(15장 사진) → build_v6.js --expect real → check_deck → render_deck (_render/final)
      → deliverables/언덕위우리동네_기획서_final.pptx · .pdf (PDF 는 렌더링으로 확인한 그 파일)
   5. 판정 줄: 실제판 후보 / inputs.json 채우고 다시 / --later-ok 로 다시 / 대비책 판
@@ -223,7 +223,8 @@ def main():
         say("\n── 공개 대조군: 도보 네트워크 파일 또는 grid_hbi.csv 없음 → 16장 공개데이터 칸이 누락으로 나옴")
         soft.append("공개 대조군 건너뜀")
 
-    if os.path.exists(os.path.join(rd, "points_SKT_60대이상유동인구_dong.csv")):   # [v6.3] 외출 비교 그림 (SKT 지수·KCB, 동 단위)
+    if os.path.exists(os.path.join(rd, "points_SKT_60대이상유동인구_dong.csv")) or os.path.exists(os.path.join(ROOT, "data_public", "living65_outing.csv")):
+        # [v6.3] 외출 비교 그림 (SKT 지수·KCB, 동 단위). [10/13] SKT 가 없으면 공개 서울 생활인구 65세 이상 (tools/prep_living_pop.py)
         ok, _ = run("외출 비교 (outing_compare)", [py, os.path.join(ROOT, "tools", "outing_compare.py"), "--src", RAW])
         ok or soft.append("outing_compare")
 
