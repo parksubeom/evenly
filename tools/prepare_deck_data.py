@@ -868,6 +868,31 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
             best = (v, r)
     P("V6.14.top_dong", "부담이 가장 큰 동", ["dong_hbi.csv"] + ([f"(share_{tag_r}, v6.2)"] if M else []),
       (f"{best[1]['adm_nm'].split()[-1]} ({RM:g}분 이상 {best[0] * 100:.0f}%)" if M else f"{best[1]['adm_nm'].split()[-1]} (HBI {best[0]:.2f})") if best else None)
+    # [10/13 v9 청사진] 2·4·14장: 가장 급한 동 이름과 비율을 따로, 그 동에 서울시 2025 선정지가 있는지, 그 동 고립 위험 격자의 왕복 추가 중앙값
+    P("V6.14.risk_n", "고립 위험 주거 건물 수", ["summary.csv"], f"{f_int(n_)}개" if n_ is not None else None)
+    tn_ = best[1]["adm_nm"].split()[-1] if best else None
+    P("V6.14.top_name", "가장 급한 동 이름", ["dong_hbi.csv"], tn_, optional=True)
+    P("V6.14.top_share", "가장 급한 동의 고립 위험 비율", ["dong_hbi.csv"], (f"왕복 {RM:g}분 넘게 잃는 주거 건물이 {best[0] * 100:.0f}%" if M else f"HBI {best[0]:.2f}") if best else None, optional=True)
+    add4 = None
+    if best:
+        try:
+            dd_ = load_dongs(None)
+            sd_ = set()
+            for r in read_csv(os.path.join(ROOT, "analysis", "hbi", "external", "sites.csv")) or []:
+                if num(r.get("lon")) is not None and num(r.get("lat")) is not None:
+                    d_ = dong_of(*to5186(num(r["lon"]), num(r["lat"])), dd_)
+                    if d_:
+                        sd_.add(d_["adm_cd"])
+            P("V6.14.top_no_site", "가장 급한 동에 2025 선정지가 없음", ["analysis/hbi/external/sites.csv (선정지 5곳)"], "yes" if best[1]["adm_cd"] not in sd_ else "no", optional=True)
+            bd_ = next((d for d in dd_ if d["adm_cd"] == best[1]["adm_cd"]), None)
+            if bd_ and M:
+                cells_ = [g for g in gT if cv(g, "add_min_med") is not None and (cv(g, f"share_{tag_r}") or 0) >= 0.5 and dong_of(cv(g, "cell_x"), cv(g, "cell_y"), [bd_])]
+                vs_ = sorted(cv(g, "add_min_med") for g in cells_)
+                add4 = (vs_[len(vs_) // 2] if len(vs_) % 2 else (vs_[len(vs_) // 2 - 1] + vs_[len(vs_) // 2]) / 2) if vs_ else None
+        except Exception as ex:
+            print(f"!! 4·14장 동 계산 건너뜀: {ex}")
+    P("V6.4.dong", "4장 페르소나 동네 (가장 급한 동)", ["dong_hbi.csv"], tn_, optional=True)
+    P("V6.4.add", "4장: 그 동 고립 위험 격자의 왕복 추가 시간 중앙값(분)", ["grid_hbi.csv (add_min_med, share_add)"], f"{add4:.1f}" if add4 is not None else None, later="실제 결과 후")
 
     # ── 16 신뢰 ──
     done = [x for x in site_rows if x["percentile"] is not None]
@@ -1075,6 +1100,14 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         except ValueError:
             pass
         P("V6.17.n_facility", "자동 후보 중 '시설 검토' 수", ["intervention_candidates.csv (v6.3)"], f"{n_fac}곳")
+        fd_ = []
+        for r in crs:
+            if r.get("kind") == "후보" and r.get("prescription") == "시설 검토":
+                nm_ = (r.get("adm_nm") or "").split()[-1] if r.get("adm_nm") else ""
+                if nm_ and nm_ not in fd_:
+                    fd_.append(nm_)
+        P("V6.17.fac_dongs", "'시설 검토' 후보가 있는 동", ["intervention_candidates.csv (v6.3)"],
+          ("·".join(n[:-1] if n.endswith("동") else n for n in fd_[:-1]) + ("·" if len(fd_) > 1 else "") + fd_[-1]) if fd_ else None, optional=True)
     else:
         B.table("V6.17.cand", "후보·선정지 비교표 (09 후보 자동, 격자 단위)", ["intervention_candidates.csv (v6.3)"], None)
         P("V6.17.n_facility", "자동 후보 중 '시설 검토' 수", ["intervention_candidates.csv (v6.3)"], None)
@@ -1158,8 +1191,11 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     hl_a = next((num(v) for k, v in mm_.items() if gu_ and k.startswith(f"{gu_} 경사 8.3% 이상 땅 비율")), None)
     hl_b = next((num(v) for k, v in mm_.items() if gu_ and k.startswith(f"{gu_} 경사 8.3% 이상 땅에 있는 주거 건물 비율")), None)
     dres = next((re.search(r"DEM ([0-9.]+)m", k).group(1) for k in mm_ if gu_ and k.startswith(f"{gu_} 경사 8.3% 이상 땅 비율") and re.search(r"DEM ([0-9.]+)m", k)), "")
-    P("V6.13.hill", "구릉지 비율 (경사 8.3% 이상, DEM 자체 계산)", ["summary.csv meta (02·05, 10/13)"],
-      (f"경사 8.3%(1/12) 이상 땅이 구 면적의 {hl_a:.0%}(산 포함)" + (f", 주거 건물의 {hl_b:.0%}" if hl_b is not None else "") + f" (DEM {float(dres):g}m 자체 계산)" if dres else "") if hl_a is not None else None, optional=True)
+    # [10/13 판정 3] 대표값 = 주거 건물 비율, 구 면적 비율(산 포함)은 출처 줄
+    P("V6.13.hill", "구릉지 대표값: 경사 8.3% 이상 땅 위 주거 건물 비율 (DEM 자체 계산)", ["summary.csv meta (05, 10/13)"],
+      f"주거 건물의 {hl_b:.0%}가 경사 8.3%(1/12) 이상 땅 위 (DEM {float(dres):g}m 자체 계산)" if hl_b is not None and dres else None, optional=True)
+    P("V6.13.hill_area", "구릉지: 경사 8.3% 이상 땅의 구 면적 비율 (산 포함)", ["summary.csv meta (02·05, 10/13)"],
+      f"경사 8.3% 이상 땅은 {gu_} 면적의 {hl_a:.0%} ({'관악산 포함' if gu_ == '관악구' else '산 포함'})" if hl_a is not None else None, optional=True)
     # [10/13 판정] 어르신 평지 보행속도: 결과의 run_meta elder_speed (v6.3 #bce59e 까지는 칸이 없고 0.8). 출처 문구는 inputs.json elder_speed_source[속도]
     spd_ = num(rm.get("elder_speed")) or 0.8
     P("V6.speed", "어르신 평지 보행속도 (m/s)", ["run_meta.csv (elder_speed, 10/13)"], f"{spd_:g}", optional=True)
