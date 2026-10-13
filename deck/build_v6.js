@@ -33,6 +33,9 @@ const LATER_OK = R.source === 'real' && argv.includes('--later-ok');
 const LATER_OK_RE = /^V6\.15\.\d\.(app|meas|model)$|^V6\.15\.date$|^V6\.16\.meas_r$|^V6\.21\.(skt|kcb)$|^V6\.22\.acc$/;
 const BANDS = R.bands || 'mix', MINB = BANDS === 'min';
 const HB = () => Q('V6.hb', '1.3'), RMIN = () => Q('V6.rmin', '10');   // 체감 부담 HBI 문턱, 고립 위험 왕복 추가 분 (결과의 run_meta = mapping 한 곳)
+const SPD = () => Number(Q('V6.speed', '0.7'));   // [10/13 판정] 어르신 평지 보행속도 m/s (결과의 run_meta elder_speed, 대비책 판 = 1차 v5 의 0.8)
+const PF = 14.3 / 9.4;                            // 3·12장 예시 길(profile.png, 450m·평균 경사 12%)의 경사 배수 (속도와 무관)
+const EX = () => { const a = 450 / 1.1 / 60, f = 450 / SPD() / 60; return { adult:a, flat:f, slope:f * PF }; };   // 예시 분: 성인 1.1m/s, 어르신 SPD
 
 const pres = new pptxgen(); pres.layout = 'LAYOUT_16x9';
 pres.title = (FAKE ? '[가상 수치 · 검토용] ' : REH ? '[공개 대역 · 제출 금지] ' : '') + '언덕 위 우리동네: 경사 반영 이동약자 접근성 지도';
@@ -216,13 +219,14 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
 // ── 3 같은 길, 다른 시간 ──
 { const s = base('한 사람의 귀갓길', '같은 450m, 다른 시간'); tag(s, 4.85, 0.82, '예시 계산', 1.0);
   s.addImage({ path:img('profile.png'), x:0.5, y:1.4, w:5.7, h:2.76 });
-  [['7분','지도앱 도보 안내','평지 · 성인 보행속도',C.muted],['9분','고령자 보행속도','경사는 아직 반영 전',C.ink],['14분','오르막 경사까지','지도앱 안내의 2배',C.acc]].forEach((r, i) => {
+  const ex3 = EX();   // [10/13] 예시 분을 어르신 속도에서 계산
+  [[`${Math.round(ex3.adult)}분`,'지도앱 도보 안내','평지 · 성인 보행속도',C.muted],[`${Math.round(ex3.flat)}분`,'고령자 보행속도','경사는 아직 반영 전',C.ink],[`${Math.round(ex3.slope)}분`,'오르막 경사까지',`지도앱 안내의 ${(ex3.slope / ex3.adult).toFixed(1)}배`,C.acc]].forEach((r, i) => {
     const y = 1.45 + i*0.93; if (i) hr(s, 6.5, y-0.06, 2.9);
     T(s, r[0], { x:6.5, y, w:1.25, h:0.7, fontSize:i==2?32:28, bold:true, color:r[3], valign:'middle' });
     T(s, r[1], { x:7.8, y:y+0.08, w:1.7, h:0.3, fontSize:12.5, bold:true, color:C.ink });
     T(s, r[2], { x:7.8, y:y+0.38, w:1.7, h:0.28, fontSize:11, color:C.muted }); });
   takeaway(s, '집은 언덕 위, 약국은 언덕 아래. 돌아오는 길은 고도 54m를 올라야 합니다.', 4.5);
-  src(s, '예시 계산: 성인 1.1m/s, 고령자 0.8m/s, 평균 경사 12%, Tobler 보행함수. 현장 실측 구간 값으로 교체 예정'); }
+  src(s, `예시 계산: 성인 1.1m/s, 고령자 ${SPD()}m/s, 평균 경사 12%, Tobler 보행함수. 현장 실측 구간 값으로 교체 예정`); }
 
 // ── 4 페르소나 ──
 { const s = base('한 사람의 귀갓길', '김순자 할머니(78)의 "약 받는 날"'); tag(s, 6.05, 0.82, '가상 인물', 1.0);
@@ -333,10 +337,12 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
     T(s, b[1], { x, y:3.17, w:1.38, h:0.3, fontSize:12, color:C.muted }); });
   vr(s, 5.05, 2.6, 2.3);
   T(s, '예시: 김순자 할머니의 귀갓길 (편도)', { x:5.3, y:2.62, w:4.1, h:0.3, fontSize:11.5, bold:true, color:C.muted });
-  T(s, [{ text:'14.3분', options:{ color:C.acc, bold:true } }, { text:'  ÷  9.4분  =  ', options:{ color:C.ink } }, { text:'1.52배', options:{ color:C.acc, bold:true } }], { x:5.3, y:2.95, w:4.1, h:0.55, fontSize:20, valign:'middle' });
+  const ex12 = EX();
+  T(s, [{ text:`${ex12.slope.toFixed(1)}분`, options:{ color:C.acc, bold:true } }, { text:`  ÷  ${ex12.flat.toFixed(1)}분  =  `, options:{ color:C.ink } }, { text:`${PF.toFixed(2)}배`, options:{ color:C.acc, bold:true } }], { x:5.3, y:2.95, w:4.1, h:0.55, fontSize:20, valign:'middle' });
   T(s, '"분"이라 누구나 이해하고, 시설 설치 전후를 같은 잣대로 비교할 수 있습니다. 비율이라 보행속도 가정에도 덜 흔들립니다.', { x:5.3, y:3.6, w:4.1, h:1.1, fontSize:12, color:C.text, lineSpacingMultiple:1.12 });
-  // [v6.3] 고립 위험 문턱의 근거 (5장 420m 와 같은 출처, 고령자 속도 0.8m/s = 모델 기본값)
-  T(s, [{ text:`왕복 +${RMIN()}분의 근거  `, options:{ bold:true, color:C.ink } }, { text:'후기고령자 평균 이동거리 420m ÷ 어르신 걸음 0.8m/s ≈ 편도 9분. 왕복 10분이 더 걸리면 하루에 감당하는 거리를 한 번 더 걷는 셈입니다.', options:{ color:C.text } }],
+  // [v6.3] 고립 위험 문턱의 근거 (5장 420m 와 같은 출처). [10/13 판정] 어르신 속도 = 결과의 elder_speed (0.7 이면 420 ÷ 0.7 = 편도 10분 딱 맞음)
+  const m12 = 420 / SPD() / 60, eq12 = Math.abs(m12 - Math.round(m12)) < 0.05 ? '=' : '≈';
+  T(s, [{ text:`왕복 +${RMIN()}분의 근거  `, options:{ bold:true, color:C.ink } }, { text:`후기고령자 평균 이동거리 420m ÷ 어르신 걸음 ${SPD()}m/s ${eq12} 편도 ${Math.round(m12)}분 → 왕복 ${RMIN()}분 추가 = 감당 거리 하나가 통째로 더 붙는 것입니다.`, options:{ color:C.text } }],
     { x:0.6, y:3.62, w:4.3, h:0.95, fontSize:11, lineSpacingMultiple:1.12 });
   src(s, `체감 부담은 HBI(배수), 고립 위험은 왕복 추가 시간(분)으로 판정 / 문턱(${HB()}·${RMIN()}분)은 실제 관악 결과로 확정`); }
 
@@ -405,7 +411,7 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
   const notes16 = [has('V6.16.wheel_note') ? R.fields['V6.16.wheel_note'].value : null, has('V6.16.daehyun_note') ? R.fields['V6.16.daehyun_note'].value : null].filter(Boolean).join(' · ');
   src(s, FALLBACK ? `선정지 백분위: ${Q('V6.fb.limits', '1차 반출(10/2) 값')}`
     : (REH ? '공개 대역(리허설) 값 · ' : '') + `선정지 백분위: 반경 300m 원 평균 비교 · 계단을 빼면 휠체어 시간 과소 계산 ${V('V6.16.stairs')}` + (notes16 ? ' · ' + notes16 : '')
-      + ` · 어르신 평지 속도 0.8m/s: ${V('V6.16.speed_src')}`); }
+      + ` · 어르신 평지 속도 ${SPD()}m/s: ${V('V6.16.speed_src')}`); }
 
 // ── 17 우선 검토 후보 ──
 const NCAND = () => V('V6.17.n_cand');
@@ -601,11 +607,12 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
     T(s, c[0], { x:0.6, y, w:4.4, h:0.3, fontSize:13, bold:true, color: i==2 ? C.acc : C.ink }); T(s, c[1], { x:0.6, y:y+0.34, w:4.4, h:0.7, fontSize:11.5, color:C.text }); });
   const xs = [0,2,4,6,8,10,12,14,16,18,20], tob = sl => 6*Math.exp(-3.5*Math.abs(sl+0.05)), flatv = tob(0);
   s.addChart(pres.charts.LINE, [{ name:'오르막 소요시간 배수', labels:xs.map(x=>x+'%'), values:xs.map(x => +(flatv/tob(x/100)).toFixed(2)) }], { x:5.25, y:1.4, w:4.2, h:2.45, chartColors:[C.acc], lineSize:2.5, lineDataSymbol:'circle', lineDataSymbolSize:5, showTitle:true, title:'오르막 경사별 소요시간 배수', titleFontSize:11, titleColor:C.ink, titleFontFace:F, catAxisLabelColor:C.muted, valAxisLabelColor:C.muted, catAxisLabelFontSize:9, valAxisLabelFontSize:9, valGridLine:{ color:'E8EAE9', size:0.5 }, catGridLine:{ style:'none' }, showLegend:false, valAxisMinVal:1 });
-  T(s, [{ text:'고령자 ', options:{ bold:true, color:C.ink } }, { text:'0.8m/s × Tobler 배수, 내리막은 오르막 부담의 50%, 계단 최소 25%·1.2배', options:{ breakLine:true } }, { text:'휠체어 ', options:{ bold:true, color:C.teal } }, { text:'1.0m/s, 1/12 초과는 10배(회피), 계단 통행 불가', options:{} }], { x:5.25, y:4.0, w:4.2, h:1.0, fontSize:11, color:C.text, valign:'middle' });
-  src(s, `Tobler 보행함수 v = 6·exp(−3.5·|s+0.05|) km/h / 어르신 0.8m/s: ${V('V6.16.speed_src')} / 휠체어 경사 기준: 장애인·노인·임산부 등의 편의증진 보장에 관한 법률 시행규칙`); }   // [10/13] 속도 출처
+  T(s, [{ text:'고령자 ', options:{ bold:true, color:C.ink } }, { text:`${SPD()}m/s × Tobler 배수, 내리막은 오르막 부담의 50%, 계단 최소 25%·1.2배`, options:{ breakLine:true } }, { text:'휠체어 ', options:{ bold:true, color:C.teal } }, { text:'1.0m/s, 1/12 초과는 10배(회피), 계단 통행 불가', options:{} }], { x:5.25, y:4.0, w:4.2, h:1.0, fontSize:11, color:C.text, valign:'middle' });
+  src(s, `Tobler 보행함수 v = 6·exp(−3.5·|s+0.05|) km/h / 어르신 ${SPD()}m/s: ${V('V6.16.speed_src')} / 휠체어 경사 기준: 장애인·노인·임산부 등의 편의증진 보장에 관한 법률 시행규칙`); }   // [10/13] 속도 출처
 { const s = base('부록 3', '가정을 바꿔도 결론이 유지되는가');
   const r = (a,b,c2,d) => [B(a), b, c2, d];
-  etable(s, [['가정','값','근거','바꿨을 때 (순위상관)'], r('고령자 보행속도','0.8m/s','가정 (민감도로 점검)',V('V6.29.speed')), r('내리막 부담','오르막의 50%','가정 (0%·100% 비교)',V('V6.29.down')), r('계단','최소 25% 경사, 1.2배','가정 (1.5배 비교)',V('V6.29.stair')), r('휠체어 경사 한계','1/12 (8.3%)','법정 경사로 기준','해당 없음 (법정)'), r(`고립 위험 문턱`,`왕복 +${RMIN()}분`,'420m ÷ 0.8m/s ≈ 편도 9분',Q('V6.29.band_rho_short', '실제 결과 후')), r('엘리베이터 대기',`${Q('V6.29.facility_w', '30·60·90초')} 비교`,'서울시 발표 + 실측',{ text:V('V6.29.facility'), options:{ fontSize:9 } }), r('반출 최소 건물 수','5채','비식별 기준','해당 없음')],
+  const eq29 = Math.abs(420 / SPD() / 60 - Math.round(420 / SPD() / 60)) < 0.05 ? '=' : '≈';
+  etable(s, [['가정','값','근거','바꿨을 때 (순위상관)'], r('고령자 보행속도',`${SPD()}m/s`, SPD() === 0.7 ? '경찰청 매뉴얼 (2020.11.30 개정)' : '개정 전 기준 (개정판 0.7)', { text:`${SPD() === 0.7 ? '개정 전 0.8' : '0.7'}·1.0m/s: ${V('V6.29.speed')}`, options:{ fontSize:9.5 } }), r('내리막 부담','오르막의 50%','가정 (0%·100% 비교)',V('V6.29.down')), r('계단','최소 25% 경사, 1.2배','가정 (1.5배 비교)',V('V6.29.stair')), r('휠체어 경사 한계','1/12 (8.3%)','법정 경사로 기준','해당 없음 (법정)'), r(`고립 위험 문턱`,`왕복 +${RMIN()}분`,`420m ÷ ${SPD()}m/s ${eq29} 편도 ${Math.round(420 / SPD() / 60)}분`,Q('V6.29.band_rho_short', '실제 결과 후')), r('엘리베이터 대기',`${Q('V6.29.facility_w', '30·60·90초')} 비교`,'서울시 발표 + 실측',{ text:V('V6.29.facility'), options:{ fontSize:9 } }), r('반출 최소 건물 수','5채','비식별 기준','해당 없음')],
     { colW:[2.2,2.1,2.6,1.9], rowH:[0.34,0.4,0.4,0.4,0.4,0.4,0.4,0.4] });
   src(s, '순위상관이 0.9 이상이면 "누가 더 취약한가"의 순서가 가정에 크게 흔들리지 않는다는 뜻'); }
 { const s = base('부록 4', '경사 비용 계산 (발췌)');

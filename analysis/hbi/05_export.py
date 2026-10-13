@@ -255,6 +255,7 @@ write_csv(os.path.join(C.OUTPUT, "run_meta.csv"), ["key", "value"], [
     ["rep_mode", rep_mode()], ["is_rep_mode", "yes" if REP else "no"],   # [10/12] 값 칸을 낸 방식인지 (기획서는 yes 인 폴더를 씀)
     ["hbi_bands", ",".join(f"{x:g}" for x in C.HBI_BANDS)], ["extra_min_bands", ",".join(f"{x:g}" for x in C.MIN_BANDS)],   # [v6.2] 구간 문턱 (기획서가 읽음)
     ["risk_min", f"{C.RISK_MIN:g}" if C.RISK_MIN else ""],   # [v6.3] 고립 위험 문턱(분)
+    ["elder_speed", f"{C.ELDER_SPEED:g}"],                   # [10/13] 어르신 평지 보행속도 m/s (기획서 3·12·16장·부록이 읽음)
     ["auto_candidates", str(C.AUTO_CANDIDATES)],             # [v6.3] 09 후보 자동 수와 처방 규칙 (기획서 17장 규칙 문구가 읽음)
     ["cand_rule", f"{C.CAND_RULE['min_per100m']:g},{C.CAND_RULE['cost_eok']:g},{C.CAND_RULE['radius_m']:g}"],   # [10/13] 1억 원당 기준, 억 원, m (고립 위험 집 수 조건 뺌)
     ["register_link_rate", st.get("link_rate", "")], ["register_join", st.get("register_join", "")], ["register_join_used", st.get("join_used", "")],

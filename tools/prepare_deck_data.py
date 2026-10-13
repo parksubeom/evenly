@@ -1160,13 +1160,18 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     dres = next((re.search(r"DEM ([0-9.]+)m", k).group(1) for k in mm_ if gu_ and k.startswith(f"{gu_} 경사 8.3% 이상 땅 비율") and re.search(r"DEM ([0-9.]+)m", k)), "")
     P("V6.13.hill", "구릉지 비율 (경사 8.3% 이상, DEM 자체 계산)", ["summary.csv meta (02·05, 10/13)"],
       (f"경사 8.3%(1/12) 이상 땅이 구 면적의 {hl_a:.0%}(산 포함)" + (f", 주거 건물의 {hl_b:.0%}" if hl_b is not None else "") + f" (DEM {float(dres):g}m 자체 계산)" if dres else "") if hl_a is not None else None, optional=True)
-    P("V6.16.speed_src", "어르신 평지 보행속도 0.8m/s 의 출처", ["deck/inputs.json 의 elder_speed_source"], inp.get("elder_speed_source"), later="출처 기입 예정")
+    # [10/13 판정] 어르신 평지 보행속도: 결과의 run_meta elder_speed (v6.3 #bce59e 까지는 칸이 없고 0.8). 출처 문구는 inputs.json elder_speed_source[속도]
+    spd_ = num(rm.get("elder_speed")) or 0.8
+    P("V6.speed", "어르신 평지 보행속도 (m/s)", ["run_meta.csv (elder_speed, 10/13)"], f"{spd_:g}", optional=True)
+    ss_ = inp.get("elder_speed_source")
+    P("V6.16.speed_src", f"어르신 평지 보행속도 {spd_:g}m/s 의 출처", [f"deck/inputs.json 의 elder_speed_source[\"{spd_:g}\"]"],
+      (ss_.get(f"{spd_:g}") if isinstance(ss_, dict) else ss_), later="출처 기입 예정")
     P("V6.13.gwanak_reason", "관악구를 고른 이유 문구", ["deck/inputs.json 의 gwanak_reason"], inp.get("gwanak_reason"), optional=True)   # [10/12 청사진] 밑줄 2개 = 빈칸 표시 아님
 
     # ── 29 민감도 (순위상관) ──
     sens = {r["scenario"].strip(): num(r.get("rank_corr_vs_base")) for r in (R("sensitivity.csv") or [])}
     mn = lambda *ks: min((sens[k] for k in ks if sens.get(k) is not None), default=None)
-    for key, lab, ks in [("speed", "보행속도 0.7·1.0m/s", ("보행속도 0.7m/s", "보행속도 1.0m/s")), ("down", "내리막 부담 0%·100%", ("내리막 부담 0%(Tobler 원식)", "내리막 부담 100%")),
+    for key, lab, ks in [("speed", "보행속도 다른 값(개정 전 0.8 또는 0.7)·1.0m/s", ("보행속도 0.8m/s (개정 전)", "보행속도 0.7m/s", "보행속도 1.0m/s")), ("down", "내리막 부담 0%·100%", ("내리막 부담 0%(Tobler 원식)", "내리막 부담 100%")),
                          ("stair", "계단 가중 1.5", ("계단 가중 1.5",))]:
         v = mn(*ks)
         P(f"V6.29.{key}", f"민감도 순위상관: {lab}", ["sensitivity.csv (08)"], f"{v:.2f}" if v is not None else None)
