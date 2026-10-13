@@ -9,10 +9,16 @@ npm run build:fake           # 가상 수치 → ../deliverables/_test_기획서
 npm run build:rehearsal      # 공개 대역, 혼합 기준 → _rehearsal_기획서_v6.pptx ("공개 대역 · 제출 금지")
 npm run build:rehearsal:ab   # 비교용 A(HBI 1.3·1.8)·B(왕복 추가 5·10분) → _rehearsal_기획서_v6_A·B.pptx
 npm run build:real           # 실제 반출 결과 → ../deliverables/언덕위우리동네_기획서_final.pptx (가짜·공개 대역이면 멈춤)
+npm run build:real:later     # 위와 같고, 관악 실측·상호제공 칸만 ___ 대신 '실측 후'·'상호제공데이터 확보 시' (--later-ok)
+npm run real-day -- <받은 반출 zip 또는 폴더>   # [10/22] 놓기 → 점검 → 밖 도구 → build:real → check_deck → 렌더링 → PDF → 판정 줄 (tools/real_day.py)
+npm run build:fallback       # 대비책 판: 1차 반출(10/2) 숫자만 → ../deliverables/언덕위우리동네_기획서_대비책.pptx (deck/first_visit_results.json)
+npm run fallback-pdf         # 대비책 판 + check_deck + 렌더링 → ../deliverables/언덕위우리동네_기획서_대비책.pdf
 python3 ../tools/check_deck.py ../deliverables/_rehearsal_기획서_v6.pptx --missing data/missing_v6.txt
 python3 ../tools/render_deck.py ../deliverables/_rehearsal_기획서_v6.pptx --out ../_render/v6_mix   # 미리보기 PNG
 ```
 - [10/12] 구간 기준은 **혼합**이다. 체감 부담은 HBI 1.3 이상이고, 고립 위험은 왕복이 10분 이상 더 걸리는 경우다. 문턱은 분석 mapping 의 `hbi_band`·`extra_min_bands` 에서 정하고, 결과의 `run_meta.csv` 를 거쳐 기획서로 온다. 기획서 안에 숫자를 따로 적지 않는다.
+- [10/13] 15장 사진: `docs/photos/15_1`~`15_4` (.jpg·.png·.heic; 1 봉천 계단 · 2 봉천역 오르막 · 3 도림천 · 4 낙성대). `tools/prep_photos.py`(build:real·fallback·real-day 가 먼저 부름)가 바로 세우고 촬영 정보(GPS 등 EXIF)를 지운 사본 `docs/photos/_deck/15_N.jpg` 만 기획서에 들어감. 없으면 '사진 자리'
+- 절차: 10/19 현장 `docs/2차방문_1019_한장.pdf`, 10/22 마감일 `docs/22일_기획서_절차.pdf` (원본 html, Chrome 으로 PDF)
 - 예전 29장 생성기 `build_deck.js` 는 쓰지 않음 (`npm run build:v5deck:fake|real` 로만 남김)
 
 ## (예전 29장 생성기 설명)

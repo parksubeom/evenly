@@ -5,6 +5,7 @@
 //   오른쪽 위 표시: fake "가상 수치 · 검토용", rehearsal "공개 대역 · 제출 금지", real 없음
 //   값이 없으면 ___ 로 남기고 data/missing.txt 에 "누락: 장, 값, 필요한 파일 [key]" (tools/check_deck.py 가 1:1 대조).
 //   공개 대역 판에서 원래 채울 수 없는 칸(결과 키의 later)은 ___ 대신 "실제 결과 후" 등으로 보이고 "대체" 로 적음
+//   node build_v6.js --expect real --later-ok : 실제 판에서 관악 실측·상호제공 칸만 later 문구로 (22일 판정용)
 const pptxgen = require('pptxgenjs');
 const fs = require('fs');
 const path = require('path');
@@ -26,6 +27,10 @@ const FAKE = R.source === 'fake', REH = R.source === 'rehearsal', REAL = R.sourc
 const FALLBACK = R.source === 'fallback';
 const FB_TEXT = '2차 분석 결과 반영 예정';
 const INPUT_KEYS = new Set(['team_name', 'team_display', 'V6.13.visit2', 'V6.13.visit3']);
+// [10/13] 실제 판 --later-ok (22일 판정용, docs/22일_기획서_절차.md): 자료가 원래 없을 수 있는 칸(관악 실측·상호제공)만
+//   ___ 대신 결과 키의 later 문구 ("실측 후"·"상호제공데이터 확보 시", missing 에 '대체'). 그 밖의 누락은 그대로 ___
+const LATER_OK = R.source === 'real' && argv.includes('--later-ok');
+const LATER_OK_RE = /^V6\.15\.\d\.(app|meas|model)$|^V6\.15\.date$|^V6\.16\.meas_r$|^V6\.21\.(skt|kcb)$|^V6\.22\.acc$/;
 const BANDS = R.bands || 'mix', MINB = BANDS === 'min';
 const HB = () => Q('V6.hb', '1.3'), RMIN = () => Q('V6.rmin', '10');   // 체감 부담 HBI 문턱, 고립 위험 왕복 추가 분 (결과의 run_meta = mapping 한 곳)
 
@@ -68,7 +73,11 @@ function fb(key, used) {
 function V(key, blank = '___') {
   const f = R.fields[key];
   if (f && f.value !== null && f.value !== undefined && f.value !== '') return String(f.value);
-  if ((REH || FALLBACK) && f && f.later) { LATER.add(f.later); fb(key, f.later); return f.later; }
+  const lok = LATER_OK && LATER_OK_RE.test(key);
+  if ((REH || FALLBACK || lok) && f && f.later) {
+    const t = (lok && key === 'V6.15.date') ? '실측 후' : f.later;      // 실측을 안 했으면 측정일 자리도 "실측 후" ("2026.10.__" 는 빈칸처럼 보임)
+    LATER.add(t); fb(key, t); return t;
+  }
   if (FALLBACK && !INPUT_KEYS.has(key)) { LATER.add(FB_TEXT); fb(key, FB_TEXT); return FB_TEXT; }
   if (f && f.optional) { fb(key, blank); return blank; }
   miss(key, f || { label:key, need:[] }); pending.push({ key, page });
@@ -136,6 +145,24 @@ function stat(s, x, y, w, label, value, o={}) {
   T(s, v, { x, y:y+0.26, w, h:0.46, fontSize:(o.size||20), bold:true, color: later ? (o.laterInk ? C.ink : C.muted) : (o.color||(v.includes('___') ? C.accD : C.ink)), valign:'top' });
 }
 // 자리 상자. key(그림 결과 키)를 주면 그 그림이 빠진 자리: 연한 주황(FFF7F2, check_deck 이 빈칸으로 봄) + 이름표
+// [10/13] 사진을 칸(w×h)에 꽉 차게: 가로·세로 비를 맞춰 가운데를 자름 (jpg·png 머리에서 크기를 읽음)
+function imgSize(f) {
+  const b = fs.readFileSync(f);
+  if (b[0] === 0x89 && b[1] === 0x50) return { w:b.readUInt32BE(16), h:b.readUInt32BE(20) };
+  for (let i = 2; i < b.length - 9;) {                       // JPEG: SOF0~SOF15 (C4·C8·CC 제외) 의 높이·너비
+    if (b[i] !== 0xFF) { i++; continue; }
+    const m = b[i+1], len = b.readUInt16BE(i+2);
+    if (m >= 0xC0 && m <= 0xCF && ![0xC4, 0xC8, 0xCC].includes(m)) return { w:b.readUInt16BE(i+7), h:b.readUInt16BE(i+5) };
+    i += 2 + len;
+  }
+  return null;
+}
+function photoCover(f, w, h) {
+  const z = imgSize(f);
+  if (!z || !z.w || !z.h) return { w, h };
+  const k = Math.max(w / z.w, h / z.h);                       // pptxgenjs cover: w·h 는 사진 원래 비율, sizing 이 칸 크기
+  return { w:z.w * k, h:z.h * k, sizing:{ type:'cover', w, h } };
+}
 function slot(s, x, y, w, h, label, key) {
   if (key && FALLBACK) { key = undefined; label = label.split('\n')[0] + '\n' + FB_TEXT; }   // [10/13] 대비책 판: 빈칸이 아니라 예정 자리
   const t = key ? take(0, ['img:' + key]) : undefined;
@@ -322,7 +349,7 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
   T(s, '공개데이터로 코드를 미리 시험하고, 자료 구조가 달라도 스스로 맞추는 자동 점검 도구를 준비', { x:0.82, y:3.95, w:3.9, h:0.85, fontSize:12, color:C.text });
   bar(s, 5.2, 3.62, 1.2); T(s, '반출 원칙', { x:5.42, y:3.62, w:4, h:0.3, fontSize:12.5, bold:true, color:C.acc });
   T(s, '250m 격자·행정동 집계만 반출, 건물 5개 미만 칸 제외. 건물·필지 단위 결과와 소유 정보는 반출하지 않음', { x:5.42, y:3.95, w:4.0, h:0.85, fontSize:12, color:C.text });
-  src(s, '방문일은 실제 일자로 기입'); }
+  if (!(has('V6.13.visit2') && has('V6.13.visit3'))) src(s, '방문일은 실제 일자로 기입'); }   // [10/13] 작성 안내 줄: 방문일을 다 넣으면 빠짐
 
 // ── 14 결과 ① 사각지대 ──
 { const s = base('분석 결과 · 사각지대' + ((REH || FALLBACK) ? ' · ' + SCOPE : ''), () => FALLBACK
@@ -343,7 +370,13 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
 
 // ── 15 현장실측 ──
 { const s = base('현장실측 · 관악구', '직접 걸어서 확인했습니다');
-  ['봉천동 선정지 계단','봉천역 → 언덕 오르막','도림천 산책로 (평지)','낙성대역 → 언덕'].forEach((p, i) => { const x = 0.6 + (i%2)*2.25, y = 1.45 + Math.floor(i/2)*1.6; slot(s, x, y, 2.1, 1.45, '사진 자리\n' + p); });
+  // [10/13] 사진: tools/prep_photos.py 가 docs/photos/15_1~15_4 를 바로 세우고 촬영 정보(GPS)를 지운 사본 docs/photos/_deck/15_N.jpg 가 있으면 넣고
+  //   (가운데를 잘라 칸에 맞춤), 없으면 자리 표시. 원본(EXIF 남음)은 읽지 않음. 사진은 git 에 넣지 않음 (얼굴·번지 표지 제외)
+  ['봉천동 선정지 계단','봉천역 → 언덕 오르막','도림천 산책로 (평지)','낙성대역 → 언덕'].forEach((p, i) => { const x = 0.6 + (i%2)*2.25, y = 1.45 + Math.floor(i/2)*1.6;
+    const ph = [`../docs/photos/_deck/15_${i+1}.jpg`].find(f => fs.existsSync(f));
+    if (!ph) return slot(s, x, y, 2.1, 1.45, '사진 자리\n' + p);
+    s.addImage(Object.assign({ path:ph, x, y }, photoCover(ph, 2.1, 1.45)));
+    box(s, x, y+1.17, 2.1, 0.28, C.white); T(s, p, { x:x+0.08, y:y+1.17, w:1.94, h:0.28, fontSize:9.5, color:C.ink, valign:'middle' }); });
   const rn = ['계단 · 봉천 선정지','오르막 · 봉천역','평지 · 도림천','오르막 · 낙성대'];   // 10/12 청사진: prepare 의 V6.15.<i> 도 관악 네 구간 (현장실측①~④)
   const r15 = rn.map((n, i) => [V(`V6.15.${i}.app`), V(`V6.15.${i}.meas`), V(`V6.15.${i}.model`)]);
   etable(s, [['구간','지도앱','실측','모델']].concat(rn.map((n, i) => FALLBACK && r15[i].every(v => v === FB_TEXT)
@@ -454,9 +487,9 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
     T(s, v[3], { x:v[0]+0.15, y:v[1]+0.6, w:1.85, h:0.7, fontSize:11.5, color: v[4] ? C.white : C.muted }); });
   T(s, '돌봄 수요(독거노인·장애인) ↑', { x:0.6, y:4.43, w:2.2, h:0.25, fontSize:10, color:C.muted });
   T(s, '언덕 부담(HBI) →', { x:2.75, y:4.43, w:2.1, h:0.25, fontSize:10, color:C.muted, align:'right' });
-  const sk21 = V('V6.21.skt'), kc21 = V('V6.21.kcb');      // 10/12 청사진: 외출(SKT)·소득(KCB)을 한 칸에 (둘 다 같은 대체 문구면 하나만)
+  const sk21 = V('V6.21.skt'), kc21 = V('V6.21.kcb');      // 10/12 청사진: 외출(SKT)·소득(KCB)을 한 칸에 (둘 다 같은 대체 문구면 하나만. 둘 다 ___ 면 빈칸 둘: 누락 key 가 둘)
   const rk21 = has('V6.21.risk_dongs') ? R.fields['V6.21.risk_dongs'].value + '곳' : (FALLBACK ? V('V6.21.risk_dongs') : '-');   // 선택 키 (고위험 동 = 값이 0 보다 큰 동 중 상위 25%)
-  [[`고립 위험(왕복 +${RMIN()}분) 건물이 많은 동`, rk21],['고립 위험 상위 3개 동의 독거노인 수 (합, 공개 통계)', V('V6.21.alone_top3')],['외출(SKT)·소득(KCB)과 겹치는 동', sk21 === kc21 ? sk21 : `${sk21} · ${kc21}`]].forEach((r, i) => { if (i) hr(s, 5.3, 1.45+i*0.88-0.08, 4.1); stat(s, 5.3, 1.45+i*0.88, 4.1, r[0], r[1], { size:18, laterInk:true }); });
+  [[`고립 위험(왕복 +${RMIN()}분) 건물이 많은 동`, rk21],['고립 위험 상위 3개 동의 독거노인 수 (합, 공개 통계)', V('V6.21.alone_top3')],['외출(SKT)·소득(KCB)과 겹치는 동', (sk21 === kc21 && !runs(sk21)) ? sk21 : `${sk21} · ${kc21}`]].forEach((r, i) => { if (i) hr(s, 5.3, 1.45+i*0.88-0.08, 4.1); stat(s, 5.3, 1.45+i*0.88, 4.1, r[0], r[1], { size:18, laterInk:true }); });
   bar(s, 5.3, 4.2, 0.55); T(s, '보건소 방문건강관리, 돌봄SOS, 방문 약료의 대상 선정에 씁니다', { x:5.52, y:4.2, w:3.9, h:0.55, fontSize:12, bold:true, color:C.ink, valign:'middle' });
   src(s, (has('V6.21.alone_top3_dongs') ? `고립 위험 상위 3개 동: ${R.fields['V6.21.alone_top3_dongs'].value} (독거노인: 서울시 동별 통계) / ` : '') + '외출·소득은 행정동 단위 보조 지표이며 상관 관찰입니다 / SKT는 60세 이상 기준'); }
 

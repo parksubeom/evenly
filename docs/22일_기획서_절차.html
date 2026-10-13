@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>10/22 기획서 마감일 절차</title>
+<style>
+@page { size: A4; margin: 8mm 9mm 7mm; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; font-size: 8.1pt; line-height: 1.3; color: #000; background: #fff; }
+.page { width: 192mm; }
+h1 { font-size: 13pt; margin: 0 0 .6mm; }
+h2 { font-size: 9.4pt; margin: 1.8mm 0 .7mm; border-bottom: 1px solid #000; padding-bottom: .4mm; }
+p, ul, ol { margin: 0 0 .6mm; }
+ul, ol { padding-left: 4mm; }
+li { margin: 0 0 .2mm; }
+table { width: 100%; border-collapse: collapse; }
+th, td { border: 1px solid #000; padding: .45mm .9mm; vertical-align: top; text-align: left; }
+th { background: #eee; font-weight: 700; }
+.meta { font-size: 8.2pt; margin-bottom: 1mm; }
+.top { border: 2px solid #000; padding: 1mm 1.6mm; margin: 0 0 1mm; font-size: 8.6pt; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 2.6mm; }
+.c { font-family: "Menlo", "Consolas", monospace; font-size: 7.4pt; white-space: pre; border: 1px solid #000; padding: .7mm 1.1mm; margin: .4mm 0 .6mm; line-height: 1.3; }
+code { font-family: "Menlo", "Consolas", monospace; font-size: 7.3pt; }
+.small { font-size: 7.5pt; }
+.ck { width: 4mm; }
+td.ck, th.ck { text-align: center; }
+@media screen { body { padding: 12px; } .page { margin: 0 auto; } }
+</style>
+</head>
+<body>
+<div class="page">
+<h1>10/22(목) 기획서 마감일 — 반출 결과 받기부터 제출까지 (1시간)</h1>
+<p class="meta">마감 <b>18:00</b> · 판정 <b>12:00</b> (실제판 / 대비책 판 중 하나) · 결과는 오전 도착 예상 (10/19 반출 신청 → 심사 3~4일) · 시간 어림: 받기 5분 + 한 명령 1분 + 장별 확인 30분 + 제출 15분</p>
+
+<div class="top"><b>원칙</b> 기획서에 숫자를 손으로 쓰지 않습니다 (pptx 를 열어 고치지 않음). 값이 이상하면 결과 파일로 원인을 찾고, 10분 안에 설명이 안 되면 대비책 판으로 갑니다. 리허설 값은 어느 판에도 들어가지 않습니다.</div>
+
+<h2>0. 10/21(수) 밤까지 끝낼 것</h2>
+<table class="small">
+<tr><th class="ck">✓</th><th style="width:27%">할 일</th><th>어떻게</th></tr>
+<tr><td class="ck"></td><td>방문일 (13장)</td><td><code>deck/inputs.json</code> 의 <code>"visit_dates": [null, "2026-10-19", "2026-10-20", null, null]</code> (둘째 = 2차, 셋째 = 3차. 10/20 을 3차로 볼지 정해서. 13장 3차 줄 글은 "5개 구 확대 분석 (자료 수령 시)")</td></tr>
+<tr><td class="ck"></td><td>관악 실측 (15장, 실측을 했을 때만)</td><td>같은 파일에 <code>"survey_date": "2026.10.__ (요일)"</code>, <code>"mapapp_min": {"비안어린이공원": 분, "봉천역": 분, "도림천": 분, "낙성대": 분}</code> (기록지의 지도앱 칸, 숫자만). 잰 분은 10/19 안심구역에서 od_pairs 에 넣은 것이 반출로 옴</td></tr>
+<tr><td class="ck"></td><td>15장 사진 4장</td><td><code>docs/photos/15_1</code>~<code>15_4</code> (.jpg·.png·.heic): 1 봉천 계단 · 2 봉천역 오르막 · 3 도림천 · 4 낙성대. 얼굴·번지판·번호판이 없는 것. 빌드가 바로 세우고 촬영 정보(GPS)를 지운 사본만 씀. 없으면 '사진 자리' 점선</td></tr>
+<tr><td class="ck"></td><td>대비책 판 완성</td><td><code>cd ~/Downloads/evenly/deck</code> → <code>npm run fallback-pdf</code> → 화면에 <b>누락 0건</b>·<b>결과: 통과</b> → <code>_render/fallback/s-NN.png</code> 훑기. 제출 파일 <code>deliverables/언덕위우리동네_기획서_대비책.pdf</code></td></tr>
+<tr><td class="ck"></td><td>관악만 결과일 때 문구</td><td>3장 "5개 구 집집마다 … 계산합니다", 20장 끝 줄 "큰 계단(5개 구)에서는 고령자 시간 단축이 더해집니다" 를 그대로 둘지 정함 (관악만이면 결과로 뒷받침되지 않는 문장)</td></tr>
+<tr><td class="ck"></td><td>5개 구 결과일 때만</td><td>중구 금호터널 옆 옹벽 수직 엘리베이터 설치 여부 → <code>data_public/existing_facilities.csv</code> (17장 '500m 안 기존 시설'. 일정 체크리스트 "5개 구 분석 전 확인")</td></tr>
+<tr><td class="ck"></td><td>제출 준비</td><td>개인정보 동의서 서명본(PDF), 대회 접수 페이지 로그인·파일 올리는 곳 확인</td></tr>
+</table>
+
+<h2>1. 받기 → 한 명령 (오전, 결과가 오면 바로)</h2>
+<div class="two">
+<div>
+<p>받은 zip 이나 폴더를 다운로드 폴더에 <b>그대로</b> 둡니다 (풀지 않아도 됨). 터미널에서:</p>
+<div class="c">cd ~/Downloads/evenly/deck
+npm run real-day -- <받은 zip 또는 폴더></div>
+<p class="small"><code>&lt;받은 zip 또는 폴더&gt;</code> 자리: <code>-- </code> 뒤 한 칸 띄우고 Finder 에서 받은 파일을 <b>터미널 창으로 끌어다 놓으면</b> 주소가 들어감 (이름에 빈칸이 있어도 됨) → Enter</p>
+<p class="small">하는 일 (리허설 12초): <code>results/raw_export</code> 에 놓기 (있던 것은 <code>raw_export_old/</code> 로 옮김) → 반출 점검 (판 번호, 대표 방식, 결과 점검표 빨강, 파일) → 고령인구·독거노인·공개 대조군 → 기획서 → check_deck → 렌더링 → <code>deliverables/언덕위우리동네_기획서_final.pdf</code></p>
+</div>
+<div>
+<table class="small">
+<tr><th style="width:42%">맨 아래 <b>▶</b> 줄</th><th>할 일</th></tr>
+<tr><td>실제판 후보</td><td>2. 장별 확인</td></tr>
+<tr><td>deck/inputs.json 을 채우고 다시</td><td>위 줄에 나온 칸 채우고 <code>npm run real-day</code> (인자 없이)</td></tr>
+<tr><td>관악 실측·상호제공 칸만 비었음</td><td>실측을 했고 15장이 비었으면 inputs.json → <code>npm run real-day</code>. 아니면 <code>npm run real-day -- --later-ok</code> (그 칸만 '실측 후'·'상호제공데이터 확보 시')</td></tr>
+<tr><td>대비책 판 — 이유 …</td><td>이유를 메모 → 12:00 에 대비책 판</td></tr>
+</table>
+<p class="small">기록: <code>_render/final/real_day_report.txt</code>. 받은 파일이 output 폴더가 아니면 "방식 폴더가 없습니다" 로 멈춤</p>
+</div>
+</div>
+
+<h2>2. 장별 확인 (30분) — <code>_render/final/s-01.png</code> ~ <code>s-30.png</code> (Finder 에서 스페이스로 넘김) 또는 같은 PDF</h2>
+<table class="small">
+<tr><th class="ck">✓</th><th style="width:5%">장</th><th style="width:53%">볼 것</th><th>멈출 신호 (→ 원인 찾기, 10분 안에 설명 안 되면 대비책 판)</th></tr>
+<tr><td class="ck"></td><td>전체</td><td>30장 · 오른쪽 위 '가상 수치'·'공개 대역' 표시 없음 · <code>___</code> 없음 · 글자 잘림·겹침 없음</td><td>하나라도 있음</td></tr>
+<tr><td class="ck"></td><td>1·26</td><td>팀 표시 "서울평평단 (박수범)"</td><td></td></tr>
+<tr><td class="ck"></td><td>13</td><td>2·3차 방문일, 아래 '방문일은 실제 일자로 기입' 줄이 없음</td><td></td></tr>
+<tr><td class="ck"></td><td>14</td><td>제목 %, 지도 (분석한 구만, 평지·체감 부담·고립 위험 세 색), 고립 위험 건물 수·비율, 어르신 추정, 부담이 가장 큰 동</td><td>지도 빈 칸 · 동 이름이 분석한 구 밖</td></tr>
+<tr><td class="ck"></td><td>15</td><td>사진 4장 (얼굴·번지 없음), 네 구간 지도앱·실측·모델, 측정일</td><td>모델이 실측의 절반 아래나 두 배 위</td></tr>
+<tr><td class="ck"></td><td>16</td><td>선정지 (관악만: "봉천동 상위 n%" / 5개 구: "상위 10% n곳") · 휠체어 우회 "모델 ○m" (5개 구면 대현산 줄, 관악만이면 봉천 줄. 1,000m 넘으면 출처 줄 안내) · r · 공개데이터 놓침 % · DEM 상위 10%</td><td>휠체어 m 이 0 이거나 빈 칸</td></tr>
+<tr><td class="ck"></td><td>17·19</td><td>후보 수, 표 5줄 (구·동, 고립 위험 건물 수, 왕복 추가 중앙값, 500m 안 기존 시설, 처방 방향) · 19장 등시선 그림 (봉천)</td><td>위치가 분석한 구 밖</td></tr>
+<tr><td class="ck"></td><td>20</td><td>봉천 휠체어 길 전 → 후, 높이 차, 1억 원당 수혜 "x.x동", 끝 줄 문구 (0번 결정대로)</td><td>높이 차 1m 미만·10m 넘음 (실제 DEM 약 5m)</td></tr>
+<tr><td class="ck"></td><td>21·22</td><td>고립 위험 동 수, 상위 3개 동 독거노인 합, SKT·KCB · 정류장 검토 지역, 사고 법정동</td><td></td></tr>
+<tr><td class="ck"></td><td>29</td><td>민감도 순위상관 3개, 시설 대기 30·60·90초 수혜</td><td></td></tr>
+</table>
+
+<div class="two">
+<div>
+<h2>3. 12:00 판정</h2>
+<ul>
+<li><b>실제판</b>: ▶ 가 "실제판 후보" 이고 장별 확인에 멈출 신호가 남지 않음</li>
+<li><b>대비책 판</b>: 그 밖 모두 (12:00 까지 결과가 안 옴, ▶ 가 대비책 판, 멈출 신호를 설명 못 함)</li>
+<li>12:00 뒤에 결과가 와도 판정은 바꾸지 않음 (확인 30분과 제출 여유를 지키려고)</li>
+<li>판정: 실제판 / 대비책 판 · 이유 ______________________</li>
+</ul>
+</div>
+<div>
+<h2>4. 제출 (15분, 목표 13:00)</h2>
+<ul>
+<li>올릴 파일: 실제판 <code>deliverables/언덕위우리동네_기획서_final.pdf</code> / 대비책 판 <code>…_대비책.pdf</code> (30장 = 30p 이내) + 개인정보 동의서</li>
+<li><b>PDF 를 냅니다</b>: 렌더링으로 확인한 그 파일. 이 맥에는 맑은 고딕이 없어 PDF 글꼴은 Apple SD Gothic Neo. pptx 는 심사 PC 의 맑은 고딕으로 열려 줄바꿈이 확인본과 다를 수 있어, 접수처가 pptx 를 요구할 때만 같은 이름 .pptx</li>
+<li>올린 뒤 접수 확인 화면 저장, <code>shasum -a 256 &lt;올린 파일&gt;</code> 값 메모 → ____________</li>
+</ul>
+</div>
+</div>
+</div>
+</body>
+</html>

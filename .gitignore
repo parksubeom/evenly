@@ -8,6 +8,8 @@ analysis/*/testdata/
 # 반출 결과 원본 (비공개 레포라도 기본 제외. 필요하면 이 줄을 지우세요)
 results/raw_export/*
 !results/raw_export/.gitkeep
+# real_day 가 옮겨 둔 예전 반출 내용 (지우지 않고 보관)
+results/raw_export_old/
 # 노드
 node_modules/
 package-lock.json
