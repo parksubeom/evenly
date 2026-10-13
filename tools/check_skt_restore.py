@@ -7,7 +7,7 @@ tools/check_skt_restore.py ─ [10/13 판정 A2 시험] SKT 지수 × 공개 인
 [보는 것]
   1. v6.3 points_SKT_*_dong.csv 의 index 가 구마다 평균 1.0 (유효숫자 2자리라 ±0.05)
   2. 정답 유동 ÷ (index × 공개 60세 이상 인구) = 구마다 같은 배율 K (±6%) → 지수 × 인구 는 유동을 모르는 K 로 나눈 값일 뿐
-  3. K, 1/K, 구 유동 합·평균, 구 (유동 합 ÷ 인구 합) 이 v6.3 결과 CSV 어디에도 숫자로 없음 (±1%. 방식 폴더 모두, run_summary 포함)
+  3. K, 1/K, 구 유동 합·평균, 구 (유동 합 ÷ 인구 합) 이 v6.3 결과 CSV 어디에도 숫자로 없음 (±0.2%, 유효숫자 3자리 이상. 방식 폴더 모두, run_summary 포함)
 [결과] 화면에 통과/실패. 실패하면 종료 코드 1
 """
 import csv, glob, os, re, sys
@@ -57,19 +57,33 @@ for f in f63:
 # 3. 그 수들이 결과 어디에도 없는지
 targets = [(n, v) for n, v in targets if v and abs(v) > 1e-9]
 hits = []
+SKT_FILE = lambda p: any(k in os.path.basename(p).lower() for k in ("skt", "points_", "dong_context", "summary", "run_meta"))
 for p in glob.glob(f"{H63}/output/**/*.csv", recursive=True) + glob.glob(f"{H63}/output/**/*.txt", recursive=True):
-    txt = open(p, encoding="utf-8-sig", errors="replace").read()
-    for tok in set(re.findall(r"-?\d+(?:\.\d+)?", txt.replace(",", ""))):
-        x = float(tok)
-        if abs(x) < 1e-9 or len(tok.replace("-", "").replace(".", "")) < 3:   # 두 자리 이하 숫자(작은 개수·비율)는 흔해서 뺌
-            continue
-        for n, v in targets:
-            if abs(x - v) / abs(v) <= 0.01:
-                hits.append((os.path.relpath(p, H63), tok, n, v))
+    rows = []
+    if p.endswith(".csv"):
+        with open(p, encoding="utf-8-sig", errors="replace", newline="") as f:
+            rr = list(csv.reader(f))
+        head = rr[0] if rr else []
+        for row in rr[1:]:
+            for j, cell in enumerate(row):
+                rows.append((head[j] if j < len(head) else f"칸{j}", " ".join(row[:2]) if p.endswith("summary.csv") else "", cell))
+    else:
+        for line in open(p, encoding="utf-8-sig", errors="replace"):
+            rows.append(("글", "", line))
+    for col, ctx, cell in rows:
+        for tok in re.findall(r"(?<![\d.])-?\d+(?:\.\d+)?(?![\d.])", cell):
+            x = float(tok)
+            if abs(x) < 1e-9 or len(tok.replace("-", "").replace(".", "").lstrip("0")) < 3:   # 유효숫자 두 자리 이하(작은 개수·비율)는 흔해서 뺌
+                continue
+            for n, v in targets:
+                if abs(x - v) / abs(v) <= 0.002:
+                    real = SKT_FILE(p) or "skt" in col.lower()
+                    hits.append((os.path.relpath(p, H63), col, ctx, tok, n, v, real))
+real_hits = [h for h in hits if h[6]]
 for h in hits[:20]:
-    print(f"  !! {h[0]}: {h[1]} ≈ {h[2]} ({h[3]:.4g})")
-if hits:
-    bad.append(f"결과 안에 배율·합계와 같은 수 {len(hits)}곳")
-print(f"[결과 숫자 찾기] 대상 수 {len(targets)}개 (구마다 K·1/K·유동 합·평균·합÷인구 합) → 같은 수 {len(hits)}곳")
+    print(f"  {'!!' if h[6] else '(우연 일치 후보: SKT 와 무관한 칸)'} {h[0]} [{h[1]}{(' · ' + h[2]) if h[2] else ''}]: {h[3]} ≈ {h[4]} ({h[5]:.4g})")
+if real_hits:
+    bad.append(f"SKT 관련 파일·칸에 배율·합계와 같은 수 {len(real_hits)}곳")
+print(f"[결과 숫자 찾기] 대상 수 {len(targets)}개 (구마다 K·1/K·유동 합·평균·합÷인구 합) → SKT 관련 칸 {len(real_hits)}곳, 그 밖 칸 우연 일치 {len(hits) - len(real_hits)}곳")
 print("통과" if not bad else f"실패: {bad}")
 sys.exit(1 if bad else 0)

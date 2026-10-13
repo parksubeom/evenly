@@ -173,6 +173,53 @@ log(f"  노드 고도 결측 {np.isnan(z5).mean():.1%}")
 # [v6.1] sample 은 DEM 범위 밖 노드를 가장자리 값으로 채움 (그래서 위 결측은 0% 로 나오기 쉬움) → 범위 밖 노드 비율을 따로 보임 (값은 그대로)
 out5 = ~d5.covers(nodes[giant, 0], nodes[giant, 1])
 log(f"  DEM 5m 범위 밖 노드 {out5.mean():.1%}" + ("  ← 0% 가 아니면 그곳 경사가 평지에 가깝게 계산됨: DEM 폴더에 대상 구 도엽이 다 있는지 확인" if out5.any() else ""))
+# [10/13 판정] 대상 구의 경사 면적 비율 (13장 "구릉지 비율", 자체 계산): DEM 5m 격자마다 경사(%) = 높이 변화율, 구 경계 안 칸 중 문턱 이상 비율
+#   → work/terrain_slope.json → 05 가 summary 의 meta 줄로 냄 (구 단위 비율만, 건물 정보 없음). 실패해도 분석은 그대로
+SLOPE_PCT = [5, 100 / 12, 15, 20]
+
+
+def terrain_slope(dem, gus):
+    from osgeo import gdal, ogr
+    from lib.area import gu_polys
+    gt, arr = dem.gt, dem.arr
+    if not (0.5 <= abs(gt[1]) <= 50):
+        return {"note": f"DEM 칸 크기 {gt[1]:g} 가 미터로 보이지 않음"}
+    dy, dx = np.gradient(arr, abs(gt[5]), abs(gt[1]))
+    slope = np.hypot(dx, dy) * 100
+    # 05 가 대표 방식에서 '경사 문턱 이상 땅에 있는 주거 건물 비율'을 세도록 경사 격자를 work 에 (반출 안 함)
+    np.savez_compressed(os.path.join(C.WORK_NET, "terrain_slope.npz"), slope=slope.astype("float32"), gt=np.array(gt, float),
+                        wkt=np.array(dem.srs.ExportToWkt() if getattr(dem, "srs", None) is not None else ""))
+    out = {"dem_res_m": round(abs(gt[1]), 2), "gu": {}}
+    for gu, g in gu_polys(gus or None).items():
+        g = g.Clone()
+        if dem.ct is not None:
+            g.Transform(dem.ct)
+        drv = ogr.GetDriverByName("MEM") or ogr.GetDriverByName("Memory")
+        vds = drv.CreateDataSource("t")
+        lyr = vds.CreateLayer("g", geom_type=ogr.wkbMultiPolygon)
+        f = ogr.Feature(lyr.GetLayerDefn())
+        f.SetGeometry(g)
+        lyr.CreateFeature(f)
+        rds = gdal.GetDriverByName("MEM").Create("", arr.shape[1], arr.shape[0], 1, gdal.GDT_Byte)
+        rds.SetGeoTransform(gt)
+        gdal.RasterizeLayer(rds, [1], lyr, burn_values=[1])
+        m = (rds.GetRasterBand(1).ReadAsArray() == 1) & np.isfinite(slope)
+        area_g = g.GetArea()
+        cov = float(m.sum() * abs(gt[1] * gt[5]) / area_g) if area_g > 0 else 0.0
+        out["gu"][gu] = {"cover": round(cov, 3), **{f"ge{t:.1f}": round(float((slope[m] >= t).mean()), 3) if m.any() else None for t in SLOPE_PCT}}
+        log(f"  경사 면적 비율 {gu} (DEM {abs(gt[1]):g}m, 구 면적의 {cov:.0%} 를 덮음): " + " · ".join(f"{t:.1f}% 이상 {out['gu'][gu][f'ge{t:.1f}']:.1%}" for t in SLOPE_PCT if m.any()))
+    return out
+
+
+try:
+    import json as _json
+    _ts = terrain_slope(d5, C.TARGET_GU)
+except Exception as ex:                                   # 구 경계가 없거나 GDAL 이 다르면: 13장 칸만 빔
+    _ts = {"note": f"계산 못 함 ({type(ex).__name__}: {ex})"}
+    log(f"  경사 면적 비율: {_ts['note']} → 13장 칸이 빔 (분석에는 영향 없음)")
+with open(os.path.join(C.WORK_NET, "terrain_slope.json"), "w", encoding="utf-8") as _f:
+    _json.dump(_ts, _f, ensure_ascii=False)
+
 s5, bad = edge_slope(z5, e)
 a = np.abs(s5)
 log(f"  경사: 중앙값 {np.median(a):.3f}, 90% {np.percentile(a, 90):.3f}, 절단 {bad.mean():.2%}")
@@ -835,6 +882,46 @@ if C.TARGET_GU and st.get("n_res_all", 0) > st.get("n_res_target", 0):
     summary.append(["meta", "대상 구 (출발점은 이 구의 집만, 옆 구는 길·목적지로만)", ",".join(C.TARGET_GU)])
 if getattr(C, "TARGET_NOTE", ""):                 # [v6.1] 자료가 일부 구만 덮어 대상 구를 줄였을 때 (예: 대상 5개 구 중 1개 구만 자료 있음)
     summary.append(["meta", "대상 구 범위", C.TARGET_NOTE])
+# [10/13 판정] 구릉지 비율 (02 가 DEM 으로 계산한 구별 경사 면적 비율, 구 단위라 방식과 무관하게 같은 값): 13장 "자체 계산"
+_tsp = os.path.join(C.WORK_NET, "terrain_slope.json")
+if os.path.exists(_tsp):
+    import json as _json
+    _ts = _json.load(open(_tsp, encoding="utf-8"))
+    for _gu, _v in (_ts.get("gu") or {}).items():
+        for _k, _x in _v.items():
+            if _k.startswith("ge") and _x is not None:
+                summary.append(["meta", f"{_gu} 경사 {float(_k[2:]):g}% 이상 땅 비율 (DEM {_ts.get('dem_res_m', '')}m, 자체 계산)", _x])
+        summary.append(["meta", f"{_gu} 경사 계산이 덮은 구 면적 비율", _v.get("cover", "")])
+# 같은 문턱으로 '경사 문턱 이상 땅에 있는 주거 건물 비율' (산을 빼고 읽을 수 있게). 건물 집계라 대표 방식에서만, 구마다 건물 5개 이상일 때만
+_tsn = os.path.join(C.WORK_NET, "terrain_slope.npz")
+if REP and os.path.exists(_tsn):
+    try:
+        from osgeo import osr
+        from lib.qio import TARGET, transformer, transform_xy
+        from lib.area import gu_of_points
+        _z = np.load(_tsn)
+        _sl, _gt, _wkt = _z["slope"], _z["gt"], str(_z["wkt"])
+        if _wkt:
+            _s = osr.SpatialReference(wkt=_wkt)
+            _s.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+            _ct = transformer(TARGET, _s)
+        else:
+            _ct = None
+        _px, _py = transform_xy(_ct, X, Y)
+        _c = np.floor((np.asarray(_px) - _gt[0]) / _gt[1]).astype(int)
+        _r = np.floor((np.asarray(_py) - _gt[3]) / _gt[5]).astype(int)
+        _in = (_r >= 0) & (_r < _sl.shape[0]) & (_c >= 0) & (_c < _sl.shape[1])
+        _sb = np.full(len(X), np.nan)
+        _sb[_in] = _sl[_r[_in], _c[_in]]
+        _gu_b = gu_of_points(X, Y)
+        for _gu in (C.TARGET_GU or sorted({g_ for g_ in _gu_b if g_})):
+            _m = U & (_gu_b == _gu) & np.isfinite(_sb)
+            if _m.sum() >= C.MIN_COUNT:
+                for _t in (5, 100 / 12, 15, 20):
+                    summary.append(["meta", f"{_gu} 경사 {f'{_t:.1f}'.rstrip('0').rstrip('.')}% 이상 땅에 있는 주거 건물 비율 (DEM {_ts.get('dem_res_m', '') if os.path.exists(_tsp) else ''}m, 자체 계산)",
+                                    round(float((_sb[_m] >= _t).mean()), 3)])
+    except Exception as _ex:
+        log(f"  경사 땅 위 주거 건물 비율: 계산 못 함 ({type(_ex).__name__}) → 13장 칸이 빔")
 write_csv(os.path.join(C.OUTPUT, "run_meta.csv"), ["key", "value"], [
     ["target_gu", ",".join(C.TARGET_GU) or "(전체)"], ["neighbor_gu", ",".join(C.NEIGHBOR_GU)],
     ["target_gu_all", ",".join(getattr(C, "TARGET_GU_ALL", []))], ["target_note", getattr(C, "TARGET_NOTE", "")],
@@ -843,7 +930,7 @@ write_csv(os.path.join(C.OUTPUT, "run_meta.csv"), ["key", "value"], [
     ["hbi_bands", ",".join(f"{x:g}" for x in C.HBI_BANDS)], ["extra_min_bands", ",".join(f"{x:g}" for x in C.MIN_BANDS)],   # [v6.2] 구간 문턱 (기획서가 읽음)
     ["risk_min", f"{C.RISK_MIN:g}" if C.RISK_MIN else ""],   # [v6.3] 고립 위험 문턱(분)
     ["auto_candidates", str(C.AUTO_CANDIDATES)],             # [v6.3] 09 후보 자동 수와 처방 규칙 (기획서 17장 규칙 문구가 읽음)
-    ["cand_rule", f"{C.CAND_RULE['min_risk']},{C.CAND_RULE['min_per100m']:g},{C.CAND_RULE['cost_eok']:g},{C.CAND_RULE['radius_m']:g}"],
+    ["cand_rule", f"{C.CAND_RULE['min_per100m']:g},{C.CAND_RULE['cost_eok']:g},{C.CAND_RULE['radius_m']:g}"],   # [10/13] 1억 원당 기준, 억 원, m (고립 위험 집 수 조건 뺌)
     ["register_link_rate", st.get("link_rate", "")], ["register_join", st.get("register_join", "")], ["register_join_used", st.get("join_used", "")],
     ["register_rate_pnu", st.get("rate_pnu", "")], ["register_rate_pk", st.get("rate_pk", "")],
     ["ufid_match_rate", "" if st.get("rate_ufid") is None else st.get("rate_ufid")],
@@ -1887,10 +1974,11 @@ addD = ((b[f"{DT}_t_elder"] - b[f"{DT}_t_flat"]) / 60) if DT else None
 RR = C.CAND_RULE
 
 
-def prescribe(n_risk, per100m, near_m):
+def prescribe(per100m, near_m):
+    """[10/13 판정] 500m 안 기존 시설 → 연계 / 1억 원당 수혜 ≥ cand_min_per100m(기본 5) → 시설 검토 / 그 밖 → 정비 + 방문돌봄 (고립 위험 집 수 조건 없음)"""
     if near_m is not None and near_m <= RR["radius_m"]:
         return "기존 시설 연계"
-    if n_risk not in ("", None) and n_risk >= RR["min_risk"] and per100m is not None and per100m >= RR["min_per100m"]:
+    if per100m is not None and per100m >= RR["min_per100m"]:
         return "시설 검토"
     return "난간·쉼터·계단 정비 + 방문돌봄"
 
@@ -1927,11 +2015,11 @@ if DT and (CANDS or any(not c_ for c_ in is_cand)):
                       dcode[kd] if kd >= 0 else "", dname[kd] if kd >= 0 else "", cx, cy, nbc if nbc >= C.MIN_COUNT else "", nrk,
                       typ, info["rise"], (int(round(ln_, -1)) if c else round(ln_)), info["pass"], round(wn / 10) * 10 if wn is not None else "없음",
                       row[22], row[14], row[10], row[4], per if per is not None else ("0" if (n_any == 0 and REP) else ""),
-                      int(round(near / 50) * 50) if near is not None and near <= 3000 else "", prescribe(nrk, per, near) if REP else ""])
-    log(f"  후보·선정지 비교표: {len(crows)}줄 (처방 규칙: 고립 위험 {RR['min_risk']}채 이상 + 1억 원당 {RR['min_per100m']:g}동 이상 → 시설 검토, "
+                      int(round(near / 50) * 50) if near is not None and near <= 3000 else "", prescribe(per, near) if REP else ""])
+    log(f"  후보·선정지 비교표: {len(crows)}줄 (처방 규칙: 1억 원당 수혜 {RR['min_per100m']:g}동 이상 → 시설 검토, "
         f"{RR['radius_m']:g}m 안 기존 시설 → 연계, 그 밖 → 난간·쉼터·계단 정비 + 방문돌봄. 시설 1곳 {RR['cost_eok']:g}억 원 가정)")
     for r_ in crows:
-        log(f"    {r_[1]}: {r_[3] or '동 모름'}, 고립 위험 {r_[7]}채, {r_[8]} 높이 {r_[9]}m, 수혜 {r_[13]} (고령자 30초 {r_[14]}), 1억 원당 {r_[17] or '-'} → {r_[19] or '-'}")
+        log(f"    {r_[1]}: {r_[3] or '동 모름'}, 고립 위험 {r_[7]}채, {r_[8]} 높이 {r_[9]}m, 수혜 {r_[13]} (고령자 30초 {r_[14]} · 휠체어 1분 {r_[15]}), 1억 원당 {r_[17] or '-'} → {r_[19] or '-'}")
 write_csv(os.path.join(C.OUTPUT, "intervention_candidates.csv"),
           ["kind", "facility", "adm_cd", "adm_nm", "cell_x", "cell_y", "n_bld_cell", f"n_risk_{C.RISK_MIN:g}m" if C.RISK_MIN else "n_risk",
            "facility_type", "rise_m", "length_m", "pass_s", "wheel_now_m", "n_benefit_any", "n_saved_30s", "wheel_benefit", "mean_saved_min",
@@ -1974,6 +2062,7 @@ FILES['hbi6/10_points_join.py'] = r'''# -*- coding: utf-8 -*-
        period_col(예: STD_YM) 을 주면 기간 수로 나눠 기간 평균. 이때 n_points·per100_bld 는 "값 합계"·"건물 100개당 값"
   points_<이름>_dong.csv   : adm_cd, n_bld, hbi_mean, n_points, per100_bld
                              [v6.3] 지수 방식(config POINT_DATA 의 index_pop·index_rel, SKT 기본)이면 adm_cd, n_bld, hbi_mean, index 만 (원값 없음, 격자 파일 없음)
+                             [10/13] index_pop 이면 (유동 ÷ 인구) 를 구마다 그 구 동 평균으로 나눈 상대 지수 (구 평균 = 1.0)
   points_<이름>_grid.csv   : cell_x, cell_y, n_bld, hbi_mean, n_points, per100_bld
   points_summary.csv       : 이름별 행 수 흐름(전체 → 조건 통과 → 좌표 있음 → 범위 안 → 동·격자 합계)과 상관계수
 [해석] 상관이 있어도 인과는 아님 (예: 언덕 동네는 원래 길이 좁을 수도 있음). 기획서에는 "보조 근거"로만 씁니다.
@@ -2095,17 +2184,28 @@ for name, cfg in todo.items():
     ng, nd = sum(r[4] for r in grows), sum(r[3] for r in drows)
     if idx_mode:                                         # [v6.3] 동 값 → 지수 (인구 대비 또는 동 평균 대비). n_points·per100_bld 칸 없음
         mean_ = float(np.mean([r[3] for r in drows])) if drows else 0.0
-        sig2 = lambda x: float(f"{x:.2g}") if x > 0 else 0.0     # [v6.3 검토] 유효숫자 2자리 (지수 × 공개 인구 = 원값을 ±5% 안으로만)
+        sig2 = lambda x: float(f"{x:.2g}") if x > 0 else 0.0     # [v6.3 검토] 유효숫자 2자리
+        if ipop:
+            # [10/13 판정] 인구 대비 값(유동 ÷ 인구)을 구마다 그 구 동 평균으로 나눈 상대 지수 (관악구 평균 = 1.0).
+            #   지수 × 공개 인구 = 유동 × (그 구의 모르는 배율) 이라 절대값이 나오지 않음 (배율 = 구 평균 유동÷인구, 어디에도 내지 않음)
+            rat = {}
+            for r in drows:
+                pp = popd.get(r[0])
+                rat[r[0]] = r[3] / pp if pp and np.isfinite(pp) and pp > 0 else None
+            gmean = {}
+            for gk in {c[:5] for c in rat}:
+                vs = [x for c, x in rat.items() if c[:5] == gk and x is not None]
+                gmean[gk] = float(np.mean(vs)) if vs else 0.0
         for r in drows:
             if ipop:
-                pp = popd.get(r[0])
-                r[3] = sig2(r[3] / pp) if pp and np.isfinite(pp) and pp > 0 else ""
+                x, gm = rat.get(r[0]), gmean.get(r[0][:5], 0.0)
+                r[3] = sig2(x / gm) if x is not None and gm > 0 else ""
             else:
                 r[3] = sig2(r[3] / mean_) if mean_ > 0 else ""
             del r[4]
         drows = [r for r in drows]
         write_csv(os.path.join(C.OUTPUT, f"points_{name}_dong.csv"), ["adm_cd", "n_bld", "hbi_mean", "index"], drows)
-        log(f"  지수 방식: {'60세 이상 유동 ÷ 60세 이상 인구 (external/' + ipop + ')' if ipop else '동 값 ÷ 분석 범위 동 평균'} → 동 {len(drows)}개, 원값·격자 파일은 내지 않음")
+        log(f"  지수 방식: {'60세 이상 유동 ÷ 60세 이상 인구 (external/' + ipop + '), 구 평균 = 1.0 상대 지수' if ipop else '동 값 ÷ 분석 범위 동 평균'} → 동 {len(drows)}개, 원값·격자 파일은 내지 않음")
     else:
         write_csv(os.path.join(C.OUTPUT, f"points_{name}_dong.csv"), ["adm_cd", "n_bld", "hbi_mean", "n_points", "per100_bld"], drows)
 
@@ -2122,7 +2222,7 @@ for name, cfg in todo.items():
     unit = "값 합계" if summing else "점 수"
     if idx_mode:                                         # [v6.3] 원값 합계 줄 없이 행 수·상관·지수 4분위 평균만
         summary += [[name, "전체 행 수", n0], [name, "조건 통과", n1], [name, "좌표 있음", n2], [name, "분석 범위 안", n3],
-                    [name, "지수", "60세 이상 유동 ÷ 60세 이상 인구" if ipop else "동 값 ÷ 분석 범위 동 평균"],
+                    [name, "지수", "60세 이상 유동 ÷ 60세 이상 인구, 구 평균 = 1.0 상대 지수" if ipop else "동 값 ÷ 분석 범위 동 평균"],
                     [name, "지수를 낸 행정동 수", len(dv)],
                     [name, "동별 HBI 평균 vs 지수: 스피어만", f(rho)],
                     [name, "HBI 하위 25% 동 평균 지수", f(lo)], [name, "HBI 상위 25% 동 평균 지수", f(hi)]]
@@ -2747,8 +2847,14 @@ if skt:
         log(f"  SKT 대조: output/points_{skt[0]}_dong.csv 의 지수가 없어 대조 못 함 (10_points_join.py 먼저, 인구 파일 external/pop60.csv)")
     else:
         common = [(c, s) for c, s in check if c in ten and s is not None]
-        bad = [(c, s, ten[c]) for c, s in common if abs(float(f"{s:.2g}") - ten[c]) > 1e-9]   # 10 과 같은 유효숫자 2자리로 견줌
-        log(f"  SKT 대조: 10 과 같은 행정동 {len(common)}곳 중 " + ("모두 같음" if not bad else f"!! {len(bad)}곳 다름 {bad[:3]} → 읽는 규칙 확인"))
+        # [10/13] 10 의 지수는 구 평균 = 1.0 상대 지수 → 14 의 (유동 ÷ 인구) 와 구마다 같은 배율이어야 함 (유효숫자 2자리라 ±6% 안). 배율 자체는 찍지 않음
+        bad = []
+        for gk in {c[:5] for c, _ in common}:
+            qs = [(c, s / ten[c]) for c, s in common if c[:5] == gk and ten[c] > 0]
+            if qs:
+                md = float(np.median([q for _, q in qs]))
+                bad += [c for c, q in qs if abs(q / md - 1) > 0.06]
+        log(f"  SKT 대조: 10 과 같은 행정동 {len(common)}곳 중 " + ("모두 같은 배율 (구 평균 = 1.0 상대 지수)" if not bad else f"!! {len(bad)}곳 배율이 다름 {bad[:3]} → 읽는 규칙 확인"))
 log(f"완료 → output/dong_context.csv ({len(out)}행, 건물·셀 좌표는 저장하지 않음)")
 '''
 
@@ -2783,10 +2889,10 @@ python run_all.py                ← 분석. 멈추면 고친 뒤 python run_all
 - `output/run_meta.csv`: 대상 구, 건물 용도 방식, 건축물대장 연결률, AREA_BBOX 와 이유. [v6.2] `hbi_bands`(체감 부담·고위험 HBI 문턱)·`extra_min_bands`(왕복 추가 분 문턱) — 기획서 생성기가 이 값을 읽어 구간을 적음
 
 - [v6.3] 바뀐 것 (mapping 새 키는 setup 이 기본값으로 적음):
-  - **후보 자동** (`auto_candidates` = 5, 0 이면 안 함): 09 가 고립 위험 집(왕복 `risk_min` = 10분 이상 더)이 가장 많은 격자 K곳에서, 그 집들의 고령자 최단 경로가 가장 많이 지나는 가파른 구간(계단 먼저, 경사 1/12 이상, 수평 120m 상한)의 양 끝에 수직·경사형 엘리베이터를 놓아 봄 (봉천과 같은 시간 식, 목적지는 의료만, ALL 에는 넣지 않음). 결과 `output/intervention_candidates.csv` (격자 단위: 동·격자 가운데·격자 고립 위험 집 수·시설 종류·높이 차·길이·지금 휠체어 길·수혜·1억 원당·처방). **시설 양 끝 좌표는 반출하지 않음** (`work/intervention_candidates_ends.csv` 에만). 처방 규칙: 500m(`existing_radius_m`) 안 기존 이동편의시설(`external/existing_facilities.csv`) → 기존 시설 연계 / 고립 위험 30채(`cand_min_risk`) 이상이고 1억 원당 수혜 1동(`cand_min_per100m`) 이상 → 시설 검토 / 그 밖 → 난간·쉼터·계단 정비 + 방문돌봄 (시설 1곳 `facility_cost_eok` = 40억 원 가정). 시설 좌표가 하나도 없어도 09 를 돎
+  - **후보 자동** (`auto_candidates` = 5, 0 이면 안 함): 09 가 고립 위험 집(왕복 `risk_min` = 10분 이상 더)이 가장 많은 격자 K곳에서, 그 집들의 고령자 최단 경로가 가장 많이 지나는 가파른 구간(계단 먼저, 경사 1/12 이상, 수평 120m 상한)의 양 끝에 수직·경사형 엘리베이터를 놓아 봄 (봉천과 같은 시간 식, 목적지는 의료만, ALL 에는 넣지 않음). 결과 `output/intervention_candidates.csv` (격자 단위: 동·격자 가운데·격자 고립 위험 집 수·시설 종류·높이 차·길이·지금 휠체어 길·수혜·1억 원당·처방). **시설 양 끝 좌표는 반출하지 않음** (`work/intervention_candidates_ends.csv` 에만). 처방 규칙: 500m(`existing_radius_m`) 안 기존 이동편의시설(`external/existing_facilities.csv`) → 기존 시설 연계 / 1억 원당 수혜 5동(`cand_min_per100m`) 이상 → 시설 검토 / 그 밖 → 난간·쉼터·계단 정비 + 방문돌봄 (10/13: 고립 위험 집 수 조건은 뺌. 후보표·화면에 수혜를 고령자 30초·휠체어 1분으로 나눠 적음) (시설 1곳 `facility_cost_eok` = 40억 원 가정). 시설 좌표가 하나도 없어도 09 를 돎
   - `extra_min_bands` 기본 3,5,10,**15** (기준 민감도), 고립 위험 문턱은 `risk_min` (가장 큰 값이 아님)
   - 05 summary: 고립 위험 집 종류 구성(단독·다가구·연립·다세대·아파트·공동 기타, 1~4채 종류는 "5채 미만"), 집 어르신 추정·집당 배분 어르신(전체, 단독·다가구, 공동주택. 종류별은 빼기 검사를 통과할 때만 숫자, 못 하면 단독·다가구는 "5명 이상/미만" 판정만), 고립 위험 격자 안 독거노인 추정 합, 기준 민감도(5·10·15분 행정동 순위상관). dong_hbi 맨 뒤 `n_riskcell`·`alone65_riskcell_est` (독거노인 × 격자 안 주거 연면적 ÷ 동 주거 연면적, 1~4채이거나 낸 연면적과 빼서 1~4채가 남으면 빈 칸). 결과 점검표 `집당 배분 어르신` (단독·다가구 집당 5명 이상이면 빨강 → 층수·용도 방식 확인). `external/elderly_pop.csv`·`alone65.csv`·`pop60.csv` 는 채워서 반입
-  - 10·14 **SKT 는 지수만** (원값 합계를 내지 않음): 60세 이상 = 유동 ÷ 60세 이상 인구(`external/pop60.csv`), 낮 시간 = 동 평균 대비. `points_SKT_*_dong.csv` 는 adm_cd·n_bld·hbi_mean·index, 격자 파일 없음. dong_context 의 SKT 칸은 skt_res_share(주거 칸 몫)·skt_res_index
+  - 10·14 **SKT 는 지수만** (원값 합계를 내지 않음): 60세 이상 = 유동 ÷ 60세 이상 인구(`external/pop60.csv`) 를 다시 구마다 그 구 동 평균으로 나눈 상대 지수(관악구 평균 = 1.0, 10/13: 공개 인구를 곱해도 절대값이 나오지 않게), 낮 시간 = 동 평균 대비. `points_SKT_*_dong.csv` 는 adm_cd·n_bld·hbi_mean·index, 격자 파일 없음. dong_context 의 SKT 칸은 skt_res_share(주거 칸 몫)·skt_res_index
   - 04: od_pairs 의 `measured_slow_min`(천천히 걷기 = 어르신 걸음 흉내 잰 분)이 있으면 validation_routes 맨 뒤, 3개 이상이면 고령자 예측과 상관 (validation_measured)
 
 아래 v5 설명(단계별 파일)은 그대로 유효합니다.
@@ -24246,8 +24352,7 @@ DEFAULTS = {
     "hbi_band": ("1.3", "[v6.2] 체감 부담 HBI 문턱 (이 값 이상 = 체감 부담. 결과의 HBI 구간 첫 값, 1 보다 크고 1.8 보다 작게). HBI 1.8 구간은 결과에 그대로", "결과 구간"),
     # ── 후보 시설 [v6.3] (09 후보 자동) ──
     "auto_candidates": ("5", "[v6.3] 09 가 고립 위험 집이 가장 많은 격자 K곳에 시설을 자동으로 놓아 봄 (0 = 안 함). 시설 양 끝 좌표는 반출하지 않음", "후보 시설"),
-    "cand_min_risk": ("30", "[v6.3] 처방: 격자 고립 위험 집이 이 수 이상이고 1억 원당 수혜가 cand_min_per100m 이상이면 '시설 검토', 아니면 '난간·쉼터·계단 정비 + 방문돌봄'", "후보 시설"),
-    "cand_min_per100m": ("1.0", "[v6.3] 처방: 1억 원당 수혜 건물(고령자 30초 또는 휠체어 1분 이상 단축) 기준", "후보 시설"),
+    "cand_min_per100m": ("5", "[v6.3] 처방: 1억 원당 수혜 건물(고령자 30초 또는 휠체어 1분 이상 단축)이 이 수 이상이면 '시설 검토', 미만이면 '난간·쉼터·계단 정비 + 방문돌봄' (10/13 판정: 고립 위험 집 수 조건은 없음)", "후보 시설"),
     "facility_cost_eok": ("40", "[v6.3] 시설 1곳 비용 가정(억 원). 1억 원당 수혜 = 수혜 건물 ÷ 이 값", "후보 시설"),
     "existing_radius_m": ("500", "[v6.3] 처방: 격자 가운데에서 이 거리(m) 안에 기존 이동편의시설(external/existing_facilities.csv)이 있으면 '기존 시설 연계'", "후보 시설"),
 }
@@ -24353,8 +24458,7 @@ def apply(g):
     g["HBI_BANDS"] = [hbi_band(m.get("hbi_band"), g["HBI_BANDS"]), g["HBI_BANDS"][1]]     # [v6.2] 체감 부담 문턱은 mapping 한 곳에서
     g["RISK_MIN"] = risk_min(m.get("risk_min"), g["MIN_BANDS"])                             # [v6.3] 고립 위험 문턱(분)
     g["AUTO_CANDIDATES"] = _num(m.get("auto_candidates"), "auto_candidates", int, 0, 20)
-    g["CAND_RULE"] = {"min_risk": _num(m.get("cand_min_risk"), "cand_min_risk", int, 0, None),
-                      "min_per100m": _num(m.get("cand_min_per100m"), "cand_min_per100m", float, 0, None),
+    g["CAND_RULE"] = {"min_per100m": _num(m.get("cand_min_per100m"), "cand_min_per100m", float, 0, None),
                       "cost_eok": _num(m.get("facility_cost_eok"), "facility_cost_eok", float, 1e-9, None),
                       "radius_m": _num(m.get("existing_radius_m"), "existing_radius_m", float, 0, None)}
 
@@ -25231,6 +25335,7 @@ class DEM:
             gt = vrt.GetGeoTransform()
             s = srs_from(guess_crs(gt[0], gt[0] + gt[1] * vrt.RasterXSize))
         self.ct = transformer(TARGET, s)       # 분석 좌표 → DEM 좌표 (DEM 좌표계가 다를 때 대비)
+        self.srs = s                           # [10/13] DEM 좌표계 (02 가 경사 격자를 work 에 저장할 때)
         # GeoTransform: 픽셀 ↔ 좌표 변환 정보. gt[0]=왼쪽 x, gt[1]=픽셀 가로크기, gt[3]=위쪽 y, gt[5]=픽셀 세로크기(음수)
         gt = vrt.GetGeoTransform()
         bbox = bbox or C.AREA_BBOX
@@ -28307,7 +28412,7 @@ if __name__ == "__main__":
 '''
 
 # ---------------------------------------------------------------- hbi6/VERSION
-FILES['hbi6/VERSION'] = r'''hbi_code v6.3 #b6149b
+FILES['hbi6/VERSION'] = r'''hbi_code v6.3 #bce59e
 '''
 
 try:

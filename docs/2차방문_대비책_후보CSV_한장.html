@@ -40,7 +40,8 @@ code { font-family: "Menlo", "Consolas", monospace; font-size: 8.6pt; background
 </div>
 <h2>순서 (안내서·카드는 인쇄 폴더 <span class="s">_대비책_v6.2</span> 의 v6.2 판)</h2>
 <ol>
-<li><b>v6.2 그대로</b>: 안내서 v6.2 단계 0~5-3 (<code>python hbi_code_bundle_v6.2.txt</code> → <code>cd hbi6</code> → <code>python setup.py</code> → <code>python check.py</code> → <code>python run_all.py --modes auto,all</code>). 관악 실측을 했으면 단계 7 (<code>--from 04</code>) 까지 먼저 끝냄. <span class="small">천천히 잰 분은 기록지에만 (v6.2 의 od_pairs 에는 칸이 없음)</span></li>
+<li><b>v6.2 그대로</b>: 안내서 v6.2 단계 0~5-3 (<code>python hbi_code_bundle_v6.2.txt</code> → <code>cd hbi6</code> → <code>python setup.py</code> → <code>python check.py</code> → <code>python run_all.py --modes auto,all</code>). 관악 실측을 했으면 단계 7 (<code>--from 04</code>) 까지 먼저 끝냄. <span class="small">천천히 잰 분은 기록지에만 (v6.2 의 od_pairs 에는 칸이 없음)</span><br>
+<b>단 하나 다른 것</b>: setup 의 <span class="s">7. 상호제공 CSV</span> 끝 질문 <span class="s">위 파일 경로를 config.py 에 넣을까요? (y/n, Enter = y)</span> 에만 <code>n</code> Enter. <span class="small">v6.2 는 SKT 유동인구를 행정동 합계 그대로 내므로 (v6.3 은 구 평균 = 1.0 지수) 상호제공 자료를 쓰지 않음. KCB·교통사고도 함께 빠짐 (기획서 21·22장은 공개 자료판으로 나옴)</span></li>
 <li><b>후보 CSV 로 바꾸기</b> (hbi6 폴더에서, 한 줄):
 <div class="c">copy /Y ..\interventions_candidates.csv external\interventions.csv</div>
 <span class="small">Windows 가 <span class="s">1개 파일이 복사되었습니다.</span> 를 띄우면 됨. <span class="s">지정된 파일을 찾을 수 없습니다.</span> → CSV 가 박수범 폴더에 없음 (담당자에게 확인)</span></li>
