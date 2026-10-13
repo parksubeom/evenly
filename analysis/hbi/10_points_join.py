@@ -18,6 +18,7 @@
        period_col(예: STD_YM) 을 주면 기간 수로 나눠 기간 평균. 이때 n_points·per100_bld 는 "값 합계"·"건물 100개당 값"
   points_<이름>_dong.csv   : adm_cd, n_bld, hbi_mean, n_points, per100_bld
                              [v6.3] 지수 방식(config POINT_DATA 의 index_pop·index_rel, SKT 기본)이면 adm_cd, n_bld, hbi_mean, index 만 (원값 없음, 격자 파일 없음)
+                             [10/13] index_pop 이면 (유동 ÷ 인구) 를 구마다 그 구 동 평균으로 나눈 상대 지수 (구 평균 = 1.0)
   points_<이름>_grid.csv   : cell_x, cell_y, n_bld, hbi_mean, n_points, per100_bld
   points_summary.csv       : 이름별 행 수 흐름(전체 → 조건 통과 → 좌표 있음 → 범위 안 → 동·격자 합계)과 상관계수
 [해석] 상관이 있어도 인과는 아님 (예: 언덕 동네는 원래 길이 좁을 수도 있음). 기획서에는 "보조 근거"로만 씁니다.
@@ -139,17 +140,28 @@ for name, cfg in todo.items():
     ng, nd = sum(r[4] for r in grows), sum(r[3] for r in drows)
     if idx_mode:                                         # [v6.3] 동 값 → 지수 (인구 대비 또는 동 평균 대비). n_points·per100_bld 칸 없음
         mean_ = float(np.mean([r[3] for r in drows])) if drows else 0.0
-        sig2 = lambda x: float(f"{x:.2g}") if x > 0 else 0.0     # [v6.3 검토] 유효숫자 2자리 (지수 × 공개 인구 = 원값을 ±5% 안으로만)
+        sig2 = lambda x: float(f"{x:.2g}") if x > 0 else 0.0     # [v6.3 검토] 유효숫자 2자리
+        if ipop:
+            # [10/13 판정] 인구 대비 값(유동 ÷ 인구)을 구마다 그 구 동 평균으로 나눈 상대 지수 (관악구 평균 = 1.0).
+            #   지수 × 공개 인구 = 유동 × (그 구의 모르는 배율) 이라 절대값이 나오지 않음 (배율 = 구 평균 유동÷인구, 어디에도 내지 않음)
+            rat = {}
+            for r in drows:
+                pp = popd.get(r[0])
+                rat[r[0]] = r[3] / pp if pp and np.isfinite(pp) and pp > 0 else None
+            gmean = {}
+            for gk in {c[:5] for c in rat}:
+                vs = [x for c, x in rat.items() if c[:5] == gk and x is not None]
+                gmean[gk] = float(np.mean(vs)) if vs else 0.0
         for r in drows:
             if ipop:
-                pp = popd.get(r[0])
-                r[3] = sig2(r[3] / pp) if pp and np.isfinite(pp) and pp > 0 else ""
+                x, gm = rat.get(r[0]), gmean.get(r[0][:5], 0.0)
+                r[3] = sig2(x / gm) if x is not None and gm > 0 else ""
             else:
                 r[3] = sig2(r[3] / mean_) if mean_ > 0 else ""
             del r[4]
         drows = [r for r in drows]
         write_csv(os.path.join(C.OUTPUT, f"points_{name}_dong.csv"), ["adm_cd", "n_bld", "hbi_mean", "index"], drows)
-        log(f"  지수 방식: {'60세 이상 유동 ÷ 60세 이상 인구 (external/' + ipop + ')' if ipop else '동 값 ÷ 분석 범위 동 평균'} → 동 {len(drows)}개, 원값·격자 파일은 내지 않음")
+        log(f"  지수 방식: {'60세 이상 유동 ÷ 60세 이상 인구 (external/' + ipop + '), 구 평균 = 1.0 상대 지수' if ipop else '동 값 ÷ 분석 범위 동 평균'} → 동 {len(drows)}개, 원값·격자 파일은 내지 않음")
     else:
         write_csv(os.path.join(C.OUTPUT, f"points_{name}_dong.csv"), ["adm_cd", "n_bld", "hbi_mean", "n_points", "per100_bld"], drows)
 
@@ -166,7 +178,7 @@ for name, cfg in todo.items():
     unit = "값 합계" if summing else "점 수"
     if idx_mode:                                         # [v6.3] 원값 합계 줄 없이 행 수·상관·지수 4분위 평균만
         summary += [[name, "전체 행 수", n0], [name, "조건 통과", n1], [name, "좌표 있음", n2], [name, "분석 범위 안", n3],
-                    [name, "지수", "60세 이상 유동 ÷ 60세 이상 인구" if ipop else "동 값 ÷ 분석 범위 동 평균"],
+                    [name, "지수", "60세 이상 유동 ÷ 60세 이상 인구, 구 평균 = 1.0 상대 지수" if ipop else "동 값 ÷ 분석 범위 동 평균"],
                     [name, "지수를 낸 행정동 수", len(dv)],
                     [name, "동별 HBI 평균 vs 지수: 스피어만", f(rho)],
                     [name, "HBI 하위 25% 동 평균 지수", f(lo)], [name, "HBI 상위 25% 동 평균 지수", f(hi)]]

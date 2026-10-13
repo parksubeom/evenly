@@ -29,6 +29,53 @@ log(f"  노드 고도 결측 {np.isnan(z5).mean():.1%}")
 # [v6.1] sample 은 DEM 범위 밖 노드를 가장자리 값으로 채움 (그래서 위 결측은 0% 로 나오기 쉬움) → 범위 밖 노드 비율을 따로 보임 (값은 그대로)
 out5 = ~d5.covers(nodes[giant, 0], nodes[giant, 1])
 log(f"  DEM 5m 범위 밖 노드 {out5.mean():.1%}" + ("  ← 0% 가 아니면 그곳 경사가 평지에 가깝게 계산됨: DEM 폴더에 대상 구 도엽이 다 있는지 확인" if out5.any() else ""))
+# [10/13 판정] 대상 구의 경사 면적 비율 (13장 "구릉지 비율", 자체 계산): DEM 5m 격자마다 경사(%) = 높이 변화율, 구 경계 안 칸 중 문턱 이상 비율
+#   → work/terrain_slope.json → 05 가 summary 의 meta 줄로 냄 (구 단위 비율만, 건물 정보 없음). 실패해도 분석은 그대로
+SLOPE_PCT = [5, 100 / 12, 15, 20]
+
+
+def terrain_slope(dem, gus):
+    from osgeo import gdal, ogr
+    from lib.area import gu_polys
+    gt, arr = dem.gt, dem.arr
+    if not (0.5 <= abs(gt[1]) <= 50):
+        return {"note": f"DEM 칸 크기 {gt[1]:g} 가 미터로 보이지 않음"}
+    dy, dx = np.gradient(arr, abs(gt[5]), abs(gt[1]))
+    slope = np.hypot(dx, dy) * 100
+    # 05 가 대표 방식에서 '경사 문턱 이상 땅에 있는 주거 건물 비율'을 세도록 경사 격자를 work 에 (반출 안 함)
+    np.savez_compressed(os.path.join(C.WORK_NET, "terrain_slope.npz"), slope=slope.astype("float32"), gt=np.array(gt, float),
+                        wkt=np.array(dem.srs.ExportToWkt() if getattr(dem, "srs", None) is not None else ""))
+    out = {"dem_res_m": round(abs(gt[1]), 2), "gu": {}}
+    for gu, g in gu_polys(gus or None).items():
+        g = g.Clone()
+        if dem.ct is not None:
+            g.Transform(dem.ct)
+        drv = ogr.GetDriverByName("MEM") or ogr.GetDriverByName("Memory")
+        vds = drv.CreateDataSource("t")
+        lyr = vds.CreateLayer("g", geom_type=ogr.wkbMultiPolygon)
+        f = ogr.Feature(lyr.GetLayerDefn())
+        f.SetGeometry(g)
+        lyr.CreateFeature(f)
+        rds = gdal.GetDriverByName("MEM").Create("", arr.shape[1], arr.shape[0], 1, gdal.GDT_Byte)
+        rds.SetGeoTransform(gt)
+        gdal.RasterizeLayer(rds, [1], lyr, burn_values=[1])
+        m = (rds.GetRasterBand(1).ReadAsArray() == 1) & np.isfinite(slope)
+        area_g = g.GetArea()
+        cov = float(m.sum() * abs(gt[1] * gt[5]) / area_g) if area_g > 0 else 0.0
+        out["gu"][gu] = {"cover": round(cov, 3), **{f"ge{t:.1f}": round(float((slope[m] >= t).mean()), 3) if m.any() else None for t in SLOPE_PCT}}
+        log(f"  경사 면적 비율 {gu} (DEM {abs(gt[1]):g}m, 구 면적의 {cov:.0%} 를 덮음): " + " · ".join(f"{t:.1f}% 이상 {out['gu'][gu][f'ge{t:.1f}']:.1%}" for t in SLOPE_PCT if m.any()))
+    return out
+
+
+try:
+    import json as _json
+    _ts = terrain_slope(d5, C.TARGET_GU)
+except Exception as ex:                                   # 구 경계가 없거나 GDAL 이 다르면: 13장 칸만 빔
+    _ts = {"note": f"계산 못 함 ({type(ex).__name__}: {ex})"}
+    log(f"  경사 면적 비율: {_ts['note']} → 13장 칸이 빔 (분석에는 영향 없음)")
+with open(os.path.join(C.WORK_NET, "terrain_slope.json"), "w", encoding="utf-8") as _f:
+    _json.dump(_ts, _f, ensure_ascii=False)
+
 s5, bad = edge_slope(z5, e)
 a = np.abs(s5)
 log(f"  경사: 중앙값 {np.median(a):.3f}, 90% {np.percentile(a, 90):.3f}, 절단 {bad.mean():.2%}")

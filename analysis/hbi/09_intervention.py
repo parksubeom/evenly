@@ -621,10 +621,11 @@ addD = ((b[f"{DT}_t_elder"] - b[f"{DT}_t_flat"]) / 60) if DT else None
 RR = C.CAND_RULE
 
 
-def prescribe(n_risk, per100m, near_m):
+def prescribe(per100m, near_m):
+    """[10/13 판정] 500m 안 기존 시설 → 연계 / 1억 원당 수혜 ≥ cand_min_per100m(기본 5) → 시설 검토 / 그 밖 → 정비 + 방문돌봄 (고립 위험 집 수 조건 없음)"""
     if near_m is not None and near_m <= RR["radius_m"]:
         return "기존 시설 연계"
-    if n_risk not in ("", None) and n_risk >= RR["min_risk"] and per100m is not None and per100m >= RR["min_per100m"]:
+    if per100m is not None and per100m >= RR["min_per100m"]:
         return "시설 검토"
     return "난간·쉼터·계단 정비 + 방문돌봄"
 
@@ -661,11 +662,11 @@ if DT and (CANDS or any(not c_ for c_ in is_cand)):
                       dcode[kd] if kd >= 0 else "", dname[kd] if kd >= 0 else "", cx, cy, nbc if nbc >= C.MIN_COUNT else "", nrk,
                       typ, info["rise"], (int(round(ln_, -1)) if c else round(ln_)), info["pass"], round(wn / 10) * 10 if wn is not None else "없음",
                       row[22], row[14], row[10], row[4], per if per is not None else ("0" if (n_any == 0 and REP) else ""),
-                      int(round(near / 50) * 50) if near is not None and near <= 3000 else "", prescribe(nrk, per, near) if REP else ""])
-    log(f"  후보·선정지 비교표: {len(crows)}줄 (처방 규칙: 고립 위험 {RR['min_risk']}채 이상 + 1억 원당 {RR['min_per100m']:g}동 이상 → 시설 검토, "
+                      int(round(near / 50) * 50) if near is not None and near <= 3000 else "", prescribe(per, near) if REP else ""])
+    log(f"  후보·선정지 비교표: {len(crows)}줄 (처방 규칙: 1억 원당 수혜 {RR['min_per100m']:g}동 이상 → 시설 검토, "
         f"{RR['radius_m']:g}m 안 기존 시설 → 연계, 그 밖 → 난간·쉼터·계단 정비 + 방문돌봄. 시설 1곳 {RR['cost_eok']:g}억 원 가정)")
     for r_ in crows:
-        log(f"    {r_[1]}: {r_[3] or '동 모름'}, 고립 위험 {r_[7]}채, {r_[8]} 높이 {r_[9]}m, 수혜 {r_[13]} (고령자 30초 {r_[14]}), 1억 원당 {r_[17] or '-'} → {r_[19] or '-'}")
+        log(f"    {r_[1]}: {r_[3] or '동 모름'}, 고립 위험 {r_[7]}채, {r_[8]} 높이 {r_[9]}m, 수혜 {r_[13]} (고령자 30초 {r_[14]} · 휠체어 1분 {r_[15]}), 1억 원당 {r_[17] or '-'} → {r_[19] or '-'}")
 write_csv(os.path.join(C.OUTPUT, "intervention_candidates.csv"),
           ["kind", "facility", "adm_cd", "adm_nm", "cell_x", "cell_y", "n_bld_cell", f"n_risk_{C.RISK_MIN:g}m" if C.RISK_MIN else "n_risk",
            "facility_type", "rise_m", "length_m", "pass_s", "wheel_now_m", "n_benefit_any", "n_saved_30s", "wheel_benefit", "mean_saved_min",

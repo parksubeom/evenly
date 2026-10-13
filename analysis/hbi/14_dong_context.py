@@ -196,6 +196,12 @@ if skt:
         log(f"  SKT 대조: output/points_{skt[0]}_dong.csv 의 지수가 없어 대조 못 함 (10_points_join.py 먼저, 인구 파일 external/pop60.csv)")
     else:
         common = [(c, s) for c, s in check if c in ten and s is not None]
-        bad = [(c, s, ten[c]) for c, s in common if abs(float(f"{s:.2g}") - ten[c]) > 1e-9]   # 10 과 같은 유효숫자 2자리로 견줌
-        log(f"  SKT 대조: 10 과 같은 행정동 {len(common)}곳 중 " + ("모두 같음" if not bad else f"!! {len(bad)}곳 다름 {bad[:3]} → 읽는 규칙 확인"))
+        # [10/13] 10 의 지수는 구 평균 = 1.0 상대 지수 → 14 의 (유동 ÷ 인구) 와 구마다 같은 배율이어야 함 (유효숫자 2자리라 ±6% 안). 배율 자체는 찍지 않음
+        bad = []
+        for gk in {c[:5] for c, _ in common}:
+            qs = [(c, s / ten[c]) for c, s in common if c[:5] == gk and ten[c] > 0]
+            if qs:
+                md = float(np.median([q for _, q in qs]))
+                bad += [c for c, q in qs if abs(q / md - 1) > 0.06]
+        log(f"  SKT 대조: 10 과 같은 행정동 {len(common)}곳 중 " + ("모두 같은 배율 (구 평균 = 1.0 상대 지수)" if not bad else f"!! {len(bad)}곳 배율이 다름 {bad[:3]} → 읽는 규칙 확인"))
 log(f"완료 → output/dong_context.csv ({len(out)}행, 건물·셀 좌표는 저장하지 않음)")

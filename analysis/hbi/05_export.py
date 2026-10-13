@@ -208,6 +208,46 @@ if C.TARGET_GU and st.get("n_res_all", 0) > st.get("n_res_target", 0):
     summary.append(["meta", "대상 구 (출발점은 이 구의 집만, 옆 구는 길·목적지로만)", ",".join(C.TARGET_GU)])
 if getattr(C, "TARGET_NOTE", ""):                 # [v6.1] 자료가 일부 구만 덮어 대상 구를 줄였을 때 (예: 대상 5개 구 중 1개 구만 자료 있음)
     summary.append(["meta", "대상 구 범위", C.TARGET_NOTE])
+# [10/13 판정] 구릉지 비율 (02 가 DEM 으로 계산한 구별 경사 면적 비율, 구 단위라 방식과 무관하게 같은 값): 13장 "자체 계산"
+_tsp = os.path.join(C.WORK_NET, "terrain_slope.json")
+if os.path.exists(_tsp):
+    import json as _json
+    _ts = _json.load(open(_tsp, encoding="utf-8"))
+    for _gu, _v in (_ts.get("gu") or {}).items():
+        for _k, _x in _v.items():
+            if _k.startswith("ge") and _x is not None:
+                summary.append(["meta", f"{_gu} 경사 {float(_k[2:]):g}% 이상 땅 비율 (DEM {_ts.get('dem_res_m', '')}m, 자체 계산)", _x])
+        summary.append(["meta", f"{_gu} 경사 계산이 덮은 구 면적 비율", _v.get("cover", "")])
+# 같은 문턱으로 '경사 문턱 이상 땅에 있는 주거 건물 비율' (산을 빼고 읽을 수 있게). 건물 집계라 대표 방식에서만, 구마다 건물 5개 이상일 때만
+_tsn = os.path.join(C.WORK_NET, "terrain_slope.npz")
+if REP and os.path.exists(_tsn):
+    try:
+        from osgeo import osr
+        from lib.qio import TARGET, transformer, transform_xy
+        from lib.area import gu_of_points
+        _z = np.load(_tsn)
+        _sl, _gt, _wkt = _z["slope"], _z["gt"], str(_z["wkt"])
+        if _wkt:
+            _s = osr.SpatialReference(wkt=_wkt)
+            _s.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+            _ct = transformer(TARGET, _s)
+        else:
+            _ct = None
+        _px, _py = transform_xy(_ct, X, Y)
+        _c = np.floor((np.asarray(_px) - _gt[0]) / _gt[1]).astype(int)
+        _r = np.floor((np.asarray(_py) - _gt[3]) / _gt[5]).astype(int)
+        _in = (_r >= 0) & (_r < _sl.shape[0]) & (_c >= 0) & (_c < _sl.shape[1])
+        _sb = np.full(len(X), np.nan)
+        _sb[_in] = _sl[_r[_in], _c[_in]]
+        _gu_b = gu_of_points(X, Y)
+        for _gu in (C.TARGET_GU or sorted({g_ for g_ in _gu_b if g_})):
+            _m = U & (_gu_b == _gu) & np.isfinite(_sb)
+            if _m.sum() >= C.MIN_COUNT:
+                for _t in (5, 100 / 12, 15, 20):
+                    summary.append(["meta", f"{_gu} 경사 {f'{_t:.1f}'.rstrip('0').rstrip('.')}% 이상 땅에 있는 주거 건물 비율 (DEM {_ts.get('dem_res_m', '') if os.path.exists(_tsp) else ''}m, 자체 계산)",
+                                    round(float((_sb[_m] >= _t).mean()), 3)])
+    except Exception as _ex:
+        log(f"  경사 땅 위 주거 건물 비율: 계산 못 함 ({type(_ex).__name__}) → 13장 칸이 빔")
 write_csv(os.path.join(C.OUTPUT, "run_meta.csv"), ["key", "value"], [
     ["target_gu", ",".join(C.TARGET_GU) or "(전체)"], ["neighbor_gu", ",".join(C.NEIGHBOR_GU)],
     ["target_gu_all", ",".join(getattr(C, "TARGET_GU_ALL", []))], ["target_note", getattr(C, "TARGET_NOTE", "")],
@@ -216,7 +256,7 @@ write_csv(os.path.join(C.OUTPUT, "run_meta.csv"), ["key", "value"], [
     ["hbi_bands", ",".join(f"{x:g}" for x in C.HBI_BANDS)], ["extra_min_bands", ",".join(f"{x:g}" for x in C.MIN_BANDS)],   # [v6.2] 구간 문턱 (기획서가 읽음)
     ["risk_min", f"{C.RISK_MIN:g}" if C.RISK_MIN else ""],   # [v6.3] 고립 위험 문턱(분)
     ["auto_candidates", str(C.AUTO_CANDIDATES)],             # [v6.3] 09 후보 자동 수와 처방 규칙 (기획서 17장 규칙 문구가 읽음)
-    ["cand_rule", f"{C.CAND_RULE['min_risk']},{C.CAND_RULE['min_per100m']:g},{C.CAND_RULE['cost_eok']:g},{C.CAND_RULE['radius_m']:g}"],
+    ["cand_rule", f"{C.CAND_RULE['min_per100m']:g},{C.CAND_RULE['cost_eok']:g},{C.CAND_RULE['radius_m']:g}"],   # [10/13] 1억 원당 기준, 억 원, m (고립 위험 집 수 조건 뺌)
     ["register_link_rate", st.get("link_rate", "")], ["register_join", st.get("register_join", "")], ["register_join_used", st.get("join_used", "")],
     ["register_rate_pnu", st.get("rate_pnu", "")], ["register_rate_pk", st.get("rate_pk", "")],
     ["ufid_match_rate", "" if st.get("rate_ufid") is None else st.get("rate_ufid")],

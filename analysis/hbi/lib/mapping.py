@@ -82,8 +82,7 @@ DEFAULTS = {
     "hbi_band": ("1.3", "[v6.2] 체감 부담 HBI 문턱 (이 값 이상 = 체감 부담. 결과의 HBI 구간 첫 값, 1 보다 크고 1.8 보다 작게). HBI 1.8 구간은 결과에 그대로", "결과 구간"),
     # ── 후보 시설 [v6.3] (09 후보 자동) ──
     "auto_candidates": ("5", "[v6.3] 09 가 고립 위험 집이 가장 많은 격자 K곳에 시설을 자동으로 놓아 봄 (0 = 안 함). 시설 양 끝 좌표는 반출하지 않음", "후보 시설"),
-    "cand_min_risk": ("30", "[v6.3] 처방: 격자 고립 위험 집이 이 수 이상이고 1억 원당 수혜가 cand_min_per100m 이상이면 '시설 검토', 아니면 '난간·쉼터·계단 정비 + 방문돌봄'", "후보 시설"),
-    "cand_min_per100m": ("1.0", "[v6.3] 처방: 1억 원당 수혜 건물(고령자 30초 또는 휠체어 1분 이상 단축) 기준", "후보 시설"),
+    "cand_min_per100m": ("5", "[v6.3] 처방: 1억 원당 수혜 건물(고령자 30초 또는 휠체어 1분 이상 단축)이 이 수 이상이면 '시설 검토', 미만이면 '난간·쉼터·계단 정비 + 방문돌봄' (10/13 판정: 고립 위험 집 수 조건은 없음)", "후보 시설"),
     "facility_cost_eok": ("40", "[v6.3] 시설 1곳 비용 가정(억 원). 1억 원당 수혜 = 수혜 건물 ÷ 이 값", "후보 시설"),
     "existing_radius_m": ("500", "[v6.3] 처방: 격자 가운데에서 이 거리(m) 안에 기존 이동편의시설(external/existing_facilities.csv)이 있으면 '기존 시설 연계'", "후보 시설"),
 }
@@ -189,8 +188,7 @@ def apply(g):
     g["HBI_BANDS"] = [hbi_band(m.get("hbi_band"), g["HBI_BANDS"]), g["HBI_BANDS"][1]]     # [v6.2] 체감 부담 문턱은 mapping 한 곳에서
     g["RISK_MIN"] = risk_min(m.get("risk_min"), g["MIN_BANDS"])                             # [v6.3] 고립 위험 문턱(분)
     g["AUTO_CANDIDATES"] = _num(m.get("auto_candidates"), "auto_candidates", int, 0, 20)
-    g["CAND_RULE"] = {"min_risk": _num(m.get("cand_min_risk"), "cand_min_risk", int, 0, None),
-                      "min_per100m": _num(m.get("cand_min_per100m"), "cand_min_per100m", float, 0, None),
+    g["CAND_RULE"] = {"min_per100m": _num(m.get("cand_min_per100m"), "cand_min_per100m", float, 0, None),
                       "cost_eok": _num(m.get("facility_cost_eok"), "facility_cost_eok", float, 1e-9, None),
                       "radius_m": _num(m.get("existing_radius_m"), "existing_radius_m", float, 0, None)}
 

@@ -248,6 +248,7 @@ class DEM:
             gt = vrt.GetGeoTransform()
             s = srs_from(guess_crs(gt[0], gt[0] + gt[1] * vrt.RasterXSize))
         self.ct = transformer(TARGET, s)       # 분석 좌표 → DEM 좌표 (DEM 좌표계가 다를 때 대비)
+        self.srs = s                           # [10/13] DEM 좌표계 (02 가 경사 격자를 work 에 저장할 때)
         # GeoTransform: 픽셀 ↔ 좌표 변환 정보. gt[0]=왼쪽 x, gt[1]=픽셀 가로크기, gt[3]=위쪽 y, gt[5]=픽셀 세로크기(음수)
         gt = vrt.GetGeoTransform()
         bbox = bbox or C.AREA_BBOX
