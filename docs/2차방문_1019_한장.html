@@ -33,12 +33,12 @@ code { font-family: "Menlo", "Consolas", monospace; font-size: 8.6pt; background
 </head>
 <body>
 <div class="page">
-<h1>10/19(월) 안심구역 — 오늘 한 장 (안내서 v6.2 와 함께)</h1>
+<h1>10/19(월) 안심구역 — 오늘 한 장 (안내서 v6.3 과 함께)</h1>
 
 <div class="top">
-<b class="big">분석이 끝나는 대로, 그 자리에서 바로 <code>output</code> 반출 신청</b> (안내서 단계 8, 14쪽)<br>
+<b class="big">분석이 끝나는 대로, 그 자리에서 바로 <code>output</code> 반출 신청</b> (안내서 단계 8, 15쪽)<br>
 오늘 신청 → 심사 3~4일 → <b>22일 오전 결과</b> → 22일 12:00 실제판/대비책 판 판정 → 18:00 마감. <b>내일(10/20) 신청하면 결과가 마감 뒤에 올 수 있습니다.</b><br>
-반출 신청 설명에 넣을 한 줄: <i>시설 단위 수혜 건물 수는 개수만 포함하며 건물 속성·좌표는 없음 (1~4채는 "5채 미만"으로 적음)</i><br>
+반출 신청 설명에 넣을 두 줄: <i>시설 단위 수혜 건물 수는 개수만 포함하며 건물 속성·좌표는 없음 (1~4채는 "5채 미만"으로 적음)</i> / <i>자동 후보의 위치는 250m 격자 가운데와 행정동만이며 시설 양 끝 좌표·건물 단위 정보는 없음</i><br>
 반출 신청 마감 시각 (담당자에게): <span class="blank"></span> · 신청한 시각: <span class="blank"></span>
 </div>
 
@@ -51,9 +51,9 @@ code { font-family: "Menlo", "Consolas", monospace; font-size: 8.6pt; background
 <li><b>번들 → setup</b> <span class="pg">(단계 2~3-2, 4~6쪽)</span>: 폴더 표 11줄이 모두 <span class="s">○ … → 관악구</span> → Enter. <span class="s">이 구만 분석할까요?</span> → <b>Enter</b> → <span class="s">1개 구만 자료 있음</span></li>
 <li><b>check</b> <span class="pg">(단계 4, 7쪽)</span>: <span class="s">통과</span>. 경고 <span class="s">대상 5개 구 중 1개 구만 자료 있음</span> 은 정상</li>
 <li><b>run_all</b> <span class="pg">(단계 5, 9쪽)</span>: <code>python run_all.py --modes auto,all</code> 약 3~6분. 시작 <span class="blank"></span> 끝 <span class="blank"></span></li>
-<li><b>끝난 뒤</b> <span class="pg">(단계 5-2·5-3, 10~11쪽)</span>: 결과 점검표 선정지 <span class="s">계산 1/5곳</span> (봉천만) 정상, 관악 밖 <span class="s">건너뜀</span> 정상. 09 봉천 높이 차 <b>약 5m</b></li>
-<li><b>관악 실측</b> <span class="pg">(단계 7, 13쪽)</span>: 했으면 <code>external\od_pairs.csv</code> ①~④ 잰 분 → <code>python run_all.py --from 04</code>. 그다음 12·13·14 (12 는 봉천만 9행)</li>
-<li><b>반출 신청</b> <span class="pg">(단계 8, 14쪽)</span>: <code>hbi6\output</code> 하나</li>
+<li><b>끝난 뒤</b> <span class="pg">(단계 5-2·5-3, 10~12쪽)</span>: 결과 점검표 선정지 <span class="s">계산 1/5곳</span> (봉천만) 정상, 관악 밖 <span class="s">건너뜀</span> 정상. 09 봉천 높이 차 <b>약 5m</b>, <span class="s">후보 자동: … 후보 N곳</span> 의 N·<span class="s">시설 검토</span> 수 메모</li>
+<li><b>관악 실측</b> <span class="pg">(단계 7, 14쪽)</span>: 했으면 <code>external\od_pairs.csv</code> ①~④ 잰 분·천천히 잰 분 → <code>python run_all.py --from 04</code>. 그다음 12·13·14 (12 는 봉천만 9행)</li>
+<li><b>반출 신청</b> <span class="pg">(단계 8, 15쪽)</span>: <code>hbi6\output</code> 하나, 신청 설명 두 줄 함께</li>
 </ol>
 </div>
 <div class="col">
@@ -62,7 +62,7 @@ code { font-family: "Menlo", "Consolas", monospace; font-size: 8.6pt; background
 <li><b>setup</b>: 폴더 표가 길어지고 <b>번호 순서가 바뀝니다</b> (관악 폴더가 1~11번이 아닐 수 있음). 모두 ○ → Enter. <span class="s">이 구만 분석할까요?</span> 는 <b>나오지 않음</b> (나오면 일부 구만 온 것 → Enter = 온 구만). <span class="s">대상 구 자료 범위</span> 다섯 구가 100% 가까이</li>
 <li><b>check</b>: <span class="s">대상 구 ○○구: 면적의 …%</span> 다섯 줄. <span class="s">9. 예상 소요 시간</span> 의 분 <span class="blank"></span> (넓이 비례 어림. 57도엽이면 약 15~30분)</li>
 <li><b>run_all</b>: 명령은 A 와 같음. 시작 <span class="blank"></span> 끝 <span class="blank"></span></li>
-<li><b>끝난 뒤</b>: 선정지 <span class="s">계산 5/5곳</span>, 대현산 구간도 계산됨 (16장). 09 시설 효과는 <b>봉천만</b> (다른 선정지는 a·b 좌표 없음, 정상). 12 등시선 5곳, 13 은 좌표 있는 시설만</li>
+<li><b>끝난 뒤</b>: 선정지 <span class="s">계산 5/5곳</span>, 대현산 구간도 계산됨 (16장). 09 사람이 넣은 시설은 <b>봉천만</b> (다른 선정지는 a·b 좌표 없음, 정상), 자동 후보 N곳·<span class="s">시설 검토</span> 수 메모. 12 등시선 5곳, 13 은 좌표 있는 시설만</li>
 <li><b>관악 실측·12·13·14·반출</b>: A 의 5·6 과 같음</li>
 <li><b>늦어지면 관악만으로</b>: 반출 마감 1시간 전까지 run_all 이 안 끝나거나 같은 곳에서 두 번 멈추면 → <code>python setup.py</code> → 폴더 표에서 <b><span class="s">→</span> 오른쪽에 관악구가 없는 줄</b>의 번호를 모두 쳐서 × (예: <code>12 13 14</code>) → Enter → <span class="s">이 구만 분석할까요?</span> Enter → <code>python check.py</code> → <code>python run_all.py --modes auto,all</code> → A 의 4~6. 5개 구는 10/20 에<br><span class="small">(가짜 5개 구 자료로 이 순서대로 하면 관악구만 남고 check 가 묻지 않고 통과하는 것을 확인)</span></li>
 </ol>
@@ -71,9 +71,9 @@ code { font-family: "Menlo", "Consolas", monospace; font-size: 8.6pt; background
 
 <h2>멈췄을 때 · 내일 · 메모</h2>
 <ul>
-<li>멈추면 화면의 <b>메모 카드 다섯 줄</b>만 적어 옴 (반출하지 않아도 됨, 단계 6·9 = 12·15쪽). 카드 5 줄 할 일 → <code>--from 번호</code></li>
+<li>멈추면 화면의 <b>메모 카드 다섯 줄</b>만 적어 옴 (반출하지 않아도 됨, 단계 6·9 = 13·16쪽). 카드 5 줄 할 일 → <code>--from 번호</code></li>
 <li><b>10/20</b>: 오늘 반출을 신청했으면 본선용 추가 분석 (B 를 관악만으로 끝냈으면 5개 구, 08 민감도 등. 결과는 마감 뒤). 오늘 신청을 못 했으면 끝내고 바로 신청 (22일은 대비책 판 쪽으로 기움)</li>
-<li>메모 칸은 안내서 16쪽. 데이터 값은 적지 않음 (이름·개수·비율만)</li>
+<li>메모 칸은 안내서 17쪽. 데이터 값은 적지 않음 (이름·개수·비율만)</li>
 </ul>
 <table class="small">
 <tr><th style="width:30%">오늘 간 길</th><td>A 관악만 / B 7개 구 / B → 관악만으로</td><th style="width:18%">반출 폴더</th><td>output (방식 폴더 ________ · all)</td></tr>

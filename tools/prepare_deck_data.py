@@ -1075,7 +1075,10 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         P(f"V6.15.{i}.model", f"현장실측 {kw} 모델(성인)", ["validation_routes.csv (adult_min)"], f"{num(r['adult_min']):.1f}분" if r and num(r.get("adult_min")) is not None and num(r.get("measured_min")) is not None else None, later="실측 후")
     P("V6.15.wait", "대현산 모노레일 대기", ["deck/inputs.json 의 monorail_wait_s"], f"{inp['monorail_wait_s']}초" if inp.get("monorail_wait_s") else None, later="실제 결과 후")
     P("V6.15.ride", "대현산 모노레일 탑승", ["deck/inputs.json 의 monorail_ride_s"], f"{inp['monorail_ride_s']}초" if inp.get("monorail_ride_s") else None, later="실제 결과 후")
-    P("V6.15.date", "현장실측 날짜", ["deck/inputs.json 의 survey_date"], inp.get("survey_date"), later="2026.10.__")   # [10/12 청사진] 밑줄 2개 = 빈칸 표시 아님
+    P("V6.15.date", "현장실측 날짜", ["deck/inputs.json 의 survey_date"], inp.get("survey_date"), later="2026.10.__")
+    # [v6.3] 16장 어르신 속도 출처·13장 관악구 이유 (기획서에 지어 넣지 않고 inputs.json 에서)
+    P("V6.16.speed_src", "어르신 평지 보행속도 0.8m/s 의 출처", ["deck/inputs.json 의 elder_speed_source"], inp.get("elder_speed_source"), later="출처 기입 예정")
+    P("V6.13.gwanak_reason", "관악구를 고른 이유 문구", ["deck/inputs.json 의 gwanak_reason"], inp.get("gwanak_reason"), optional=True)   # [10/12 청사진] 밑줄 2개 = 빈칸 표시 아님
 
     # ── 29 민감도 (순위상관) ──
     sens = {r["scenario"].strip(): num(r.get("rank_corr_vs_base")) for r in (R("sensitivity.csv") or [])}

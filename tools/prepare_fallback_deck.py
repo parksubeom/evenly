@@ -46,6 +46,7 @@ def main():
             except ValueError:
                 v = str(d)
         put(f"V6.13.visit{i}", f"안심구역 {i}차 방문일", ["deck/inputs.json"], v)
+    put("V6.16.speed_src", "어르신 평지 보행속도 0.8m/s 의 출처", ["deck/inputs.json 의 elder_speed_source"], inp.get("elder_speed_source") or None)   # [v6.3]
     put("V6.hb", "체감 부담 HBI 문턱", [], "1.3", optional=True)
     put("V6.rmin", "고립 위험 왕복 추가 분", [], "10", optional=True)
     put("V6.scope", "분석 범위(구)", [fvn], "관악구", optional=True)

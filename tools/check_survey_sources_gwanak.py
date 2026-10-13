@@ -138,13 +138,13 @@ for k, (lon, lat) in zip(ORDER, p1):
         bad.append(f"1쪽 {k}: 기록지 {lon}, {lat} / 원본 {src[k]}")
 if len(od) != 5 or not od[4][0].startswith("봉천 선정지 계단"):
     bad.append(f"2쪽 od 예시가 다섯 줄(①~④ + 봉천 선정지 계단)이 아님: {[r[0] for r in od]}")
-elif od[4][1:5] != od[0][1:5] or len(od[4]) != 7 or od[4][5] != "":
+elif od[4][1:5] != od[0][1:5] or len(od[4]) != 8 or od[4][5:7] != ["", ""]:   # [v6.3] 잰 분·천천히 잰 분 두 칸
     bad.append(f"2쪽 봉천 선정지 계단 줄이 ① 과 좌표가 다르거나 잰 분이 비어 있지 않음: {od[4]}")
 for i, rr in enumerate(od[:4]):
     k = ORDER[2 * i][0]
     want = (r5(src[k + " a" if k == "①" else k + " o"][0]), r5(src[k + " a" if k == "①" else k + " o"][1]),
             r5(src[k + " b" if k == "①" else k + " d"][0]), r5(src[k + " b" if k == "①" else k + " d"][1]))
-    if len(rr) != 7 or tuple(map(float, rr[1:5])) != want:
+    if len(rr) != 8 or tuple(map(float, rr[1:5])) != want:
         bad.append(f"2쪽 od 예시 {rr[0]}: {rr[1:5]} / 원본 {want} / 칸 {len(rr)}")
 if len(iv) != 10 or iv[1] != "vertical" or tuple(map(float, iv[2:6])) != (r5(src["① a"][0]), r5(src["① a"][1]), r5(src["① b"][0]), r5(src["① b"][1])):
     bad.append(f"2쪽 interventions 예시: {iv}")
@@ -157,7 +157,7 @@ REPO = list(csv.reader(open(os.path.join(R, "analysis", "hbi", "external", "od_p
 byname = {r[0]: r for r in REPO[1:] if r}
 for rr in od:
     rp = byname.get(rr[0])
-    if rp is None or rp[1:5] != rr[1:5] or rp[5] != "":
+    if rp is None or rp[1:5] != rr[1:5] or rp[5:7] != ["", ""]:
         bad.append(f"analysis/hbi/external/od_pairs.csv 의 '{rr[0]}' 줄: {rp}")
 # [v6.2, 10/12] 다음 번들의 interventions.csv 봉천 줄 = 기록지 2쪽 interventions 예시와 같은 이름·종류·좌표·상태
 IVR = {r[0]: r for r in list(csv.reader(open(os.path.join(R, "analysis", "hbi", "external", "interventions.csv"), encoding="utf-8-sig")))[1:] if r}
@@ -176,12 +176,12 @@ else:
         L = math.hypot(p[0] - q[0], p[1] - q[1])
         if abs(L - want) > 1.0:
             bad.append(f"2쪽 직선거리 {rr[0]}: 안내 {want} / 계산 {L:.1f}")
-# 같은 이름 줄이 두 번 있거나, 칸이 7개가 아니거나, 검증 줄 메모가 기록지와 다르면
+# 같은 이름 줄이 두 번 있거나, 칸이 8개(v6.3: measured_slow_min 추가)가 아니거나, 검증 줄 메모가 기록지와 다르면
 names = [r[0] for r in REPO[1:] if r]
-if len(names) != len(set(names)) or any(len(r) != 7 for r in REPO if r):
-    bad.append(f"od_pairs.csv 이름 겹침 또는 칸 수: {[r for r in REPO if r and len(r) != 7]} / {sorted(set(n for n in names if names.count(n) > 1))}")
-if byname.get(od[4][0], [""] * 7)[6] != od[4][6] or od[4][6] != "서울시 발표: 계단을 피해 200m 이상 우회":
-    bad.append(f"검증 줄 메모: 기록지 '{od[4][6]}' / od_pairs.csv '{byname.get(od[4][0], [''] * 7)[6]}'")
+if len(names) != len(set(names)) or any(len(r) != 8 for r in REPO if r):
+    bad.append(f"od_pairs.csv 이름 겹침 또는 칸 수: {[r for r in REPO if r and len(r) != 8]} / {sorted(set(n for n in names if names.count(n) > 1))}")
+if byname.get(od[4][0], [""] * 8)[7] != od[4][7] or od[4][7] != "서울시 발표: 계단을 피해 200m 이상 우회":
+    bad.append(f"검증 줄 메모: 기록지 '{od[4][7]}' / od_pairs.csv '{byname.get(od[4][0], [''] * 8)[7]}'")
 # PDF 글자: 1쪽 좌표 8쌍과 2쪽 예시 6줄이 그대로 들어 있는지 (빈칸 무시), 인쇄본이 레포 PDF 와 같은지
 PDF = os.path.join(R, "docs", "관악_실측기록지.pdf")
 txt = re.sub(r"\s+", "", subprocess.run(["pdftotext", PDF, "-"], capture_output=True, text=True, check=True).stdout)

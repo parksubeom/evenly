@@ -274,10 +274,10 @@ def v61_card(pg, ver="v6.1"):
     return {"cmds": prep + main + fix + more, "html": html_body}
 
 
-def v62_card(pg, ver="v6.2"):
+def v62_card(pg, ver="v6.2", nfiles=52, slow=False):
     """[v6.2, 10/12] 2차 방문 카드 v6.2: v6.1b 카드 + 메모 카드(오류 번호), 봉천 a·b·관악 od_pairs 가 미리 들어 있음 (잰 분만 넣고 --from 04)"""
     prep = [r"cd /d C:\Users\user\Desktop\박수범", f"python hbi_code_bundle_{ver}.txt", "cd hbi6"]
-    prep_see = ["<b>박</b> 까지 치고 Tab", q("완료: 파일 52개"), f"맨 아래 {q('…' + chr(92) + 'hbi6>')}"]
+    prep_see = ["<b>박</b> 까지 치고 Tab", q(f"완료: 파일 {nfiles}개"), f"맨 아래 {q('…' + chr(92) + 'hbi6>')}"]
     main = ["python setup.py", "python check.py", "python run_all.py --modes auto,all"]
     main_see = ["질문은 모두 <b>Enter</b>", f"끝에 {q('통과')}. {q('범위 밖')} 멈춤 → 다시, Enter",
                 f"약 3~6분, 단계마다 {q('# 끝: 정상')}"]
@@ -305,12 +305,12 @@ def v62_card(pg, ver="v6.2"):
     for c, s_, g in zip(fix, fix_see, [p(pg, "4-2"), p(pg, "6"), p(pg, "9")]):
         add(c, s_, g)
     out.append(sec("관악 실측을 한 뒤 (좌표는 이미 들어 있음)"))
-    add(more[0], "①~④ 잰 분 칸만", p(pg, "7"))
+    add(more[0], "①~④ 잰 분·천천히 잰 분 두 칸만" if slow else "①~④ 잰 분 칸만", p(pg, "7"))   # [v6.3] 천천히 걷기 칸
     add(more[1], f"{q('단계:')} 에 09", p(pg, "7"))
     k += 1
     out.append(f'<tr><td class="box">□</td><td class="n">{k}</td><td>' + "<br>".join(f"<code>{html.escape(c)}</code>" for c in more[2:])
                + f'</td><td class="see">한 줄씩. 12 관악 밖·13 좌표 없는 시설 건너뜀</td><td class="pg">{p(pg, "7")}</td></tr>')
-    out.append(note_row("<code>output</code> 폴더 반출 신청 (work 는 반출 안 함), 반출 시각 메모", p(pg, "8")) + "</table>")
+    out.append(note_row("<code>output</code> 반출 신청 + 설명 두 줄 (work 는 안 냄), 반출 시각 메모" if slow else "<code>output</code> 폴더 반출 신청 (work 는 반출 안 함), 반출 시각 메모", p(pg, "8")) + "</table>")   # [v6.3] 신청 설명 두 줄
     folders6 = ('<h2>담당자에게 물을 것</h2><table><colgroup><col style="width:32%"><col style="width:18%"><col style="width:28%"><col style="width:22%"></colgroup>'
                 '<tr><td>박수범 폴더에 자료·번들</td><td>○ / ×</td><td>나머지 4개 구 자료</td><td>들어옴 / 아직</td></tr></table>')
     memo = ('<h2>메모 칸 (값은 적지 않음, ★ = 다음 번들에 꼭 필요. 02 값 두 줄은 안내서 메모 칸)</h2><table><colgroup><col style="width:22%"><col style="width:28%"><col style="width:18%"><col style="width:32%"></colgroup>'
@@ -361,6 +361,10 @@ def main():
     v62b = os.path.join(ROOT, "deliverables", "hbi_code_bundle_v6.2.txt")
     if os.path.exists(os.path.join(DOCS, "2차방문_v6.2_안내서.pdf")) and os.path.exists(v62b):
         jobs.append(("v6.2", v62_card, "2차방문_v6.2_안내서", open(v62b, encoding="utf-8").read(), "hbi_code_bundle_v6.2.txt"))
+    # [v6.3] 10/16 메일 반입본
+    v63b = os.path.join(ROOT, "deliverables", "hbi_code_bundle_v6.3.txt")
+    if os.path.exists(os.path.join(DOCS, "2차방문_v6.3_안내서.pdf")) and os.path.exists(v63b):
+        jobs.append(("v6.3", lambda pg: v62_card(pg, "v6.3", 55, slow=True), "2차방문_v6.3_안내서", open(v63b, encoding="utf-8").read(), "hbi_code_bundle_v6.3.txt"))
     if "--only" in sys.argv:                 # [v6.1] python3 tools/print_card.py --only v6.1 → 그 카드만 (동결된 1차 방문 카드는 다시 만들지 않음)
         want = sys.argv[sys.argv.index("--only") + 1]
         jobs = [j for j in jobs if j[0] == want]
