@@ -76,10 +76,20 @@ def main():
     R = meta.get("risk_min") or "10"
     col = f"share_add{float(R):g}m".replace(".", "_")
     dong = {r["adm_cd"]: r for r in read(os.path.join(d, "dong_hbi.csv"))}
-    skt = {r["adm_cd"]: num(r.get("index")) for r in read(os.path.join(d, f"points_{SKT}_dong.csv"))}
+    prow = read(os.path.join(d, f"points_{SKT}_dong.csv"))
+    skt = {r["adm_cd"]: num(r.get("index")) for r in prow}
     if skt and all(not np.isfinite(v) for v in skt.values()):
         skt = {}
     src_lab, ylab = "SKT 60세 이상 (유동 ÷ 거주)", "외출 지수 (60세 이상 유동 ÷ 거주)"
+    if not skt and prow and "n_points" in prow[0]:           # [10/14] v6.2 는 SKT 행정동 합계(n_points) → ÷ 공개 60세 이상 인구, 구 평균 = 1.0 (v6.3 지수와 같은 뜻)
+        pop = {r["adm_cd"]: num(r.get("pop60")) for r in read(os.path.join(ROOT, "data_public", "pop60.csv"))}
+        raw = {c: num(r.get("n_points")) / pop[c] for r in prow for c in [r["adm_cd"]]
+               if np.isfinite(num(r.get("n_points"))) and np.isfinite(pop.get(c, np.nan)) and pop.get(c, 0) > 0}
+        by_gu = {}
+        for c, v in raw.items():
+            by_gu.setdefault(c[:5], []).append(v)
+        skt = {c: v / np.mean(by_gu[c[:5]]) for c, v in raw.items()}
+        src_lab = "SKT 60세 이상 (v6.2 유동 합계 ÷ 공개 60세 이상 인구, 구 평균 = 1.0)"
     if a.outing == "living" or (a.outing == "auto" and not skt):
         col_l = "outing_index" if a.all_days else "outing_index_wd"
         lv = read(a.living)

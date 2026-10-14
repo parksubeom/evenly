@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 tools/real_day.py ─ [10/22 반출 결과 받은 날] 받은 반출 파일 → 실제 기획서·PDF·판정 줄까지 한 번에 (docs/22일_기획서_절차.md)
+                    [10/14] 상호제공을 따로 반출했으면 두 번째 인자: npm run real-day -- <본 분석 zip/폴더> <상호제공 zip/폴더>
 
 [실행]  cd deck && npm run real-day -- <받은 반출 zip 또는 폴더>      (deck/py.js 가 QGIS Python 으로 실행)
         다시 돌릴 때(inputs.json 을 고친 뒤 등)는 인자 없이: npm run real-day   (results/raw_export 에 있는 것으로)
@@ -15,7 +16,7 @@ tools/real_day.py ─ [10/22 반출 결과 받은 날] 받은 반출 파일 → 
   5. 판정 줄: 실제판 후보 / inputs.json 채우고 다시 / --later-ok 로 다시 / 대비책 판
 [결과] 화면 + _render/final/real_day_report.txt (값은 적지 않음: 파일 이름·개수·판정만)
 """
-import csv, datetime, json, os, re, shutil, subprocess, sys, tempfile, time, zipfile
+import csv, datetime, json, os, re, shutil, subprocess, sys, tempfile, time, unicodedata, zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, "results", "raw_export")
@@ -72,10 +73,17 @@ def unzip(zp, dest):
         for it in z.infolist():
             name = it.filename
             if not it.flag_bits & 0x800:             # 윈도우 zip 은 한글 이름이 CP949 (UTF-8 표시 없음)
-                try:
-                    name = name.encode("cp437").decode("cp949")
-                except (UnicodeEncodeError, UnicodeDecodeError):
+                try:                                  # [10/14] 맥 zip 은 UTF-8 바이트인데 표시가 없음 → UTF-8 먼저, 안 되면 CP949
+                    raw_ = name.encode("cp437")
+                    for enc_ in ("utf-8", "cp949"):
+                        try:
+                            name = raw_.decode(enc_)
+                            break
+                        except UnicodeDecodeError:
+                            continue
+                except UnicodeEncodeError:
                     pass
+            name = unicodedata.normalize("NFC", name)   # [10/14] 맥 zip 은 한글을 자모로 나눈(NFD) 이름 → 결과 키와 같게 NFC
             if name.startswith("__MACOSX/") or "/." in "/" + name:
                 continue
             tgt = os.path.normpath(os.path.join(dest, name))
@@ -139,6 +147,42 @@ def place(src):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+SHARED_RE = re.compile(r"^(join_.+|join_summary|points_.+_dong|points_summary|legal_.+|legal_summary)\.csv$")   # [10/14] 상호제공 따로 반출 (19일 추가 수정 3번)
+
+
+def place_shared(src):
+    """[10/14] 상호제공 반출(zip 이나 폴더)의 동·법정동 단위 파일만 results/raw_export/<대표 방식>/ 에 넣음 (본 분석 파일은 건드리지 않음)"""
+    tmp = None
+    if os.path.isfile(src) and src.lower().endswith(".zip"):
+        tmp = tempfile.mkdtemp(prefix="evenly_shared_")
+        unzip(src, tmp)
+        src = tmp
+    if not os.path.isdir(src):
+        raise SystemExit(f"!! 상호제공 반출 파일을 찾지 못함: {src}")
+    for cur, dirs, files in os.walk(src):
+        if "_source.txt" in files:
+            raise SystemExit(f"!! {cur} 에 _source.txt (가짜·공개 대역 표지)가 있습니다 → 실제 반출 파일이 아님")
+    reps = [m for m in MODES if os.path.exists(os.path.join(RAW, m, "run_meta.csv"))
+            and any(r.get("key") == "is_rep_mode" and r.get("value") == "yes" for r in read_csv(os.path.join(RAW, m, "run_meta.csv")))]
+    have = [m for m in MODES if os.path.isdir(os.path.join(RAW, m))]
+    rep = reps[0] if reps else (have[0] if len(have) == 1 else None)
+    if not rep:
+        raise SystemExit(f"!! 본 분석 반출의 대표 방식 폴더를 모름 (있는 방식: {have}) → 본 분석 반출을 먼저 (npm run real-day -- <본 분석> <상호제공>)")
+    got, skip = [], []
+    for cur, dirs, files in os.walk(src):
+        dirs[:] = [x for x in dirs if x != "__MACOSX" and not x.startswith(".")]
+        for f in files:
+            (got if SHARED_RE.match(f) else skip).append((cur, f))
+    if not got:
+        raise SystemExit(f"!! {src} 안에 상호제공 결과 파일(join_·points_…_dong·legal_ …csv)이 없습니다")
+    for cur, f in got:
+        shutil.copy2(os.path.join(cur, f), os.path.join(RAW, rep, f))
+    say(f"   상호제공 {len(got)}개 → results/raw_export/{rep}/ ({', '.join(sorted(f for _, f in got))})"
+        + (f" · 그 밖 {len(skip)}개는 넣지 않음" if skip else ""))
+    if tmp:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     later_ok = "--later-ok" in sys.argv[1:]
@@ -149,6 +193,8 @@ def main():
     say("\n[1] 반출 파일 놓기")
     if args:
         place(os.path.abspath(os.path.expanduser(args[0])))
+        if len(args) > 1:                                # [10/14] 상호제공을 따로 반출했으면 두 번째 인자
+            place_shared(os.path.abspath(os.path.expanduser(args[1])))
     elif not [x for x in os.listdir(RAW) if x != ".gitkeep"]:
         raise SystemExit("!! results/raw_export 가 비어 있습니다 → npm run real-day -- <받은 zip 또는 폴더>")
     else:
