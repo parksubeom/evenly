@@ -22,8 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # [10/14 v11] 17장 시설 비용 가정 (밖에서 다시 계산). 엘리베이터 = 서울시 2025 선정 5곳 200억 원·무악동 1곳 40억 원,
 #   경사로 = 평창군 '치유의 숲 무장애 나눔길' 1km 10억 원 (경향신문 2025.01.17) 의 m당 단가를 빌림 — 도심 계단 경사로 공사비 출처를 찾으면 바꿀 것
 ELEV_COST_EOK = 40.0
-RAMP_COST_EOK_PER_M = 0.01        # 억 원/m (= m당 100만 원)
-RAMP_MAX_RISE = 3.0               # 반출 높이 차(m) 이하면 경사로로 봄
+RAMP_MAX_RISE = 3.0               # 반출 높이 차(m) 이하면 경사로로 풀 수 있는 소규모로 봄 (1억 원당 비교에서 뺌, 10/14 v12)
 from evenly_common import (ROOT, TARGET_GU, TARGET_LABEL, FAKE_MARKER, RAW_EXPORT, is_fake_dir, source_of, PUBLIC_REHEARSAL, load_dongs, dong_of, read_csv, num, truthy, to5186,
                            load_sites, point_in_rings)   # [v6.3] 지도의 선정지
 
@@ -1079,17 +1078,19 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
             od_txt, od_note = f"부담 높은 동 {mA:.2f} · 낮은 동 {mB:.2f}", f"외출 지수 중앙값 (p = {p_:.3f}, 동 단위 상관 관찰)"
         od_src = (f"외출 = 서울 생활인구 {ym_[:4]}.{ym_[4:]} 65세 이상 평일, 1 − 낮(10~17시) ÷ 새벽(3~5시)" if osrc == "생활인구" else "외출 = SKT 60세 이상 유동 ÷ 거주 (구 평균 = 1.0)") \
             + f", 부담 높은 동 {len(A_)}곳 · 낮은 동 {len(B_)}곳" + (f", 순열 검정 p = {p_:.2f}" if p_ is not None else "")
-    # [10/14 v11] 21장 큰 숫자: 최우선 방문 동 = 고립 위험 비율과 독거노인 수(서울시 동별 공개 통계)가 모두 동 중앙값보다 큰 동 (사분면의 오른쪽 위)
+    # [10/14 v11→v12] 21장 큰 숫자: 최우선 방문 동 = 고립 위험 비율과 독거노인 수(서울시 동별 공개 통계)가 모두 동 중앙값 이상인 동 (사분면의 오른쪽 위)
     al_ = {r["adm_cd"]: num(r.get("alone65")) for r in (read_csv(os.path.join(ROOT, "data_public", "alone65.csv")) or [])}
     pd_ = [c for c in rk if rk.get(c) is not None and al_.get(c) is not None]
     pri_ = None
     if len(pd_) >= 4:
         med_ = lambda xs: (sorted(xs)[len(xs) // 2] if len(xs) % 2 else (sorted(xs)[len(xs) // 2 - 1] + sorted(xs)[len(xs) // 2]) / 2)
         mr_, ma_ = med_([rk[c] for c in pd_]), med_([al_[c] for c in pd_])
-        pri_ = [c for c in pd_ if rk[c] > mr_ and al_[c] > ma_]
+        pri_ = [c for c in pd_ if rk[c] >= mr_ and al_[c] >= ma_]
     nmd_ = {r["adm_cd"]: r["adm_nm"].split()[-1] for r in rows_d}
-    P("V6.21.priority", "최우선 방문 동 수 (고립 위험·독거노인 모두 중앙값 위)", ["dong_hbi.csv", "data_public/alone65.csv"], f"{len(pri_)}곳" if pri_ is not None else None)
+    P("V6.21.priority", "최우선 방문 동 수 (고립 위험·독거노인 모두 중앙값 이상)", ["dong_hbi.csv", "data_public/alone65.csv"], f"{len(pri_)}곳" if pri_ is not None else None)
     P("V6.21.priority_dongs", "최우선 방문 동 이름", [], "·".join(nmd_.get(c, c) for c in sorted(pri_, key=lambda c: -rk[c])) if pri_ else None, optional=True)
+    P("V6.21.priority_rule", "최우선 방문 동 기준 한 줄", [],
+      f"최우선 방문 동 = 고립 위험 비율·독거노인 수가 모두 동 중앙값 이상인 동 ({len(pd_)}개 동 중)" if pri_ is not None else None, optional=True)
     P("V6.21.outing_diff", "외출 지수 두 묶음 비교 (부담 높은/낮은 동)", ["points_SKT_*_dong.csv (10) 또는 data_public/living65_outing.csv", "dong_hbi.csv"], od_txt, optional=True)
     P("V6.21.outing_note", "외출 비교 한 줄", [], od_note, optional=True)
     P("V6.21.outing_src", "외출 지수 설명", ["data_public/living65_outing.csv 또는 SKT"], od_src, optional=True)
@@ -1102,9 +1103,10 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     if crs:
         rk_ = next((k for k in crs[0] if k.startswith("n_risk")), "n_risk")
         tn = {"vertical": "수직", "elevator": "경사형", "monorail": "모노레일", "ramp": "경사로"}
-        # [10/14 v11] 시설 비용을 종류·높이로 (밖에서 다시 계산, 분석 처방 규칙 ≥ 기준은 그대로): 반출 높이 RAMP_MAX_RISE m 이하 → 경사로,
-        #   길이 = 높이 × 12 (기울기 1/12) + 높이 0.75m 마다 수평참 1.5m (장애인등편의법 경사로 기준), 비용 = 길이 × RAMP_COST_EOK_PER_M.
-        #   그 밖 → 엘리베이터 1곳 ELEV_COST_EOK. 수혜 수는 09 가 엘리베이터로 계산한 값 그대로 (경사로로 다시 계산하지 않음)
+        # [10/14 v12] 경사로는 비용 비교에서 분리 (밖에서 다시 나눔, 분석 처방 규칙 ≥ 기준은 그대로):
+        #   반출 높이 RAMP_MAX_RISE m 이하 → 경사로로 풀 수 있는 소규모: 1억 원당 숫자를 내지 않고 처방 '바로 정비'
+        #     (길이 = 높이 × 12 (기울기 1/12) + 높이 0.75m 마다 수평참 1.5m, 장애인등편의법 경사로 기준. 곳당 단가는 출처를 못 찾아 쓰지 않음)
+        #   그 밖 → 엘리베이터 1곳 ELEV_COST_EOK: 1억 원당 ≥ 기준 → '큰 시설 검토', 미만 → '정비 + 방문돌봄'. 500m 안 기존 시설 → 분석 처방(기존 시설 연계) 그대로
         cr_ = (rm.get("cand_rule") or "").split(",")
         try:
             mp_ = float(cr_[-3]); ra_ = float(cr_[-1])
@@ -1112,18 +1114,17 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
             mp_, ra_ = 5.0, 500.0
         tlab = {"station": "역", "bus": "버스", "medical": "의료", "elderly": "노인복지", "pharmacy": "약국", "station_ev": "역 엘리베이터"}
         trows = []
-        n_fac, fd_ = 0, []
+        n_big, n_quick, fd_ = 0, 0, []
         for r in crs:
             loc = " ".join((r.get("adm_nm") or "").split()[1:]) or "-"
             rise_ = num(r.get("rise_m"))
             ramp_ = rise_ is not None and rise_ <= RAMP_MAX_RISE and r.get("facility_type") in ("vertical", "elevator", "ramp")
             L_ = rise_ * 12 + math.ceil(rise_ / 0.75) * 1.5 if ramp_ else None
-            cost_ = (L_ * RAMP_COST_EOK_PER_M) if ramp_ else ELEV_COST_EOK
             na_ = num(r.get("n_benefit_any"))
-            per_ = round(na_ / cost_, 1) if na_ is not None else None
+            per_ = round(na_ / ELEV_COST_EOK, 1) if na_ is not None and not ramp_ else None
             rx_ = r.get("prescription", "")
             if r.get("kind") == "후보" and rx_ != "기존 시설 연계":
-                rx_ = "시설 검토" if per_ is not None and per_ >= mp_ else ("난간·쉼터·계단 정비 + 방문돌봄" if rx_ else rx_)
+                rx_ = "바로 정비" if ramp_ else ("큰 시설 검토" if per_ is not None and per_ >= mp_ else ("정비 + 방문돌봄" if rx_ else rx_))
             fac_ = (f"경사로 · 높이 {r.get('rise_m')}m · 길이 약 {L_:.0f}m" if ramp_
                     else f"{tn.get(r.get('facility_type'), r.get('facility_type') or '-')} · 높이 {r.get('rise_m') or '-'}m · {r.get('length_m') or '-'}m")
             alt_ = None
@@ -1133,21 +1134,27 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
                     alt_ = {"tgt": tlab.get(prow_["target"], prow_["target"]), "wheel": cnt_txt(prow_.get("wheel_benefit"))}
                     rx_ = f"휠체어 접근 효과 ({alt_['tgt']})"
             trows.append({"kind": r.get("kind", ""), "name": r.get("facility", ""), "loc": loc, "n_risk": r.get(rk_, ""),
-                          "fac": fac_, "ramp": bool(ramp_), "cost": round(cost_, 2),
+                          "fac": fac_, "ramp": bool(ramp_), "cost": "" if ramp_ else ELEV_COST_EOK,
                           "benefit": r.get("n_benefit_any", ""), "per100m": per_ if per_ is not None else "", "rx": rx_, "alt": alt_,
                           "wheel_now": r.get("wheel_now_m", ""), "saved": r.get("mean_saved_min", ""), "elder30": r.get("n_saved_30s", ""), "wheel": r.get("wheel_benefit", "")})
-            if r.get("kind") == "후보" and rx_ == "시설 검토":
-                n_fac += 1
+            if r.get("kind") == "후보" and rx_ in ("큰 시설 검토", "바로 정비"):
+                n_big += rx_ == "큰 시설 검토"
+                n_quick += rx_ == "바로 정비"
                 nm_ = (r.get("adm_nm") or "").split()[-1] if r.get("adm_nm") else ""
                 if nm_ and nm_ not in fd_:
                     fd_.append(nm_)
-        B.table("V6.17.cand", "후보·선정지 비교표 (09 후보 자동, 격자 단위, 시설 비용은 종류·높이별)", ["intervention_candidates.csv (v6.3)"], trows)
+        B.table("V6.17.cand", "후보·선정지 비교표 (09 후보 자동, 격자 단위, 경사로는 1억 원당 비교에서 뺌)", ["intervention_candidates.csv (v6.3)"], trows)
         P("V6.17.cand_rule", "처방 규칙 문구", ["run_meta.csv (cand_rule, v6.3)"],
-          f"{ra_:g}m 안 기존 시설 → 기존 시설 연계 / 1억 원당 수혜 건물 {mp_:g}개 이상 → 시설 검토 / 미만 → 난간·쉼터·계단 정비 + 방문돌봄"
-          f" (비용: 높이 {RAMP_MAX_RISE:g}m 초과 엘리베이터 {ELEV_COST_EOK:g}억 원, 이하 경사로 m당 {RAMP_COST_EOK_PER_M * 1e4:g}만 원)", optional=True)
-        P("V6.17.n_ramp", "경사로로 본 후보 수", ["intervention_candidates.csv (rise_m)"], f"{sum(1 for x in trows if x['ramp'] and x['kind'] == '후보')}곳", optional=True)
-        P("V6.17.n_facility", "자동 후보 중 '시설 검토' 수 (종류·높이별 비용)", ["intervention_candidates.csv (v6.3)"], f"{n_fac}곳")
-        P("V6.17.fac_dongs", "'시설 검토' 후보가 있는 동", ["intervention_candidates.csv (v6.3)"],
+          f"{ra_:g}m 안 기존 시설 → 기존 시설 연계 / 높이 차 {RAMP_MAX_RISE:g}m 이하 → 바로 정비 (경사로) / 엘리베이터 1억 원당 수혜 건물 {mp_:g}개 이상 → 큰 시설 검토"
+          f" / 미만 → 정비 + 방문돌봄 (엘리베이터 1곳 {ELEV_COST_EOK:g}억 원)", optional=True)
+        P("V6.17.n_big", "'큰 시설 검토' 후보 수 (엘리베이터, 1억 원당 기준 이상)", ["intervention_candidates.csv (v6.3)"], f"{n_big}곳", optional=True)
+        P("V6.17.n_ramp", "'바로 정비' 후보 수 (높이 차 기준 이하, 경사로)", ["intervention_candidates.csv (rise_m)"], f"{n_quick}곳", optional=True)
+        P("V6.17.ramp_note", "경사로 분리 한 줄", [],
+          f"높이 차 {RAMP_MAX_RISE:g}m 이하인 곳은 경사로로 풀 수 있어, 큰 예산 비교와 따로 바로 정비할 곳으로 둡니다" if n_quick else None, optional=True)
+        P("V6.17.fac_split", "2장 둘째 발견 설명 (엘리베이터 + 경사로)", [],
+          (f"엘리베이터 {n_big}곳 + 경사로로 바로 풀 수 있는 {n_quick}곳" if n_big and n_quick else (f"엘리베이터 {n_big}곳" if n_big else f"경사로로 바로 풀 수 있는 {n_quick}곳")) if (n_big + n_quick) else None, optional=True)
+        P("V6.17.n_facility", "자동 후보 중 '큰 시설 검토' + '바로 정비' 수", ["intervention_candidates.csv (v6.3)"], f"{n_big + n_quick}곳")
+        P("V6.17.fac_dongs", "'큰 시설 검토'·'바로 정비' 후보가 있는 동", ["intervention_candidates.csv (v6.3)"],
           ("·".join(n[:-1] if n.endswith("동") else n for n in fd_[:-1]) + ("·" if len(fd_) > 1 else "") + fd_[-1]) if fd_ else None, optional=True)
     else:
         B.table("V6.17.cand", "후보·선정지 비교표 (09 후보 자동, 격자 단위)", ["intervention_candidates.csv (v6.3)"], None)

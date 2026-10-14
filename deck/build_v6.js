@@ -223,11 +223,11 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
   const nf2 = FALLBACK ? '' : V('V6.17.n_facility');   // 없으면 누락으로 적힘 (빈칸 이름표)
   const F2 = FALLBACK ? [   // [10/13] 대비책 판: 1차 반출 값만, 나머지는 2차 분석에서
     [`약 ${V('V6.fb.share13')}%`, `관악 일대 건물의 약 ${V('V6.fb.share13')}%가 평지보다 ${Math.round((Number(HB()) - 1) * 100)}% 넘게 더 걸립니다`, '1차 반출(10/2) 값', C.ink],
-    [FB_TEXT, '같은 예산으로 더 많은 집을 돕는 곳', '후보 자동 · 1억 원당 수혜\n시설 종류·높이별 비용', C.acc],   // [10/14 v11]
+    [FB_TEXT, '같은 예산으로 더 많은 집을 돕는 곳', '엘리베이터 후보 (1억 원당 수혜)\n+ 경사로로 바로 풀 수 있는 곳', C.acc],   // [10/14 v12]
     [FB_TEXT, '시설 하나의 효과를 놓기 전에 잽니다', '봉천 계단의 휠체어 우회 거리', C.ink]] : [
     [`${V('V6.14.near_burden')}%`, `"가깝다"던 동네의 ${V('V6.14.near_burden')}%는 실제로 ${Math.round((Number(HB()) - 1) * 100)}% 넘게 더 걸립니다`, `${Q('V6.scope', '관악구')}에서 왕복 ${RMIN()}분 넘게 잃는 주거 건물이 ${Q('V6.14.risk_n', '___')}`, C.ink],
-    [nf2, `같은 예산으로 더 많은 집을 돕는 곳이 ${has('V6.17.n_facility') ? nf2 : V('V6.17.n_facility')} 있습니다`, `${Q('V6.17.fac_dongs', '자동 후보')} (2025 선정지 밖)\n1억 원당 수혜 · 시설 종류·높이별 비용`, C.acc],
-    [`${V('V6.20.before')} → ${V('V6.20.after')}`, `${TG20()}까지 가는 휠체어 우회\n${V('V6.20.before')} → ${V('V6.20.after')}`, `봉천 계단 엘리베이터 1기\n주거 건물 ${V('V6.20.wheel_n')}가 혜택 (${TG20()} 기준)`, C.ink],   // [10/14 v11] 20장과 같은 기준
+    [nf2, `같은 예산으로 더 많은 집을 돕는 곳이 ${has('V6.17.n_facility') ? nf2 : V('V6.17.n_facility')} 있습니다`, `${Q('V6.17.fac_split', '엘리베이터·경사로 후보').replace(' + ', ' +\n')}\n${Q('V6.17.fac_dongs', '자동 후보')} · 2025 선정지 밖`, C.acc],   // [10/14 v12]
+    [`${V('V6.20.before')} → ${V('V6.20.after')}`, '봉천 계단을 피하던 휠체어 우회 거리', `${TG20()}까지 가는 주거 건물 ${V('V6.20.wheel_n')}가 혜택`, C.ink],   // [10/14 v12] 238m 는 계단 양 끝 사이 우회(목적지 무관), 82개가 역 기준
   ];
   F2.forEach((f, i) => { const x = 0.6 + i*3.0;
     if (i) vr(s, x-0.18, 1.5, 2.2);
@@ -466,20 +466,22 @@ if (CANDT) {
   const cw = [1.5, 1.05, 1.9, 1.0, 1.0, 0.75, 1.6];
   const unit = v => (v === '' || v === null || v === undefined) ? '-' : (/^[0-9.]+$/.test(String(v)) ? `${v}개` : String(v).replace('채', '개'));
   CANDT.forEach(r => {
-    const site = r.kind !== '후보', fac = r.rx === '시설 검토';
+    const site = r.kind !== '후보', fac = r.rx === '큰 시설 검토' || r.rx === '바로 정비';   // [10/14 v12] 처방 세 단계
     const o = site ? { color:C.muted } : {};
     rows.push([B(site ? `선정지 · ${r.name.split(' ')[0]}` : `${r.name.replace('후보', '후보 ')} · ${r.loc.split(' ').pop()}`, o), { text:unit(r.n_risk), options:o },
                { text:r.fac, options:Object.assign({ fontSize:9.5 }, o) }, { text:unit(r.elder30), options:o },
                { text:unit(r.wheel) + (r.alt ? ` (${r.alt.tgt} 기준 ${r.alt.wheel})` : ''), options:Object.assign(r.alt ? { fontSize:9.5 } : {}, o) },   // [10/14 v11] 봉천: 20장과 같은 기준을 옆에
-               { text:(r.per100m === '' || r.per100m === null) ? '-' : (Number(r.per100m) >= 100 ? `${Math.round(Number(r.per100m)).toLocaleString('en-US')}개` : `${Number(r.per100m).toFixed(1)}개`), options:o },
+               r.ramp ? { text:'소규모\n(경사로)', options:Object.assign({ fontSize:9.5 }, o) }   // [10/14 v12] 경사로는 1억 원당 숫자를 내지 않음
+                      : { text:(r.per100m === '' || r.per100m === null) ? '-' : (Number(r.per100m) >= 100 ? `${Math.round(Number(r.per100m)).toLocaleString('en-US')}개` : `${Number(r.per100m).toFixed(1)}개`), options:o },
                B({ '난간·쉼터·계단 정비 + 방문돌봄':'정비 + 방문돌봄' }[r.rx] || r.rx, fac ? { color:C.teal } : (/휠체어 접근/.test(r.rx) ? { color:C.ink, fontSize:9.5 } : { color:C.muted, bold:false }))]);
   });
-  etable(s, rows, { colW:cw, rowH:[0.34].concat(CANDT.map(() => 0.34)), fontSize:10.5 });
-  bar(s, 0.6, 4.08, 0.92);
-  T(s, [{ text:'처방 규칙  ', options:{ bold:true, color:C.ink } }, { text:Q('V6.17.cand_rule', '500m 안 기존 시설 → 기존 시설 연계 / 1억 원당 수혜 건물 5개 이상 → 시설 검토 / 미만 → 난간·쉼터·계단 정비 + 방문돌봄 (시설 1곳 40억 원 가정)'), options:{ color:C.text, breakLine:true } },
+  etable(s, rows, { colW:cw, rowH:[0.34].concat(CANDT.map(() => 0.32)), fontSize:10.5 });
+  bar(s, 0.6, 4.1, 1.04);
+  T(s, [{ text:'처방 규칙  ', options:{ bold:true, color:C.ink } }, { text:Q('V6.17.cand_rule', '500m 안 기존 시설 → 기존 시설 연계 / 높이 차 3m 이하 → 바로 정비 (경사로) / 엘리베이터 1억 원당 수혜 건물 5개 이상 → 큰 시설 검토 / 미만 → 정비 + 방문돌봄 (엘리베이터 1곳 40억 원)'), options:{ color:C.text, breakLine:true } },
+        ...(has('V6.17.ramp_note') ? [{ text:R.fields['V6.17.ramp_note'].value, options:{ color:C.ink, breakLine:true } }] : []),   // [10/14 v12] 경사로 분리 한 줄
         { text:'서울시 선정지(봉천)는 역까지 가는 휠체어 접근 효과가 큰 곳입니다. 이 표는 선정을 뒤집자는 것이 아니라, 같은 예산의 비교 근거를 더합니다.', options:{ color:C.ink, bold:true } }],
-    { x:0.82, y:4.08, w:8.6, h:0.92, fontSize:10.5, valign:'middle', lineSpacingMultiple:1.1 });   // [10/14 v11]
-  src(s, (REH ? '공개 대역(리허설) 값 · ' : '') + '후보 = 고립 위험 주거 건물이 가장 많은 250m 격자에서 그 건물들의 길이 가장 많이 지나는 가파른 구간에 시설을 자동 배치 · 수혜(의료) = 고령자 왕복 30초 이상 · 휠체어 왕복 1분 이상 단축되는 건물(새로 도달 포함), 1억 원당 = 둘 중 하나 ÷ 시설 비용(부록 3) · 시설 양 끝 좌표는 반출하지 않음');
+    { x:0.82, y:4.1, w:8.6, h:1.04, fontSize:10, valign:'middle', lineSpacingMultiple:1.05 });   // [10/14 v11]
+  src(s, (REH ? '공개 대역(리허설) 값 · ' : '') + '후보 = 고립 위험 주거 건물이 가장 많은 250m 격자에서 그 건물들의 길이 가장 많이 지나는 가파른 구간에 시설을 자동 배치 · 수혜(의료) = 고령자 왕복 30초 이상 · 휠체어 왕복 1분 이상 단축되는 건물(새로 도달 포함), 1억 원당 = 둘 중 하나 ÷ 40억 (엘리베이터만, 높이 차 3m 이하 경사로는 내지 않음) · 시설 양 끝 좌표는 반출하지 않음');
 } else { const s = base('정책 제안' + SFX(), () => FALLBACK ? '어디부터 무엇을: 우선 검토 후보' : `어디부터 무엇을: 우선 검토 후보 ${NCAND()}곳`);
   // 10/12: 열 = 위치, 고립 위험 건물 수, 왕복 추가 시간 중앙값, 500m 안 기존 시설, 처방 방향 (규칙). 1억 원당 수혜는 20장(시뮬레이션한 시설)만
   const rows = [['위치', Q('V6.17.n_head', '고립 위험 건물'), '왕복 추가 (중앙값)', '500m 안 기존 시설', '처방 방향']];
@@ -528,7 +530,7 @@ if (CANDT) {
   else if (iso) s.addImage({ path:iso, x:5.6, y:1.42, w:3.85, h:3.05, sizing:{ type:'contain', w:3.85, h:3.05 } });
   else slot(s, 5.6, 1.42, 3.85, 3.05, '등시선 그림 자리\n선정지에서 10분 안에 걸어 닿는 범위\n평지 가정 vs 경사 반영 vs 휠체어', 'V6.iso');
   takeaway(s, '"민원이 많은 곳"이 아니라 "효과가 큰 곳"부터 설치할 근거를 줍니다.', 4.62);
-  src(s, '비용 가정: 엘리베이터 1곳 약 40억 원 (서울시 5곳 200억 원, 무악동 1곳 40억 원), 높이 3m 이하는 경사로 (부록 3)' + (iso ? ' / 등시선: 12_isochrone 결과' : '')); }
+  src(s, '비용 가정: 엘리베이터 1곳 약 40억 원 (서울시 5곳 200억 원, 무악동 1곳 40억 원), 높이 차 3m 이하는 경사로로 바로 정비 (부록 3)' + (iso ? ' / 등시선: 12_isochrone 결과' : '')); }
 
 // ── 20 한 사람에게 돌아가는 변화 ──
 if (Q('V6.20.mode', 'example') === 'wheel') {
@@ -585,6 +587,7 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
                 pub21 && has('V6.21.outing_note') ? `외출: ${R.fields['V6.21.outing_note'].value}` : (has('V6.21.skt') ? `외출(SKT)이 적은 고위험 동 ${sk21}` : ''),
                 has('V6.21.kcb') ? `저소득(KCB) 겹침 ${kc21}` : ''].filter(x => x);
   if (sm21.length) T(s, sm21.join('\n'), { x:5.3, y:3.9, w:4.1, h:0.45, fontSize:8.5, color:C.muted, valign:'top' });
+  if (has('V6.21.priority_rule')) T(s, R.fields['V6.21.priority_rule'].value, { x:0.6, y:4.96, w:8.8, h:0.24, fontSize:9, color:C.text });   // [10/14 v12] 장 아래 한 줄
   const yb21 = 4.42;
   bar(s, 5.3, yb21, 0.5); T(s, '보건소 방문건강관리, 돌봄SOS, 방문 약료의 대상 선정에 씁니다', { x:5.52, y:yb21, w:3.9, h:0.5, fontSize:12, bold:true, color:C.ink, valign:'middle' });
   src(s, (has('V6.21.alone_cells') ? `혼자 사는 어르신 = 서울시 동별 독거노인 × 고립 위험 격자 안 주거 연면적 비율 (${Q('V6.21.alone_cells_n', '추정을 낸 동')}) / `
@@ -670,9 +673,9 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
   etable(s, [['가정','값','근거','바꿨을 때 (숫자 = 순위상관)'], r('고령자 보행속도',`${SPD()}m/s`, SPD() === 0.7 ? '경찰청 매뉴얼 (2020.11.30 개정)' : '개정 전 기준 (개정판 0.7)', { text:`${SPD() === 0.7 ? '개정 전 0.8' : '0.7'}·1.0m/s: ${V('V6.29.speed')}`, options:{ fontSize:9.5 } }), r('내리막 부담','오르막의 50%','가정 (0%·100% 비교)',V('V6.29.down')), r('계단','최소 25% 경사, 1.2배','가정 (1.5배 비교)',V('V6.29.stair')), r('휠체어 경사 한계','1/12 (8.3%)','법정 경사로 기준','해당 없음 (법정)'),
     r(`고립 위험 문턱`,`왕복 +${RMIN()}분`,`420m ÷ ${SPD()}m/s ${eq29} 편도 ${Math.round(420 / SPD() / 60)}분`, sm29(band29)),
     r('엘리베이터 대기',`${Q('V6.29.facility_w', '30·60·90초')} 비교`,'서울시 발표 + 실측', sm29(V('V6.29.facility_txt'))),
-    r('시설 비용', sm29('엘리베이터 40억 원\n경사로 m당 100만 원'), sm29('서울시 5곳 200억 원·무악동 40억 원\n경사로: 평창군 무장애 나눔길 1km 10억 원 (2025.01) 단가를 빌림, 도심 단가 확인 필요'), sm29('높이 3m 이하 = 경사로 (1/12, 0.75m마다 수평참 1.5m)\n수혜는 엘리베이터로 계산한 값')),
+    r('시설 비용', sm29('엘리베이터 약 40억 원\n경사로 수억 원대 이하'), sm29('서울시 무장애길 1단계 5곳 200억 원\n2단계 10곳 400억 원 (곳당 약 40억)\n경사로 곳당 사업비는 찾지 못함'), sm29('높이 차 3m 이하 = 경사로\n1억 원당 비교에서 빼고 "바로 정비"\n엘리베이터 후보만 1억 원당 5개 기준')),   // [10/14 v12]
     r('반출 최소 건물 수','5개','비식별 기준','해당 없음')],
-    { colW:[1.6,1.75,2.65,2.8], rowH:[0.3,0.34,0.3,0.3,0.3,0.6,0.34,0.62,0.3] });
+    { colW:[1.6,1.75,2.65,2.8], rowH:[0.3,0.34,0.3,0.3,0.3,0.6,0.34,0.66,0.3] });
   src(s, '순위상관이 0.9 이상이면 "누가 더 취약한가"의 순서가 가정에 크게 흔들리지 않는다는 뜻'); }
 { const s = base('부록 4', '경사 비용 계산 (발췌)');
   const code = ['def tobler(s):                       # 경사 s → 보행속도 km/h','    return 6.0 * np.exp(-3.5 * np.abs(s + 0.05))','FLAT = tobler(0.0)','','def elder_time(length, s, stair):    # 고령자 링크 통과 시간(초)','    s = np.where(stair, np.sign(s + 1e-9) * np.maximum(np.abs(s), 0.25), s)','    up = FLAT / tobler(np.abs(s))','    down = 1 + C.DOWNHILL_WEIGHT * (up - 1)   # 내리막은 오르막 부담의 일부','    factor = np.where(s >= 0, FLAT / tobler(s), down)','    t = length / C.ELDER_SPEED * factor','    return np.where(stair, t * C.STAIR_FACTOR, t)','','def wheel_time(length, s, stair):    # 휠체어: 1/12 초과는 사실상 회피, 계단 불가','    up = np.maximum(s, 0)','    t = length / (C.WHEEL_SPEED * np.maximum(0.4, 1 - 5 * up))','    t = np.where(np.abs(s) > C.WHEEL_LIMIT, t * C.WHEEL_STEEP_PENALTY, t)','    return np.where(stair, np.inf, t)'].join('\n');
