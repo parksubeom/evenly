@@ -16,7 +16,7 @@ tools/prepare_deck_data.py ─ 반출 결과 파일 → 기획서에 넣을 값(
         그림은 matplotlib 이 필요합니다. deck 의 npm 스크립트는 deck/py.js 로 matplotlib 이 있는 Python(EVENLY_PY → QGIS → python3)을 고름.
         --expect real 에서 matplotlib 이 없으면 멈춤 (그림 빠진 제출본 방지). 가짜 빌드는 경고만 하고 그림을 누락으로 처리.
 """
-import argparse, datetime, json, math, os, re, sys
+import argparse, csv, datetime, json, math, os, re, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # [10/14 v11] 17장 시설 비용 가정 (밖에서 다시 계산). 엘리베이터 = 서울시 2025 선정 5곳 200억 원·무악동 1곳 40억 원,
@@ -775,6 +775,58 @@ def make_plots(B, grid, targets, T0, vs, site_rows, skt_plot, skt_rho, skt_p):
 #  later = 공개 대역 판(source=rehearsal)에서 원래 채울 수 없는 칸에 보일 말 ("실제 결과 후" 등). 실제 판에서는 ___ 그대로(누락)
 #  구간 기준 bands: hbi = HBI 1.3(부담)·1.8(고립 위험) / min = 왕복 추가 5분(부담)·10분(고립 위험)
 #  정의 표: docs/기획서_v6_결과키.md
+def v62_candidates(isum, grid, T0, RM):
+    """[10/14] v6.2 출력 (intervention_candidates.csv 없음): 19일 손 입력 후보(후보1~5, tools/field_fix_v62.py)와 좌표가 있는 입력 시설(봉천)을
+    v6.3 후보·선정지 비교표와 같은 칸으로 (v6.3 09 의 규칙을 밖에서): 격자 = 후보는 v6.3 이 고른 출발 격자, 입력 시설은 양 끝 가운데가 든 격자 /
+    고립 위험 집 = grid_hbi n_add<RM>m (같은 목적지·05 격자 표와 같은 값, 5채 미만 격자는 빈 칸) / 기존 시설 = 격자 가운데에서 가장 가까운
+    기존 이동편의시설 (data_public/existing_facilities.csv + interventions 의 existing, 50m 단위) / 길이 = 양 끝 직선 (후보는 10m 단위).
+    수혜·높이 차는 09 summary 그대로. 처방은 아래 17장 코드가 1억 원당·높이로 다시 정함. 해당 시설이 summary 에 없으면 None"""
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import field_fix_v62 as FF
+    rowsT = {r.get("facility"): r for r in isum if r.get("target") == T0 and not str(r.get("facility", "")).startswith("ALL")}
+    hand = {c["name"]: c for c in FF.candidates()}
+    if not any(n in rowsT for n in hand):
+        return None
+    meta = {r["name"].split()[0] if r["name"].startswith("후보") else r["name"]: r
+            for r in csv.DictReader(open(FF.CAND_CSV, encoding="utf-8-sig")) if r.get("a_lon") and r.get("b_lon")}
+    ex = []
+    for r in read_csv(os.path.join(ROOT, "data_public", "existing_facilities.csv")) or []:
+        if str(r.get("status", "")).strip().lower().startswith("existing") and num(r.get("lon")) is not None and num(r.get("lat")) is not None:
+            ex.append(to5186(num(r["lon"]), num(r["lat"])))
+    ex += [to5186(float(r["a_lon"]), float(r["a_lat"])) for r in meta.values() if (r.get("status") or "").strip().lower() == "existing"]
+    dongs = load_dongs()
+    gk = {(num(g.get("cell_x")), num(g.get("cell_y"))): g for g in grid if g.get("target") == T0}
+    rk = f"n_add{RM:g}m".replace(".", "_")
+    out = []
+    for nm, r in rowsT.items():
+        m = meta.get(nm)
+        if not m:
+            continue                                             # 좌표를 모르는 시설 (기획서 쪽 표에 없음)
+        ax, ay = to5186(float(m["a_lon"]), float(m["a_lat"]))
+        bx, by = to5186(float(m["b_lon"]), float(m["b_lat"]))
+        st_ = math.hypot(bx - ax, by - ay)
+        cand = nm in hand
+        if cand:
+            cx, cy = FF.CAND_CELLS[nm]
+        else:
+            cx, cy = (math.floor((ax + bx) / 2 / 250) + 0.5) * 250, (math.floor((ay + by) / 2 / 250) + 0.5) * 250
+        d_ = dong_of(cx, cy, dongs)
+        g = gk.get((cx, cy)) or {}
+        nb_ = num(g.get("n_bld"))
+        near = min((math.hypot(x - cx, y - cy) for x, y in ex), default=None)
+        out.append({"kind": "후보" if cand else ("이미 있는 시설" if (m.get("status") or "").strip().lower() == "existing" else "선정지·입력 시설"),
+                    "facility": nm, "adm_cd": d_["adm_cd"] if d_ else "", "adm_nm": d_["adm_nm"] if d_ else "", "cell_x": cx, "cell_y": cy,
+                    "n_bld_cell": g.get("n_bld", "") if nb_ and nb_ >= 5 else "", f"n_risk_{RM:g}m": g.get(rk, "") if nb_ and nb_ >= 5 else "",
+                    "facility_type": (m.get("type") or "").strip().lower(), "rise_m": r.get("rise_m", ""),
+                    "length_m": int(round(st_, -1)) if cand else round(st_), "pass_s": r.get("pass_s", ""), "wheel_now_m": "",
+                    "n_benefit_any": r.get("n_benefit_any", ""), "n_saved_30s": r.get("n_saved_30s", ""), "wheel_benefit": r.get("wheel_benefit", ""),
+                    "mean_saved_min": r.get("mean_saved_min", ""), "per100m": "",
+                    "existing_m": int(round(near / 50) * 50) if near is not None and near <= 3000 else "",
+                    "prescription": "기존 시설 연계" if near is not None and near <= 500 else "난간·쉼터·계단 정비 + 방문돌봄"})
+    out.sort(key=lambda r: (r["kind"] == "후보", r["facility"]))
+    return out or None
+
+
 def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, opt_file, extra):
     def P(key, label, need, value, later=None, optional=False):
         B.fields[key] = {"value": value, "label": label, "need": need}
@@ -798,15 +850,16 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         pass
     try:                                                         # [v6.3] 고립 위험 = run_meta 의 risk_min (v6.3 에서 15분을 더해 '가장 큰 문턱'과 갈라짐)
         RM = float(rm.get("risk_min") or "")
-    except ValueError:
-        RM = max(mins) if mins else 10.0                         # v6.2 까지: 가장 큰 왕복 추가 문턱
+    except ValueError:                                           # [10/14] v6.2 (risk_min 없음): v6.3 mapping 규칙과 같게 10분이 있으면 10, 없으면 가장 큰 값
+        RM = 10.0 if (10.0 in mins or not mins) else max(mins)   #   (19일 현장 수정으로 v6.2 에 15분을 더해도 고립 위험은 10분)
     SM = 5.0 if 5.0 in mins else (mins[len(mins) // 2] if mins else 5.0)   # (min 비교판의 부담 문턱)
     tag_r, tag_s = f"add{RM:g}m".replace(".", "_"), f"add{SM:g}m".replace(".", "_")
     b_hbi = bands in ("mix", "hbi")                              # 체감 부담을 HBI 로
     r_min = bands in ("mix", "min")                              # 고립 위험을 왕복 추가 분으로
     M = r_min
     P("V6.hb", "체감 부담 HBI 문턱", ["run_meta.csv (hbi_bands)"], f"{hb:g}", optional=True)
-    P("V6.rmin", "고립 위험 왕복 추가 문턱(분)", ["run_meta.csv (risk_min, 없으면 extra_min_bands 의 가장 큰 값)"], f"{RM:g}", optional=True)
+    P("V6.rmin", "고립 위험 왕복 추가 문턱(분)", ["run_meta.csv (risk_min, 없으면 10분 또는 extra_min_bands 의 가장 큰 값)"], f"{RM:g}", optional=True)
+    P("V6.v62", "v6.2 출력 (run_meta 에 risk_min 없음: 후보 자동·격자 안 독거노인 추정 없음)", ["run_meta.csv"], "yes" if (rm and "risk_min" not in rm) else None, optional=True)   # [10/14]
     P("V6.bands", "구간 기준", [], {"mix": f"체감 부담 HBI {hb:g} · 고립 위험 왕복 {RM:g}분", "hbi": f"HBI {hb:g}·{HI:g}", "min": f"왕복 추가 {SM:g}분·{RM:g}분"}[bands], optional=True)
     cv = lambda g, k: num(g.get(k))
     gT = [g for g in grid if g["target"] == T0]
@@ -1099,7 +1152,7 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     gB = [g for g in grid if g["target"] == "bus"]
     okB = bool(gB) and (b_hbi or f"share_{tag_s}" in gB[0])
     # ── [v6.3] 17장 후보·선정지 비교표 (09 intervention_candidates.csv), 21장 격자 안 독거노인, 14장 집 종류·집당 배분, 부록 3 기준 민감도 ──
-    crs = R("intervention_candidates.csv") or []
+    crs = R("intervention_candidates.csv") or v62_candidates(isum, grid, T0, RM) or []   # [10/14] v6.2 는 후보 자동 파일이 없음 → 19일 손 입력 후보로
     if crs:
         rk_ = next((k for k in crs[0] if k.startswith("n_risk")), "n_risk")
         tn = {"vertical": "수직", "elevator": "경사형", "monorail": "모노레일", "ramp": "경사로"}
@@ -1262,8 +1315,21 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     P("V6.13.hill_area", "구릉지: 경사 8.3% 이상 땅의 구 면적 비율 (산 포함)", ["summary.csv meta (02·05, 10/13)"],
       f"경사 8.3% 이상 땅은 {gu_} 면적의 {hl_a:.0%} ({'관악산 포함' if gu_ == '관악구' else '산 포함'})" + (f" · 경사는 DEM {float(dres):g}m 자체 계산" if dres else "") if hl_a is not None else None, optional=True)
     # [10/13 판정] 어르신 평지 보행속도: 결과의 run_meta elder_speed (v6.3 #bce59e 까지는 칸이 없고 0.8). 출처 문구는 inputs.json elder_speed_source[속도]
-    spd_ = num(rm.get("elder_speed")) or 0.8
-    P("V6.speed", "어르신 평지 보행속도 (m/s)", ["run_meta.csv (elder_speed, 10/13)"], f"{spd_:g}", optional=True)
+    spd_ = num(rm.get("elder_speed"))
+    spd_src = "run_meta.csv (elder_speed)"
+    if spd_ is None:                                             # [10/14] v6.2 는 run_meta 에 속도 줄이 없음 → 검증 경로의 망 거리 ÷ 평지 시간 (평지 시간 = 거리 ÷ 어르신 속도)
+        vr_ = sorted(((num(r.get("net_m")), num(r.get("flat_min"))) for r in routes if num(r.get("net_m")) and num(r.get("flat_min")) and num(r.get("flat_min")) >= 3), reverse=True)
+        if vr_:
+            spd_ = round(vr_[0][0] / (vr_[0][1] * 60) / 0.05) * 0.05   # 0.1분 반올림 → 0.05m/s 단위로
+            spd_src = f"validation_routes.csv (가장 긴 경로 {vr_[0][0]:g}m ÷ 평지 {vr_[0][1]:g}분)"
+        else:
+            spd_ = 0.8
+            spd_src = "알 수 없음 (run_meta·validation_routes 없음) → 0.8 로 봄"
+    spd_ = round(spd_, 2)
+    if abs(spd_ - 0.7) > 0.01:
+        print(f"!! 어르신 평지 보행속도가 {spd_:g}m/s ({spd_src}) — 12장 '420m ÷ 0.7m/s = 편도 10분' 근거와 맞지 않습니다."
+              " 19일 현장 수정(config.py ELDER_SPEED = 0.7)이 빠졌는지 확인", flush=True)
+    P("V6.speed", "어르신 평지 보행속도 (m/s)", [spd_src], f"{spd_:g}", optional=True)
     ss_ = inp.get("elder_speed_source")
     P("V6.16.speed_src", f"어르신 평지 보행속도 {spd_:g}m/s 의 출처", [f"deck/inputs.json 의 elder_speed_source[\"{spd_:g}\"]"],
       (ss_.get(f"{spd_:g}") if isinstance(ss_, dict) else ss_), later="출처 기입 예정")
@@ -1272,7 +1338,9 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     # ── 29 민감도 (순위상관) ──
     sens = {r["scenario"].strip(): num(r.get("rank_corr_vs_base")) for r in (R("sensitivity.csv") or [])}
     mn = lambda *ks: min((sens[k] for k in ks if sens.get(k) is not None), default=None)
-    for key, lab, ks in [("speed", "보행속도 다른 값(개정 전 0.8 또는 0.7)·1.0m/s", ("보행속도 0.8m/s (개정 전)", "보행속도 0.7m/s", "보행속도 1.0m/s")), ("down", "내리막 부담 0%·100%", ("내리막 부담 0%(Tobler 원식)", "내리막 부담 100%")),
+    ks_spd = tuple(k for k in ("보행속도 0.8m/s (개정 전)", "보행속도 0.8m/s", "보행속도 0.7m/s", "보행속도 1.0m/s")   # [10/14] v6.2 현장 수정 = "보행속도 0.8m/s"
+                   if abs(float(re.search(r"([0-9.]+)m/s", k).group(1)) - spd_) > 0.01)                                 #   기본과 같은 속도(0.7)의 시나리오는 비교가 아님
+    for key, lab, ks in [("speed", "보행속도 다른 값(개정 전 0.8 또는 0.7)·1.0m/s", ks_spd), ("down", "내리막 부담 0%·100%", ("내리막 부담 0%(Tobler 원식)", "내리막 부담 100%")),
                          ("stair", "계단 가중 1.5", ("계단 가중 1.5",))]:
         v = mn(*ks)
         P(f"V6.29.{key}", f"민감도 순위상관: {lab}", ["sensitivity.csv (08)"], f"{v:.2f}" if v is not None else None)
@@ -1393,7 +1461,7 @@ def v6_plots(B, grid, T0, bands, R):
     try:                                                         # [v6.3] risk_min (위와 같음)
         RM = float(rm.get("risk_min") or "")
     except ValueError:
-        RM = max(mins) if mins else 10.0
+        RM = 10.0 if (10.0 in mins or not mins) else max(mins)   # [10/14] v6.2 도 10분 (위와 같음)
     SM = 5.0 if 5.0 in mins else (mins[len(mins) // 2] if mins else 5.0)
     tr, ts = f"share_add{RM:g}m".replace(".", "_"), f"share_add{SM:g}m".replace(".", "_")
     cells = [g for g in grid if g["target"] == T0]

@@ -607,15 +607,20 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
   const sk21 = pub21 ? '' : V('V6.21.skt'), kc21 = (pub21 && !has('V6.21.kcb')) ? '' : V('V6.21.kcb');   // 장에 안 쓰는 칸은 대체 목록에도 넣지 않음      // 10/12 청사진: 외출(SKT)·소득(KCB)을 한 칸에 (둘 다 같은 대체 문구면 하나만. 둘 다 ___ 면 빈칸 둘: 누락 key 가 둘)
   const rk21 = has('V6.21.risk_dongs') ? R.fields['V6.21.risk_dongs'].value + '곳' : (FALLBACK ? V('V6.21.risk_dongs') : '-');   // 선택 키 (고위험 동 = 값이 0 보다 큰 동 중 상위 25%)
   // [10/14 v11] 큰 숫자 = 최우선 방문 동 (주황 하나), 외출 결과는 아래 작은 글씨 한 줄
-  [has('V6.21.alone_top3_dongs') ? ['고립 위험 주거 건물이 가장 많은 동', R.fields['V6.21.alone_top3_dongs'].value, C.ink] : [`고립 위험(왕복 +${RMIN()}분) 건물이 많은 동`, rk21, C.ink],
-   (has('V6.21.alone_cells') || !has('V6.21.alone_top3')) ? ['고립 위험 격자 안 혼자 사는 어르신 (추정)', V('V6.21.alone_cells'), C.ink] : ['고립 위험 상위 3개 동의 독거노인 수 (합, 공개 통계)', V('V6.21.alone_top3'), C.ink],
-   ['최우선 방문 동 (언덕 부담·혼자 사는 분 모두 많은 동)', V('V6.21.priority'), C.acc]].forEach((r, i) => { if (i) hr(s, 5.3, 1.45+i*0.8-0.07, 4.1); stat(s, 5.3, 1.45+i*0.8, 4.1, r[0], r[1], { size:18, laterInk:true, color:r[2] }); });   // [10/14 v14] 간격 0.88 → 0.8
+  // [10/14] v6.2 출력(또는 대비책 판)은 '격자 안 혼자 사는 어르신 추정'이 없음 → 그 칸을 빼고 두 칸으로 (간격 넓힘)
+  const no21 = !hasR('V6.21.alone_cells') && (hasR('V6.v62') || FALLBACK);
+  const st21 = [has('V6.21.alone_top3_dongs') ? ['고립 위험 주거 건물이 가장 많은 동', R.fields['V6.21.alone_top3_dongs'].value, C.ink] : [`고립 위험(왕복 +${RMIN()}분) 건물이 많은 동`, rk21, C.ink],
+   no21 ? null : ((has('V6.21.alone_cells') || !has('V6.21.alone_top3')) ? ['고립 위험 격자 안 혼자 사는 어르신 (추정)', V('V6.21.alone_cells'), C.ink] : ['고립 위험 상위 3개 동의 독거노인 수 (합, 공개 통계)', V('V6.21.alone_top3'), C.ink]),
+   ['최우선 방문 동 (언덕 부담·혼자 사는 분 모두 많은 동)', V('V6.21.priority'), C.acc]].filter(x => x);
+  const gap21 = st21.length === 3 ? 0.8 : 1.0;   // [10/14 v14] 간격 0.88 → 0.8
+  st21.forEach((r, i) => { if (i) hr(s, 5.3, 1.45+i*gap21-0.07, 4.1); stat(s, 5.3, 1.45+i*gap21, 4.1, r[0], r[1], { size:18, laterInk:true, color:r[2] }); });
   const sm21 = [has('V6.21.priority_dongs') ? `최우선 방문 동: ${R.fields['V6.21.priority_dongs'].value}` : '',
                 pub21 && has('V6.21.outing_note') ? `외출: ${R.fields['V6.21.outing_note'].value}` : (has('V6.21.skt') ? `외출(SKT)이 적은 고위험 동 ${sk21}` : ''),
                 has('V6.21.kcb') ? `저소득(KCB) 겹침 ${kc21}` : ''].filter(x => x).slice(0, 2);   // [10/14 v14] 두 줄까지
-  if (sm21.length) T(s, sm21.join('\n'), { x:5.3, y:3.72, w:4.1, h:0.36, fontSize:8.5, color:C.muted, valign:'top' });
+  const ysm21 = 1.45 + st21.length * gap21 - 0.13;
+  if (sm21.length) T(s, sm21.join('\n'), { x:5.3, y:ysm21, w:4.1, h:0.36, fontSize:8.5, color:C.muted, valign:'top' });
   if (has('V6.21.priority_rule')) T(s, R.fields['V6.21.priority_rule'].value, { x:0.6, y:4.8, w:8.8, h:0.24, fontSize:9, color:C.text });   // [10/14 v12] 장 아래 한 줄 (v14: 축 글자 아래로 올림)
-  const yb21 = 4.16;
+  const yb21 = Math.max(ysm21 + 0.44, 3.9);   // 세 칸이면 4.16 (v14 그대로)
   bar(s, 5.3, yb21, 0.5); T(s, '보건소 방문건강관리, 돌봄SOS, 방문 약료의 대상 선정에 씁니다', { x:5.52, y:yb21, w:3.9, h:0.5, fontSize:11.5, bold:true, color:C.ink, valign:'middle' });
   src(s, (has('V6.21.alone_cells') ? `혼자 사는 어르신 = 서울시 동별 독거노인 × 고립 위험 격자 안 주거 연면적 비율 (${Q('V6.21.alone_cells_n', '추정을 낸 동')}) / `
          : (has('V6.21.alone_top3_dongs') ? `고립 위험 상위 3개 동: ${R.fields['V6.21.alone_top3_dongs'].value} (독거노인: 서울시 동별 통계) / ` : '')) + '외출·소득은 동 단위 보조 지표 (상관 관찰) / ' + (pub21 ? R.fields['V6.21.outing_src'].value : 'SKT는 60세 이상 기준')); }

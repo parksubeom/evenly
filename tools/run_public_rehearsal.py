@@ -53,6 +53,9 @@ def main():
     ap.add_argument("--bundle", default="hbi_code_bundle_v6.1.txt", help="--root 안의 번들 파일 이름 (후보 번들 시험용)")
     ap.add_argument("--facility", action="append", default=[], metavar="이름=a_lon,a_lat,b_lon,b_lat",
                     help="[10/12] setup 뒤 external/interventions.csv 의 그 이름 줄에 양 끝 좌표를 넣음 (안내서 단계 7 처럼). 여러 번 가능")
+    ap.add_argument("--field-fix", choices=["v62"], help="[10/14] setup 뒤·check 전 현장 수정 (tools/field_fix_v62.py: config.py 0.7·민감도 0.8, mapping 15분 구간)")
+    ap.add_argument("--hand-candidates", action="store_true",
+                    help="[10/14] 12·13·14 뒤 external/interventions.csv 끝에 후보 다섯 줄 손 입력 → run_all --from 09 --modes auto (19일 추가 수정 한 장 2번)")
     a = ap.parse_args()
     root = os.path.abspath(a.root)
     if not os.path.exists(os.path.join(root, "공개대역_README.txt")):
@@ -80,16 +83,25 @@ def main():
     for name, args, cwd, inp in steps:
         if name == "check" and a.facility:              # [10/12] 단계 7 의 좌표 넣기를 setup 뒤에 미리 (그래서 run_all 이 09 를 함께 돌림)
             fill_facilities(os.path.join(H, "external", "interventions.csv"), a.facility)
+        if name == "check" and a.field_fix:             # [10/14] 19일 추가 수정 한 장 1번 (setup 뒤, check 전)
+            import field_fix_v62
+            field_fix_v62.apply(H)
         rc, out, sec = run(a.py, args, cwd, os.path.join(logs, f"L_{name}.log"), inp)
         res[name] = {"rc": rc, "sec": sec}
         print(f"{name}: 끝남 {rc} ({sec}초)", flush=True)
         if name == "check" and rc != 0:
             print(out[-2000:])
             break
+    if a.hand_candidates and res.get("run_all", {}).get("rc") == 0:   # [10/14] 19일 추가 수정 한 장 2번 (본 분석·12~14 뒤)
+        import field_fix_v62
+        field_fix_v62.append_candidates(H)
+        rc, out, sec = run(a.py, ["run_all.py", "--from", "09", "--modes", "auto"], H, os.path.join(logs, "L_09hand.log"))
+        res["09hand"] = {"rc": rc, "sec": sec}
+        print(f"09hand: 끝남 {rc} ({sec}초)", flush=True)
     bpath = os.path.join(root, a.bundle)
     res["bundle_file"] = a.bundle
     res["bundle_sha256"] = hashlib.sha256(open(bpath, "rb").read()).hexdigest() if os.path.exists(bpath) else None
-    ok = res.get("run_all", {}).get("rc") == 0
+    ok = res.get("run_all", {}).get("rc") == 0 and res.get("09hand", {"rc": 0})["rc"] == 0
     note = ("공개데이터 대역 리허설 (LX 미반영, 제출 금지)" + ("" if ok else f" — 미완료: run_all rc={res.get('run_all', {}).get('rc')}")
             + f". 번들 {a.bundle} sha256 {res['bundle_sha256']}. 자료: tools/make_public_rehearsal.py, 대응표: docs/리허설_코드대응.md")
     out_dir = os.path.join(H, "output")

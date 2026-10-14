@@ -15,7 +15,7 @@ tools/real_day.py ─ [10/22 반출 결과 받은 날] 받은 반출 파일 → 
   5. 판정 줄: 실제판 후보 / inputs.json 채우고 다시 / --later-ok 로 다시 / 대비책 판
 [결과] 화면 + _render/final/real_day_report.txt (값은 적지 않음: 파일 이름·개수·판정만)
 """
-import csv, datetime, os, re, shutil, subprocess, sys, tempfile, time, zipfile
+import csv, datetime, json, os, re, shutil, subprocess, sys, tempfile, time, zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, "results", "raw_export")
@@ -275,6 +275,18 @@ def finish(stop, soft, later_ok, t_all, built):
             say("     " + l)
     if soft:
         say(f"   밖 도구 문제: {', '.join(soft)} (해당 칸이 누락으로 나옴)")
+    try:                                              # [10/14] v6.2 + 19일 현장 수정: 속도 0.7·후보 손 입력이 결과에 들어갔는지 (판정은 바꾸지 않고 알림)
+        rj = json.load(open(os.path.join(ROOT, "deck", "data", "results.json"), encoding="utf-8"))
+        fv = lambda k: ((rj.get("fields") or {}).get(k) or {}).get("value")
+        spd = fv("V6.speed")
+        if spd and abs(float(spd) - 0.7) > 0.01:
+            say(f"   !! 어르신 평지 보행속도 {spd}m/s — 19일 현장 수정(config.py ELDER_SPEED = 0.7)이 빠졌는지 확인. 12장 '420m ÷ 0.7m/s = 편도 10분' 근거와 맞지 않음")
+        if fv("V6.v62"):
+            nc = sum(1 for r in ((rj.get("tables") or {}).get("V6.17.cand") or {}).get("rows") or [] if r.get("kind") == "후보")
+            say(f"   v6.2 출력: 후보 손 입력 {nc}곳을 17장 표로" + ("" if nc else
+                " → !! 0곳: 09 결과에 후보1~후보5 줄이 없음 (interventions.csv 손 입력 이름·run_all --from 09 --modes auto 확인). 17장이 예전 격자 표로 나옴"))
+    except Exception as ex:
+        say(f"   (결과 확인 줄을 못 읽음: {ex})")
     if stop or other:
         why = stop + ([f"그 밖 누락 {len(other)}건"] if other else [])
         verdict = f"대비책 판 (npm run build:fallback) — 이유: {'; '.join(why)}"
