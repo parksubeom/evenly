@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>10/22 기획서 마감일 절차</title>
 <style>
-@page { size: A4; margin: 6mm 9mm 5mm; }
+@page { size: A4; margin: 5mm 9mm 4mm; }
 * { box-sizing: border-box; }
 body { margin: 0; font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; font-size: 7.7pt; line-height: 1.25; color: #000; background: #fff; }
 .page { width: 192mm; }
@@ -86,8 +86,8 @@ npm run real-day -- <받은 zip 또는 폴더></div>
 <tr><td class="ck"></td><td>1·26</td><td>팀 표시 "서울평평단 (박수범)"</td><td></td></tr>
 <tr><td class="ck"></td><td>13</td><td>방문 날짜 칸 (10/02·10/19·10/20·10/21, 갔으면 10/22) · '총 ○일' · '예정' 글자 없음 · 아래 '방문일은 다녀온 날로 기입' 줄 없음</td><td>'총 ___일' (visits 의 done 이 빠짐)</td></tr>
 <tr><td class="ck"></td><td>14</td><td>제목 %, 지도 (분석한 구만, 평지·체감 부담·고립 위험 세 색), 고립 위험 건물 수·비율, 어르신 추정, 부담이 가장 큰 동</td><td>지도 빈 칸 · 동 이름이 분석한 구 밖</td></tr>
-<tr><td class="ck"></td><td>15</td><td>사진 4장 (얼굴·번지 없음), 네 구간 지도앱·실측·모델, 측정일</td><td>모델이 실측의 절반 아래나 두 배 위</td></tr>
-<tr><td class="ck"></td><td>16</td><td>선정지 (관악만: "봉천동 상위 n%" / 5개 구: "상위 10% n곳") · 휠체어 우회 "모델 ○m" (5개 구면 대현산 줄, 관악만이면 봉천 줄. 1,000m 넘으면 출처 줄 안내) · r · 공개데이터 놓침 % · DEM 상위 10%</td><td>휠체어 m 이 0 이거나 빈 칸</td></tr>
+<tr><td class="ck"></td><td>15</td><td>사진 4장 (얼굴·번지 없음), 네 구간 지도앱·실측·모델, 측정일 · <b>천천히 잰 분</b>(v6.3 기록지)은 밖에서 반출 <code>validation_routes.csv</code> 의 <code>elder_min</code>(모델 0.7m/s)과 견줘 메모만</td><td>모델이 실측의 절반 아래나 두 배 위</td></tr>
+<tr><td class="ck"></td><td>16</td><td>선정지 (관악만: "봉천동 상위 n%" / 5개 구: "상위 10% n곳") · 휠체어 우회 "모델 ○m" · r · 공개데이터 놓침 % · DEM 상위 10%</td><td>휠체어 m 이 0 이거나 빈 칸</td></tr>
 <tr><td class="ck"></td><td>17·19</td><td>선정지 + 후보 줄 (고립 위험 건물·시설·고령자 30초·휠체어 1분·1억 원당·처방 세 단계: 큰 시설 검토 / 바로 정비 / 정비 + 방문돌봄) · 19장 "후보 ○곳 중 ○곳" · 등시선 그림 (봉천)</td><td>위치가 분석한 구 밖</td></tr>
 <tr><td class="ck"></td><td>20</td><td>봉천 휠체어 길 전 → 후, 높이 차, 1억 원당 수혜 "x.x동", 끝 줄 문구 (0번 결정대로)</td><td>높이 차 1m 미만·10m 넘음 (실제 DEM 약 5m)</td></tr>
 <tr><td class="ck"></td><td>21·22</td><td>고립 위험 동 수, 상위 3개 동 독거노인 합, SKT·KCB · 정류장 검토 지역, 사고 법정동</td><td></td></tr>
@@ -108,7 +108,7 @@ npm run real-day -- <받은 zip 또는 폴더></div>
 <h2>4. 제출 (15분, 목표 13:00)</h2>
 <ul>
 <li>올릴 파일: 실제판 <code>deliverables/언덕위우리동네_기획서_final.pdf</code> / 대비책 판 <code>…_대비책.pdf</code> (30장 = 30p 이내) + 개인정보 동의서</li>
-<li><b>PDF 를 냅니다</b>: 렌더링으로 확인한 그 파일. 이 맥에는 맑은 고딕이 없어 PDF 글꼴은 Apple SD Gothic Neo. pptx 는 심사 PC 의 맑은 고딕으로 열려 줄바꿈이 확인본과 다를 수 있어, 접수처가 pptx 를 요구할 때만 같은 이름 .pptx</li>
+<li><b>PDF 를 냅니다</b>: 렌더링으로 확인한 그 파일 (pptx 는 심사 PC 의 맑은 고딕으로 열려 줄바꿈이 다를 수 있어, 접수처가 요구할 때만 같은 이름 .pptx)</li>
 <li>올린 뒤 접수 확인 화면 저장, <code>shasum -a 256 &lt;올린 파일&gt;</code> 값 메모 → ____________</li>
 </ul>
 </div>
