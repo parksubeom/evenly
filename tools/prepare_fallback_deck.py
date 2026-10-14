@@ -11,6 +11,9 @@ tools/prepare_fallback_deck.py ─ [10/13] 대비책 판 기획서 데이터: 1�
 """
 import json, os, sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from evenly_common import visit_plan
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DECK = os.path.join(ROOT, "deck")
 
@@ -33,19 +36,9 @@ def main():
     fvn = "deck/first_visit_results.json (docs/1차방문_반출결과.md)"
     put("team_name", "팀명", ["deck/inputs.json"], inp.get("team_name") or None)
     put("team_display", "팀 표시 (1·26장)", ["deck/inputs.json"], inp.get("team_display") or inp.get("team_name") or None)
-    dates = (inp.get("visit_dates") or []) + [None] * 5
-    wd = "월화수목금토일"
-    for i in (2, 3):                                   # 13장 2·3차 방문일 (build_v6 의 V6.13.visit2·3, prepare_deck_data 와 같은 서식)
-        d = dates[i - 1]
-        v = None
-        if d:
-            import datetime
-            try:
-                dt = datetime.date.fromisoformat(str(d))
-                v = f"{dt:%Y.%m.%d} ({wd[dt.weekday()]})"
-            except ValueError:
-                v = str(d)
-        put(f"V6.13.visit{i}", f"안심구역 {i}차 방문일", ["deck/inputs.json"], v)
+    vrows_, vn_ = visit_plan(inp)                      # [10/14 v14] 13장 방문일 (prepare_deck_data 와 같은 키)
+    tables_ = {"V6.13.visits": {"label": "안심구역 방문일·한 일 (13장)", "need": ["deck/inputs.json 의 visits"], "rows": vrows_}} if vrows_ else {}
+    put("V6.13.n_visits", "안심구역 방문 일수 (visits 의 done, 예비 날 제외)", ["deck/inputs.json 의 visits (다녀온 날 done: true)"], f"{vn_}일" if vn_ else None)
     # [10/13] 대비책 판은 1차 반출(v5, 어르신 0.8m/s) 값 → 속도 0.8 과 그 출처 문구 (inputs.json elder_speed_source["0.8"])
     put("V6.speed", "어르신 평지 보행속도 (m/s)", [fvn], "0.8", optional=True)
     ss_ = inp.get("elder_speed_source")
@@ -63,7 +56,7 @@ def main():
     put("V6.16.site_label", "선정지 줄 이름", [], "서울시 선정지 봉천동의 위치 (1차 반출: 관악 일대 격자 중)", optional=True)
     put("V6.16.wheel_label", "휠체어 우회 줄 이름", [], "봉천 계단 휠체어 우회 (서울시: 200m 이상)", optional=True)   # 관악 이야기 (값은 2차)
     put("V6.15.date", "현장실측 날짜", ["deck/inputs.json 의 survey_date"], inp.get("survey_date"), later="2026.10.__")
-    out = {"source": "fallback", "src": os.path.relpath(fv_p, ROOT), "bands": "mix", "fields": F, "images": {}, "tables": {}}
+    out = {"source": "fallback", "src": os.path.relpath(fv_p, ROOT), "bands": "mix", "fields": F, "images": {}, "tables": tables_}
     os.makedirs(os.path.join(DECK, "data"), exist_ok=True)
     json.dump(out, open(os.path.join(DECK, "data", "results.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print(f"[fallback] {os.path.relpath(fv_p, ROOT)} → deck/data/results.json (값 {sum(1 for f in F.values() if f['value'] is not None)}/{len(F)}, "

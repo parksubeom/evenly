@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 #   경사로 = 평창군 '치유의 숲 무장애 나눔길' 1km 10억 원 (경향신문 2025.01.17) 의 m당 단가를 빌림 — 도심 계단 경사로 공사비 출처를 찾으면 바꿀 것
 ELEV_COST_EOK = 40.0
 RAMP_MAX_RISE = 3.0               # 반출 높이 차(m) 이하면 경사로로 풀 수 있는 소규모로 봄 (1억 원당 비교에서 뺌, 10/14 v12)
-from evenly_common import (ROOT, TARGET_GU, TARGET_LABEL, FAKE_MARKER, RAW_EXPORT, is_fake_dir, source_of, PUBLIC_REHEARSAL, load_dongs, dong_of, read_csv, num, truthy, to5186,
+from evenly_common import (visit_plan, ROOT, TARGET_GU, TARGET_LABEL, FAKE_MARKER, RAW_EXPORT, is_fake_dir, source_of, PUBLIC_REHEARSAL, load_dongs, dong_of, read_csv, num, truthy, to5186,
                            load_sites, point_in_rings)   # [v6.3] 지도의 선정지
 
 HI, LO = 1.8, 1.3
@@ -244,7 +244,7 @@ def main():
     inp_rel = os.path.relpath(inp_path, ROOT)
     B.put("team_name", "팀명", [inp_rel], inp.get("team_name") or None)
     B.put("team_display", "팀 표시 (1·26장, 없으면 팀명)", [inp_rel], inp.get("team_display") or inp.get("team_name") or None)   # [10/12 판정]
-    dates = (inp.get("visit_dates") or []) + [None] * 5
+    dates = [r["iso"] if r["done"] else None for r in visit_plan(inp)[0]] + [None] * 5   # [10/14 v14] visits 의 다녀온 날
     for i in range(5):
         d = dates[i]
         v = None
@@ -1073,11 +1073,11 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         mB = sorted(B_)[len(B_) // 2] if B_ else None
         unit_ = "생활인구" if osrc == "생활인구" else "SKT 지수"
         if p_ is not None and p_ >= 0.05:
-            od_txt, od_note = "차이 보이지 않음", f"동 단위 {unit_}로는 차이가 보이지 않음 (동 안의 짧은 외출은 잡히지 않음) → 건물 단위로 계산하는 이유"
+            od_txt, od_note = "차이 보이지 않음", f"동 단위 {unit_}로는 차이가 보이지 않음 → 건물 단위로 계산하는 이유"   # [10/14 v14] 21장 아래 혼잡: 괄호 설명 뺌
         elif p_ is not None:
             od_txt, od_note = f"부담 높은 동 {mA:.2f} · 낮은 동 {mB:.2f}", f"외출 지수 중앙값 (p = {p_:.3f}, 동 단위 상관 관찰)"
         od_src = (f"외출 = 서울 생활인구 {ym_[:4]}.{ym_[4:]} 65세 이상 평일, 1 − 낮(10~17시) ÷ 새벽(3~5시)" if osrc == "생활인구" else "외출 = SKT 60세 이상 유동 ÷ 거주 (구 평균 = 1.0)") \
-            + f", 부담 높은 동 {len(A_)}곳 · 낮은 동 {len(B_)}곳" + (f", 순열 검정 p = {p_:.2f}" if p_ is not None else "")
+            + f", 부담 높은·낮은 동 {len(A_)}·{len(B_)}곳" + (f", 순열 검정 p = {p_:.2f}" if p_ is not None else "")
     # [10/14 v11→v12] 21장 큰 숫자: 최우선 방문 동 = 고립 위험 비율과 독거노인 수(서울시 동별 공개 통계)가 모두 동 중앙값 이상인 동 (사분면의 오른쪽 위)
     al_ = {r["adm_cd"]: num(r.get("alone65")) for r in (read_csv(os.path.join(ROOT, "data_public", "alone65.csv")) or [])}
     pd_ = [c for c in rk if rk.get(c) is not None and al_.get(c) is not None]
@@ -1125,7 +1125,7 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
             rx_ = r.get("prescription", "")
             if r.get("kind") == "후보" and rx_ != "기존 시설 연계":
                 rx_ = "바로 정비" if ramp_ else ("큰 시설 검토" if per_ is not None and per_ >= mp_ else ("정비 + 방문돌봄" if rx_ else rx_))
-            fac_ = (f"경사로 · 높이 {r.get('rise_m')}m · 길이 약 {L_:.0f}m" if ramp_
+            fac_ = (f"경사로 · 높이 {r.get('rise_m')}m · 약 {L_:.0f}m" if ramp_
                     else f"{tn.get(r.get('facility_type'), r.get('facility_type') or '-')} · 높이 {r.get('rise_m') or '-'}m · {r.get('length_m') or '-'}m")
             alt_ = None
             if r.get("kind") != "후보":       # [10/14 v11] 선정지(봉천) 줄: 의료 기준 값 옆에 20장과 같은 기준(휠체어 수혜가 가장 큰 목적지)
@@ -1230,10 +1230,10 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     P("V6.22.acc_pub_txt", "사고 통계가 놓치는 곳 문장", [], acc_pub_txt, optional=True)
     P("V6.22.acc_pub_src", "보행노인 사고다발지 전체 기간 줄", ["data_public/acc_elder_ped_seoul.csv"], acc_pub_src, optional=True)
 
-    # ── 13 방문일 (deck/inputs.json, SAFE.day* 와 같은 값. v6 는 글자로 넣어서 키를 따로 둠) ──
-    for i in (2, 3):
-        f = B.fields.get(f"SAFE.day{i}") or {}
-        P(f"V6.13.visit{i}", f"안심구역 {i}차 방문일", f.get("need") or ["deck/inputs.json"], f.get("value"))
+    # ── 13 방문일 [10/14 v14] deck/inputs.json visits: 날마다 칸 (날짜·한 일), 일수는 예비 날을 뺀 날이 모두 다녀온 것일 때만 ──
+    vrows_, vn_ = visit_plan(extra.get("inputs") or {})
+    B.table("V6.13.visits", "안심구역 방문일·한 일 (13장)", ["deck/inputs.json 의 visits"], vrows_ or None)
+    P("V6.13.n_visits", "안심구역 방문 일수 (visits 의 done, 예비 날 제외)", ["deck/inputs.json 의 visits (다녀온 날 done: true)"], f"{vn_}일" if vn_ else None)
 
     # ── 15 현장실측 (실측 구간 이름이 맞을 때만) ──
     # [10/12 청사진] 관악 네 구간 (od_pairs 현장실측①~④). 구간 이름에 이 글자가 든 줄, 지도앱 분(inputs mapapp_min)도 같은 글자로

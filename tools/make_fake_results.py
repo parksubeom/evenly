@@ -422,7 +422,7 @@ def main():
             [nm, "HBI 하위 25% 법정동 평균(필지 100개당)", round(lo_, 3)], [nm, "HBI 상위 25% 법정동 평균(필지 100개당)", round(hi_, 3)]])
 
     with open(P("deck_inputs.json"), "w", encoding="utf-8") as f:
-        json.dump({"team_name": "테스트팀", "visit_dates": ["2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-19"],
+        json.dump({"team_name": "테스트팀", "visits": [{"date": d, "work": w, "done": True} for d, w in [("2026-10-13", "자료 구조 점검"), ("2026-10-14", "분석·반출"), ("2026-10-15", "보완·후보 시뮬레이션"), ("2026-10-16", "민감도 분석"), ("2026-10-19", "최종 확인")]],
                    "mapapp_min": {"비안어린이공원": 1, "봉천역": 7, "도림천": 6, "낙성대": 4}, "monorail_wait_s": 55, "monorail_ride_s": 190,   # [v6.2] 15장 (가짜)
                    "survey_date": "2026.10.03"}, f, ensure_ascii=False, indent=1)
     if V5:                                                # [v6.2] 12_isochrone 그림 자리 (가짜: 동심원 세 칸)

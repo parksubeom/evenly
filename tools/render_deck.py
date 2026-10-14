@@ -8,8 +8,9 @@ tools/render_deck.py ─ 기획서 pptx 를 미리보기 그림(PDF·장별 PNG)
         [10/12] 이 맥의 LibreOffice 26.8 은 시스템 글꼴을 찾지 못해, 렌더링 전용 프로필(--profile, 기본 _render/lo_profile)의
         user/fonts 에 Apple SD Gothic Neo·Arial Unicode 사본을 넣고 그 프로필로 실행함 (사용자 LibreOffice 설정은 건드리지 않음)
 [결과]  <out>/<이름>.pdf, <out>/s-NN.png  (_render/ 는 git 에 넣지 않음)
+        --scale 1.08: 넘침 시험용 (글자를 키운 사본으로 그림, 제출 PDF 에는 쓰지 않음)
 """
-import argparse, os, shutil, subprocess, sys, tempfile, zipfile
+import argparse, os, re, shutil, subprocess, sys, tempfile, zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FROM, TO = "Malgun Gothic", "Apple SD Gothic Neo"
@@ -21,6 +22,8 @@ def main():
     ap.add_argument("--out")
     ap.add_argument("--dpi", type=int, default=80)
     ap.add_argument("--profile", default=os.path.join(ROOT, "_render", "lo_profile"))
+    ap.add_argument("--scale", type=float, default=1.0,
+                    help="[10/14 v14] 넘침 시험: 사본의 글자 크기를 이 배수로 키워 그림 (예 1.08). 맑은 고딕은 이 맥 대체 글꼴보다 줄 높이가 커서, 그 여유를 미리 봄")
     a = ap.parse_args()
     src = os.path.abspath(a.pptx)
     name = os.path.splitext(os.path.basename(src))[0]
@@ -36,6 +39,8 @@ def main():
             b = zi.read(it.filename)
             if it.filename.endswith(".xml"):
                 b = b.replace(FROM.encode(), TO.encode())
+                if a.scale != 1.0 and it.filename.startswith("ppt/slides/slide"):
+                    b = re.sub(rb'(<a:(?:rPr|defRPr|endParaRPr)\b[^>]*?\bsz=")(\d+)(")', lambda m: m.group(1) + str(round(int(m.group(2)) * a.scale)).encode() + m.group(3), b)
             zo.writestr(it, b)
     prof = os.path.abspath(a.profile)
     fdir = os.path.join(prof, "user", "fonts")

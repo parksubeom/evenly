@@ -36,7 +36,7 @@ NEED = ["summary.csv", "grid_hbi.csv", "dong_hbi.csv", "run_meta.csv", "result_c
         "validation_routes.csv", "validation_ablation.csv", "intervention_summary.csv", "intervention_wait.csv", "sensitivity.csv"]
 OPT = ["isochrone_summary.csv", "siting_summary.csv", "dong_context.csv", "parcel_summary.csv", "validation_new_candidates.csv",
        "intervention_candidates.csv"]                     # [v6.3] 09 후보 자동 (17장)
-INPUT_RE = re.compile(r"^(team_name|team_display|V6\.13\.visit\d)$")          # deck/inputs.json 에서 꼭 채울 칸 (팀명·방문일)
+INPUT_RE = re.compile(r"^(team_name|team_display|V6\.13\.n_visits)$")          # deck/inputs.json 에서 꼭 채울 칸 (팀명·방문일: visits 의 done)
 SURVEY_IN_RE = re.compile(r"^V6\.15\.(\d\.app|date)$")                                # 실측을 했으면 inputs.json (mapapp_min·survey_date)
 LATER_OK_RE = re.compile(r"^V6\.15\.\d\.(app|meas|model)$|^V6\.15\.date$|^V6\.16\.meas_r$|^V6\.21\.(skt|kcb)$|^V6\.22\.acc$")   # build_v6.js 와 같게
 

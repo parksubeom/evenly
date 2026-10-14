@@ -4,24 +4,24 @@
 <meta charset="utf-8">
 <title>10/22 기획서 마감일 절차</title>
 <style>
-@page { size: A4; margin: 8mm 9mm 7mm; }
+@page { size: A4; margin: 6mm 9mm 5mm; }
 * { box-sizing: border-box; }
-body { margin: 0; font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; font-size: 8.1pt; line-height: 1.3; color: #000; background: #fff; }
+body { margin: 0; font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; font-size: 7.7pt; line-height: 1.25; color: #000; background: #fff; }
 .page { width: 192mm; }
 h1 { font-size: 13pt; margin: 0 0 .6mm; }
-h2 { font-size: 9.4pt; margin: 1.8mm 0 .7mm; border-bottom: 1px solid #000; padding-bottom: .4mm; }
+h2 { font-size: 9pt; margin: 1.4mm 0 .5mm; border-bottom: 1px solid #000; padding-bottom: .4mm; }
 p, ul, ol { margin: 0 0 .6mm; }
 ul, ol { padding-left: 4mm; }
 li { margin: 0 0 .2mm; }
 table { width: 100%; border-collapse: collapse; }
-th, td { border: 1px solid #000; padding: .45mm .9mm; vertical-align: top; text-align: left; }
+th, td { border: 1px solid #000; padding: .35mm .8mm; vertical-align: top; text-align: left; }
 th { background: #eee; font-weight: 700; }
 .meta { font-size: 8.2pt; margin-bottom: 1mm; }
 .top { border: 2px solid #000; padding: 1mm 1.6mm; margin: 0 0 1mm; font-size: 8.6pt; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 2.6mm; }
 .c { font-family: "Menlo", "Consolas", monospace; font-size: 7.4pt; white-space: pre; border: 1px solid #000; padding: .7mm 1.1mm; margin: .4mm 0 .6mm; line-height: 1.3; }
 code { font-family: "Menlo", "Consolas", monospace; font-size: 7.3pt; }
-.small { font-size: 7.5pt; }
+.small { font-size: 7pt; }
 .ck { width: 4mm; }
 td.ck, th.ck { text-align: center; }
 @media screen { body { padding: 12px; } .page { margin: 0 auto; } }
@@ -37,13 +37,25 @@ td.ck, th.ck { text-align: center; }
 <h2>0. 10/21(수) 밤까지 끝낼 것</h2>
 <table class="small">
 <tr><th class="ck">✓</th><th style="width:27%">할 일</th><th>어떻게</th></tr>
-<tr><td class="ck"></td><td>방문일 (13장)</td><td><code>deck/inputs.json</code> 의 <code>"visit_dates": [null, "2026-10-19", "2026-10-20", null, null]</code> (둘째 = 2차, 셋째 = 3차. 10/20 을 3차로 볼지 정해서. 13장 3차 줄 글은 "5개 구 확대 분석 (자료 수령 시)")</td></tr>
+<tr><td class="ck"></td><td>방문일 (13장)</td><td><code>deck/inputs.json</code> 의 <code>"visits"</code>: 다녀온 날마다 <code>"done": true</code> (10/19·10/20·10/21). 10/22 는 <code>"optional": true</code> (가면 <code>done: true</code>, 안 가면 그대로 → 실제판에 안 나오고 일수에 안 셈). 날짜·<code>"work"</code>(한 일)가 바뀌었으면 고침. 13장 '총 ○일' = done 날 수</td></tr>
 <tr><td class="ck"></td><td>관악 실측 (15장, 실측을 했을 때만)</td><td>같은 파일에 <code>"survey_date": "2026.10.__ (요일)"</code>, <code>"mapapp_min": {"비안어린이공원": 분, "봉천역": 분, "도림천": 분, "낙성대": 분}</code> (기록지의 지도앱 칸, 숫자만). 잰 분은 10/19 안심구역에서 od_pairs 에 넣은 것이 반출로 옴</td></tr>
 <tr><td class="ck"></td><td>15장 사진 4장</td><td><code>docs/photos/15_1</code>~<code>15_4</code> (.jpg·.png·.heic): 1 봉천 계단 · 2 봉천역 오르막 · 3 도림천 · 4 낙성대. 얼굴·번지판·번호판이 없는 것. 빌드가 바로 세우고 촬영 정보(GPS)를 지운 사본만 씀. 없으면 '사진 자리' 점선</td></tr>
 <tr><td class="ck"></td><td>대비책 판 완성</td><td><code>cd ~/Downloads/evenly/deck</code> → <code>npm run fallback-pdf</code> → 화면에 <b>누락 0건</b>·<b>결과: 통과</b> → <code>_render/fallback/s-NN.png</code> 훑기. 제출 파일 <code>deliverables/언덕위우리동네_기획서_대비책.pdf</code></td></tr>
 <tr><td class="ck"></td><td>관악만 결과일 때 문구</td><td>3장 "5개 구 집집마다 … 계산합니다", 20장 끝 줄 "큰 계단(5개 구)에서는 고령자 시간 단축이 더해집니다" 를 그대로 둘지 정함 (관악만이면 결과로 뒷받침되지 않는 문장)</td></tr>
 <tr><td class="ck"></td><td>5개 구 결과일 때만</td><td>중구 금호터널 옆 옹벽 수직 엘리베이터 설치 여부 → <code>data_public/existing_facilities.csv</code> (17장 '500m 안 기존 시설'. 일정 체크리스트 "5개 구 분석 전 확인")</td></tr>
 <tr><td class="ck"></td><td>제출 준비</td><td>개인정보 동의서 서명본(PDF), 대회 접수 페이지 로그인·파일 올리는 곳 확인</td></tr>
+</table>
+
+<h2>0-1. 채울 칸 목록 (3·13·15·16·21·22·부록 1) — 리허설 판에서 빈칸·대체 문구로 남던 장</h2>
+<table class="small">
+<tr><th class="ck">✓</th><th style="width:6%">장</th><th style="width:30%">칸</th><th style="width:40%">어디서 채워지나</th><th>안 채워지면</th></tr>
+<tr><td class="ck"></td><td>3</td><td>출처 줄 '현장 실측 구간 값으로 교체 예정'</td><td>반출 <code>validation_routes.csv</code> 에 실측 분이 오면 자동으로 빠짐 ('실측 비교는 15장')</td><td>실측을 안 했으면 그대로 (예시 계산)</td></tr>
+<tr><td class="ck"></td><td>13</td><td>날짜 칸 · '총 ○일' · 현장실측 날짜</td><td><code>inputs.json</code> <code>visits</code> 의 <code>done</code> (0번), <code>survey_date</code></td><td>'총 ___일' → real-day 가 "inputs.json 을 채우고 다시"</td></tr>
+<tr><td class="ck"></td><td>15</td><td>네 구간 지도앱·실측·모델, 측정일, 사진 4장</td><td><code>mapapp_min</code>·<code>survey_date</code> (inputs.json), 실측 분 = 반출 <code>validation_routes.csv</code>, 사진 <code>docs/photos/15_1~4</code></td><td>실측을 안 했으면 <code>--later-ok</code> → '실측 후'</td></tr>
+<tr><td class="ck"></td><td>16</td><td>실측 r · 공개데이터 놓침 %</td><td>r = 실측 3구간 이상이면 자동, 놓침 % = real-day 의 공개 대조군 비교</td><td>'실측 후' / '실제 결과 후' 가 남으면 원인 확인</td></tr>
+<tr><td class="ck"></td><td>21</td><td>외출(SKT) · 소득(KCB)</td><td>상호제공 반출에 있으면 자동. 없으면 공개 생활인구 줄만</td><td><code>--later-ok</code> 면 '상호제공데이터 확보 시'</td></tr>
+<tr><td class="ck"></td><td>22</td><td>교통사고 법정동</td><td>상호제공 교통사고가 있으면 자동. 없으면 '사고 통계가 놓치는 곳' (공개 사고다발지)</td><td>공개판 그대로</td></tr>
+<tr><td class="ck"></td><td>부록 1</td><td>상호제공 줄</td><td>결과에 SKT·KCB·교통사고 출력이 있을 때만, 있는 것만 자동으로 나옴</td><td>줄이 없음 (정상)</td></tr>
 </table>
 
 <h2>1. 받기 → 한 명령 (오전, 결과가 오면 바로)</h2>
@@ -72,14 +84,14 @@ npm run real-day -- <받은 zip 또는 폴더></div>
 <tr><th class="ck">✓</th><th style="width:5%">장</th><th style="width:53%">볼 것</th><th>멈출 신호 (→ 원인 찾기, 10분 안에 설명 안 되면 대비책 판)</th></tr>
 <tr><td class="ck"></td><td>전체</td><td>30장 · 오른쪽 위 '가상 수치'·'공개 대역' 표시 없음 · <code>___</code> 없음 · 글자 잘림·겹침 없음</td><td>하나라도 있음</td></tr>
 <tr><td class="ck"></td><td>1·26</td><td>팀 표시 "서울평평단 (박수범)"</td><td></td></tr>
-<tr><td class="ck"></td><td>13</td><td>2·3차 방문일, 아래 '방문일은 실제 일자로 기입' 줄이 없음</td><td></td></tr>
+<tr><td class="ck"></td><td>13</td><td>방문 날짜 칸 (10/02·10/19·10/20·10/21, 갔으면 10/22) · '총 ○일' · '예정' 글자 없음 · 아래 '방문일은 다녀온 날로 기입' 줄 없음</td><td>'총 ___일' (visits 의 done 이 빠짐)</td></tr>
 <tr><td class="ck"></td><td>14</td><td>제목 %, 지도 (분석한 구만, 평지·체감 부담·고립 위험 세 색), 고립 위험 건물 수·비율, 어르신 추정, 부담이 가장 큰 동</td><td>지도 빈 칸 · 동 이름이 분석한 구 밖</td></tr>
 <tr><td class="ck"></td><td>15</td><td>사진 4장 (얼굴·번지 없음), 네 구간 지도앱·실측·모델, 측정일</td><td>모델이 실측의 절반 아래나 두 배 위</td></tr>
 <tr><td class="ck"></td><td>16</td><td>선정지 (관악만: "봉천동 상위 n%" / 5개 구: "상위 10% n곳") · 휠체어 우회 "모델 ○m" (5개 구면 대현산 줄, 관악만이면 봉천 줄. 1,000m 넘으면 출처 줄 안내) · r · 공개데이터 놓침 % · DEM 상위 10%</td><td>휠체어 m 이 0 이거나 빈 칸</td></tr>
-<tr><td class="ck"></td><td>17·19</td><td>후보 수, 표 5줄 (구·동, 고립 위험 건물 수, 왕복 추가 중앙값, 500m 안 기존 시설, 처방 방향) · 19장 등시선 그림 (봉천)</td><td>위치가 분석한 구 밖</td></tr>
+<tr><td class="ck"></td><td>17·19</td><td>선정지 + 후보 줄 (고립 위험 건물·시설·고령자 30초·휠체어 1분·1억 원당·처방 세 단계: 큰 시설 검토 / 바로 정비 / 정비 + 방문돌봄) · 19장 "후보 ○곳 중 ○곳" · 등시선 그림 (봉천)</td><td>위치가 분석한 구 밖</td></tr>
 <tr><td class="ck"></td><td>20</td><td>봉천 휠체어 길 전 → 후, 높이 차, 1억 원당 수혜 "x.x동", 끝 줄 문구 (0번 결정대로)</td><td>높이 차 1m 미만·10m 넘음 (실제 DEM 약 5m)</td></tr>
 <tr><td class="ck"></td><td>21·22</td><td>고립 위험 동 수, 상위 3개 동 독거노인 합, SKT·KCB · 정류장 검토 지역, 사고 법정동</td><td></td></tr>
-<tr><td class="ck"></td><td>29</td><td>민감도 순위상관 3개, 시설 대기 30·60·90초 수혜</td><td></td></tr>
+<tr><td class="ck"></td><td>29</td><td>민감도 순위상관 3개, 문턱별 상위 3개 동·건물 수, 대기 30~90초 문장</td><td>표가 장 아래로 넘침</td></tr>
 </table>
 
 <div class="two">

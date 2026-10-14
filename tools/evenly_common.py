@@ -168,6 +168,28 @@ def simplify(ring, tol):
 
 
 # ── CSV ─────────────────────────────────────────────────────────────
+def visit_plan(inp):
+    """[10/14 v14] 13장 안심구역 방문일: deck/inputs.json 의 visits = [{"date": "2026-10-19", "work": "분석·반출", "done": true, "optional": false}, ...]
+    → (rows, 일수 또는 None). rows = 날짜순 {"iso", "date" ("10/19"), "wd" ("월"), "work", "done", "optional"}.
+    일수 = 다녀온(done) 날 수. 예비 날(optional)이 아닌 날이 하나라도 done 이 아니면 None (13장 빈칸 → 다녀온 뒤 표시하라는 뜻).
+    예전 형식 visit_dates (날짜 목록) 만 있으면 그 날들을 다녀온 날로 봄"""
+    import datetime
+    vs = inp.get("visits")
+    if not vs:
+        vs = [{"date": d, "work": "", "done": True} for d in (inp.get("visit_dates") or []) if d]
+    rows = []
+    for v in vs:
+        try:
+            dt = datetime.date.fromisoformat(str(v.get("date")))
+        except ValueError:
+            continue
+        rows.append({"iso": dt.isoformat(), "date": f"{dt:%m/%d}", "wd": "월화수목금토일"[dt.weekday()], "work": v.get("work") or "",
+                     "done": bool(v.get("done")), "optional": bool(v.get("optional"))})
+    rows.sort(key=lambda r: r["iso"])
+    ok = rows and all(r["done"] for r in rows if not r["optional"])
+    return rows, (sum(1 for r in rows if r["done"]) if ok else None)
+
+
 def read_csv(path):
     if not os.path.exists(path):
         return None
