@@ -1,0 +1,38 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>19일 후보 좌표 표</title><style>
+@page { size: A4; margin: 6mm 8mm 5mm; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; font-size: 7.8pt; line-height: 1.28; color: #000; background: #fff; }
+.page { width: 194mm; }
+h1 { font-size: 12.5pt; margin: 0 0 .6mm; }
+h2 { font-size: 9.2pt; margin: 1.5mm 0 .5mm; border-bottom: 1px solid #000; padding-bottom: .3mm; }
+p, ul, ol { margin: 0 0 .5mm; }
+ol { padding-left: 4.2mm; } li { margin: 0 0 .35mm; }
+table { width: 100%; border-collapse: collapse; }
+th, td { border: 1px solid #000; padding: .4mm .8mm; vertical-align: top; text-align: left; }
+th { background: #eee; }
+.top { border: 2px solid #000; padding: .9mm 1.5mm; margin: 0 0 .8mm; font-size: 8.3pt; }
+.c { font-family: "Menlo", "Consolas", monospace; font-size: 7.3pt; white-space: pre; border: 1px solid #000; padding: .5mm 1mm; margin: .3mm 0 .4mm; line-height: 1.28; }
+.cw { font-family: "Menlo", "Consolas", monospace; font-size: 7.3pt; background: #eee; padding: 0 .6mm; }
+code { font-family: "Menlo", "Consolas", monospace; font-size: 7.3pt; background: #000; color: #fff; padding: 0 .7mm; }
+.g { font-family: "Menlo", "Consolas", monospace; font-size: 7.1pt; background: #e8e8e8; padding: .4mm .8mm; display: block; white-space: pre-wrap; margin: .2mm 0; }
+.small { font-size: 7pt; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 2.4mm; }
+.memo td { height: 5.2mm; }
+.big { font-family: "Menlo", "Consolas", monospace; font-size: 10.5pt; letter-spacing: .02em; white-space: nowrap; }
+@media screen { body { padding: 12px; } .page { margin: 0 auto; } }
+
+td.big { font-size: 12.5pt; padding: 2.2mm 2mm; } tr.hd td { background: #f2f2f2; font-size: 8.4pt; padding: 1mm 1.4mm; }</style></head><body><div class="page">
+<h1>후보 좌표 표 — <span class="cw" style="font-size:10pt">external\interventions.csv</span> 맨 끝에 다섯 줄 (19일 추가 수정 한 장 2번)</h1>
+<div class="top">한 줄 = 이름, 종류, a 경도, a 위도, b 경도, b 위도, 대기(빈 칸), 속도(빈 칸), 상태 → <b>쉼표 8개</b>. 경도(126.…)가 위도(37.…)보다 먼저.
+좌표 = 공개 자료 리허설(어르신 0.7m/s)에서 v6.3 후보 자동이 찾은 경사 구간의 양 끝 (안심구역 자료에서 나온 좌표가 아님). 결과 파일에는 좌표가 나가지 않고 시설 이름별 집계만 나감.</div>
+<table><tr class='hd'><td><b>후보1</b></td><td>경사형 엘리베이터 (elevator)</td><td>09 화면: 길이 <b>54m</b></td><td>높이 차 약 11m (공개 지형 11.1m, 참고)</td></tr><tr><td colspan='4' class='big'>후보1,elevator,126.940197,37.487757,126.940615,37.488109,,,planned</td></tr><tr class='hd'><td><b>후보2</b></td><td>경사형 엘리베이터 (elevator)</td><td>09 화면: 길이 <b>114m</b></td><td>높이 차 약 18m (공개 지형 17.6m, 참고)</td></tr><tr><td colspan='4' class='big'>후보2,elevator,126.942072,37.489506,126.942162,37.490533,,,planned</td></tr><tr class='hd'><td><b>후보3</b></td><td>수직 엘리베이터 (vertical)</td><td>09 화면: (a·b 직선 <b>19m</b>)</td><td>높이 차 약 2m (공개 지형 2.3m, 참고) · a 가 낮은 끝</td></tr><tr><td colspan='4' class='big'>후보3,vertical,126.937765,37.474673,126.937946,37.474583,,,planned</td></tr><tr class='hd'><td><b>후보4</b></td><td>경사형 엘리베이터 (elevator)</td><td>09 화면: 길이 <b>104m</b></td><td>높이 차 약 16m (공개 지형 15.8m, 참고)</td></tr><tr><td colspan='4' class='big'>후보4,elevator,126.930538,37.478372,126.930301,37.477453,,,planned</td></tr><tr class='hd'><td><b>후보5</b></td><td>수직 엘리베이터 (vertical)</td><td>09 화면: (a·b 직선 <b>43m</b>)</td><td>높이 차 약 8m (공개 지형 7.7m, 참고) · a 가 낮은 끝</td></tr><tr><td colspan='4' class='big'>후보5,vertical,126.955812,37.487061,126.955563,37.487394,,,planned</td></tr></table>
+<h2>칠 때</h2>
+<ul>
+<li>메모장 맨 끝 줄(<span class="cw">화곡동 487번지 일대,…</span>) 끝에서 Enter 를 친 뒤 첫 줄부터. 빈 줄을 끼우지 않음. 줄 끝 <span class="cw">,,,planned</span> 의 쉼표 셋 그대로</li>
+<li>다 친 뒤 줄마다 쉼표 수를 세어 봄 (8개). 숫자 안의 마침표(.)를 쉼표로 치지 않았는지 — 예: <span class="cw">후보1,elevator,126.940197,37.487757,126.940615,37.488109,,,planned</span></li>
+<li>09 화면 대조: 위의 <b>굵은 길이</b>와 화면의 <span class="cw">길이 …m</span>(경사형) · <span class="cw">(a·b 직선 …m)</span>(수직)가 ±1m 안. 다르면 그 줄 좌표 오타 → 고치고 <span class="cw">python run_all.py --from 09 --modes auto</span> 다시</li>
+<li>높이 차는 실제 DEM 5m 로 다시 재므로 공개 지형 값과 다를 수 있음 (참고). 이름(후보1~후보5)은 기획서가 그대로 읽으니 바꾸지 않음</li>
+</ul>
+<table class="memo small"><tr><th style="width:16%">후보</th><th>09 화면 길이 (m)</th><th>높이 차 (m)</th><th style="width:40%">!! 줄</th></tr>
+<tr><td>후보1</td><td></td><td></td><td></td></tr><tr><td>후보2</td><td></td><td></td><td></td></tr><tr><td>후보3</td><td></td><td></td><td></td></tr><tr><td>후보4</td><td></td><td></td><td></td></tr><tr><td>후보5</td><td></td><td></td><td></td></tr></table>
+</div></body></html>
