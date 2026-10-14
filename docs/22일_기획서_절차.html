@@ -49,7 +49,7 @@ td.ck, th.ck { text-align: center; }
 <h2>0-1. 채울 칸 목록 (3·13·15·16·21·22·부록 1) — 리허설 판에서 빈칸·대체 문구로 남던 장</h2>
 <table class="small">
 <tr><th class="ck">✓</th><th style="width:6%">장</th><th style="width:30%">칸</th><th style="width:40%">어디서 채워지나</th><th>안 채워지면</th></tr>
-<tr><td class="ck"></td><td>3</td><td>출처 줄 '현장 실측 구간 값으로 교체 예정'</td><td>반출 <code>validation_routes.csv</code> 에 실측 분이 오면 자동으로 빠짐 ('실측 비교는 15장')</td><td>실측을 안 했으면 그대로 (예시 계산)</td></tr>
+<tr><td class="ck"></td><td>3</td><td>출처 줄 '현장 실측 구간 값으로 교체 예정'</td><td>실측 분(<code>validation_routes.csv</code>)이 오면 자동으로 빠짐</td><td>실측을 안 했으면 그대로 (예시 계산)</td></tr>
 <tr><td class="ck"></td><td>13</td><td>날짜 칸 · '총 ○일' · 현장실측 날짜</td><td><code>inputs.json</code> <code>visits</code> 의 <code>done</code> (0번), <code>survey_date</code></td><td>'총 ___일' → real-day 가 "inputs.json 을 채우고 다시"</td></tr>
 <tr><td class="ck"></td><td>15</td><td>네 구간 지도앱·실측·모델, 측정일, 사진 4장</td><td><code>mapapp_min</code>·<code>survey_date</code> (inputs.json), 실측 분 = 반출 <code>validation_routes.csv</code>, 사진 <code>docs/photos/15_1~4</code></td><td>실측을 안 했으면 <code>--later-ok</code> → '실측 후'</td></tr>
 <tr><td class="ck"></td><td>16</td><td>실측 r · 공개데이터 놓침 %</td><td>r = 실측 3구간 이상이면 자동, 놓침 % = real-day 의 공개 대조군 비교</td><td>'실측 후' / '실제 결과 후' 가 남으면 원인 확인</td></tr>
@@ -82,7 +82,7 @@ npm run real-day -- <받은 zip 또는 폴더></div>
 <h2>2. 장별 확인 (30분) — <code>_render/final/s-01.png</code> ~ <code>s-30.png</code> (Finder 에서 스페이스로 넘김) 또는 같은 PDF</h2>
 <table class="small">
 <tr><th class="ck">✓</th><th style="width:5%">장</th><th style="width:53%">볼 것</th><th>멈출 신호 (→ 원인 찾기, 10분 안에 설명 안 되면 대비책 판)</th></tr>
-<tr><td class="ck"></td><td>전체</td><td>30장 · 오른쪽 위 '가상 수치'·'공개 대역' 표시 없음 · <code>___</code> 없음 · 글자 잘림·겹침 없음</td><td>하나라도 있음</td></tr>
+<tr><td class="ck"></td><td>전체</td><td>30장 · 오른쪽 위 '가상 수치'·'공개 대역' 표시 없음 · <code>___</code> 없음 · 글자 잘림·겹침 없음 · 3·4·12장 같은 숫자 다른 뜻 없음 ('!! 4장' 경고)</td><td>하나라도 있음</td></tr>
 <tr><td class="ck"></td><td>1·26</td><td>팀 표시 "서울평평단 (박수범)"</td><td></td></tr>
 <tr><td class="ck"></td><td>13</td><td>방문 날짜 칸 (10/02·10/19·10/20·10/21, 갔으면 10/22) · '총 ○일' · '예정' 글자 없음 · 아래 '방문일은 다녀온 날로 기입' 줄 없음</td><td>'총 ___일' (visits 의 done 이 빠짐)</td></tr>
 <tr><td class="ck"></td><td>14</td><td>제목 %, 지도 (분석한 구만, 평지·체감 부담·고립 위험 세 색), 고립 위험 건물 수·비율, 어르신 추정, 부담이 가장 큰 동</td><td>지도 빈 칸 · 동 이름이 분석한 구 밖</td></tr>

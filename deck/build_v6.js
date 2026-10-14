@@ -44,8 +44,12 @@ const LATER_OK_RE = /^V6\.15\.\d\.(app|meas|model)$|^V6\.15\.date$|^V6\.16\.meas
 const BANDS = R.bands || 'mix', MINB = BANDS === 'min';
 const HB = () => Q('V6.hb', '1.3'), RMIN = () => Q('V6.rmin', '10');   // 체감 부담 HBI 문턱, 고립 위험 왕복 추가 분 (결과의 run_meta = mapping 한 곳)
 const SPD = () => Number(Q('V6.speed', '0.7'));   // [10/13 판정] 어르신 평지 보행속도 m/s (결과의 run_meta elder_speed, 대비책 판 = 1차 v5 의 0.8)
-const PF = 14.3 / 9.4;                            // 3·12장 예시 길(profile.png, 450m·평균 경사 12%)의 경사 배수 (속도와 무관)
-const EX = () => { const a = 450 / 1.1 / 60, f = 450 / SPD() / 60; return { adult:a, flat:f, slope:f * PF }; };   // 예시 분: 성인 1.1m/s, 어르신 SPD
+// [10/14 v15] 3·12장 예시 길(450m·평균 경사 12%)의 배수를 분석 모델 식으로 (analysis/hbi/lib/model.py tobler·elder_time, 속도와 무관)
+//   편도 오르막 = tobler(0) ÷ tobler(0.12) = exp(3.5 × 0.12) ≈ 1.52 (예전 14.3/9.4 와 같음), 내리막 = 1 + 0.5 × (오르막 − 1) (config DOWNHILL_WEIGHT = 0.5, 부록 3),
+//   왕복 = (오르막 + 내리막) ÷ 2 (HBI 정의가 왕복). 그림(profile.png)의 S자 곡선을 그대로 넣으면 편도 1.56·왕복 1.42 (가운데가 더 가팔라서)
+const TOB = sl => 6 * Math.exp(-3.5 * Math.abs(sl + 0.05)), EX_GRADE = 0.12, DOWN_W = 0.5;
+const PF = TOB(0) / TOB(EX_GRADE), PF_DOWN = 1 + DOWN_W * (PF - 1), PF_RT = (PF + PF_DOWN) / 2;
+const EX = () => { const a = 450 / 1.1 / 60, f = 450 / SPD() / 60; return { adult:a, flat:f, slope:f * PF, down:f * PF_DOWN, rt:f * (PF + PF_DOWN) }; };   // 예시 분: 성인 1.1m/s, 어르신 SPD
 
 const pres = new pptxgen(); pres.layout = 'LAYOUT_16x9';
 pres.title = (FAKE ? '[가상 수치 · 검토용] ' : BP ? '[청사진] ' : REH ? '[공개 대역 · 제출 금지] ' : '') + '언덕 위 우리동네: 경사 반영 이동약자 접근성 지도';
@@ -255,7 +259,8 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
 
 // ── 4 페르소나 ── [10/13 v9 청사진] 한 사람의 한 달: 지도앱 왕복(3장 예시 길) + 가장 급한 동 고립 위험 격자의 왕복 추가 중앙값 × 일주일 네 번
 { let dong4, add4, map4, flat4, up4, mon4;   // 값은 장을 만든 뒤에 읽음 (빈칸·노트가 이 장에 적히게)
-  // [10/14 v14] 3장과 같은 길·속도: 지도앱 왕복 = 성인 편도 × 2, 평지 왕복 = 어르신 평지 편도 × 2, 오르막 왕복 = 평지 왕복 + 동 고립 위험 격자 왕복 추가 중앙값(언덕 몫)
+  // [10/14 v14→v15] 할머니 길 = 동 언덕 위 집에서 450m (3장 예시 길과 다른 길, 거리·속도만 같음): 지도앱 왕복 = 450m 성인 × 2, 평지 왕복 = 450m 어르신 × 2,
+  //   오르막 왕복 = 평지 왕복 + 동 고립 위험 격자 왕복 추가 중앙값(언덕 몫). 언덕 몫(반올림)이 3장 숫자와 같으면 빌드 경고 (뜻이 다름)
   const s = base('한 사람의 한 달', () => {
     dong4 = has('V6.4.dong') ? R.fields['V6.4.dong'].value : '언덕 위 동네'; add4 = has('V6.4.add') ? Number(R.fields['V6.4.add'].value) : null;
     map4 = Math.round(EX().adult * 2); flat4 = Math.round(EX().flat * 2); up4 = add4 !== null ? Math.round(EX().flat * 2 + add4) : null; mon4 = add4 !== null ? add4 * 4 * 52 / 12 / 60 : null;
@@ -273,8 +278,10 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
     T(s, r[0], { x:5.95, y, w:3.45, h:0.5, fontSize:24, bold:true, color:r[2] });
     T(s, r[1], { x:5.95, y:y+0.48, w:3.45, h:0.28, fontSize:11, color:C.muted }); });
   takeaway(s, FALLBACK ? `이렇게 매번 ${RMIN()}분 넘게 잃는 주거 건물 수는 2차 분석 결과로 채웁니다.` : `이렇게 매번 ${RMIN()}분 넘게 잃는 주거 건물이 ${Q('V6.scope', '관악구')}에만 ${V('V6.14.risk_n')} 있습니다.`, 4.4);
-  src(s, FALLBACK ? '지도앱 왕복은 3장 예시 길, 오르막을 넣은 시간은 2차 분석 결과 반영 예정. 일주일 네 번 외출은 가정, 인물은 가상'
-    : (REH ? '공개 대역(리허설) 값 · ' : '') + `언덕 몫 = ${dong4} 고립 위험 격자의 왕복 추가 시간 중앙값(${add4 !== null ? add4.toFixed(1) : '-'}분) · 지도앱·평지 왕복 = 3장 예시 길(450m, 성인 1.1m/s·어르신 ${SPD()}m/s) × 2 · 일주일 네 번 외출은 가정, 인물은 가상`); }
+  if (add4 !== null && !FALLBACK) { const e3 = EX(), n3 = [e3.adult, e3.flat, e3.slope].map(Math.round);
+    if (n3.includes(Math.round(add4))) console.error(`!! 4장 언덕 몫 ${Math.round(add4)}분이 3장 숫자(${n3.join('·')}분) 중 하나와 같음 — 뜻이 다르니 장별 확인 때 읽히는지 볼 것`); }
+  src(s, FALLBACK ? `${has('V6.4.dong') ? dong4 + ' ' : ''}언덕 위 집에서 450m 거리 기준, 오르막을 넣은 시간은 2차 분석 결과 반영 예정. 일주일 네 번 외출은 가정, 인물은 가상`
+    : (REH ? '공개 대역(리허설) 값 · ' : '') + `${dong4} 언덕 위 집에서 450m 거리 기준 (성인 1.1m/s·어르신 ${SPD()}m/s), 언덕 몫은 ${dong4} 고립 위험 격자의 왕복 추가 중앙값 · 일주일 네 번 외출은 가정, 인물은 가상`); }   // [10/14 v15]
 
 // ── 5 규모 ──
 { const s = base('문제의 규모', '한 사람의 이야기가 아닙니다');
@@ -375,10 +382,12 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
     T(s, b[0], { x, y:2.85, w:1.38, h:0.32, fontSize:13.5, bold:true, color:C.ink });
     T(s, b[1], { x, y:3.17, w:1.38, h:0.3, fontSize:12, color:C.muted }); });
   vr(s, 5.05, 2.6, 2.3);
-  T(s, '예시: 김순자 할머니의 귀갓길 (편도)', { x:5.3, y:2.62, w:4.1, h:0.3, fontSize:11.5, bold:true, color:C.muted });
-  const ex12 = EX();
-  T(s, [{ text:`${ex12.slope.toFixed(1)}분`, options:{ color:C.acc, bold:true } }, { text:`  ÷  ${ex12.flat.toFixed(1)}분  =  `, options:{ color:C.ink } }, { text:`${PF.toFixed(2)}배`, options:{ color:C.acc, bold:true } }], { x:5.3, y:2.95, w:4.15, h:0.55, fontSize:18, valign:'middle' });   // [10/14 v11] 한 줄에
-  T(s, '"분"이라 누구나 이해하고, 시설 설치 전후를 같은 잣대로 비교할 수 있습니다. 비율이라 보행속도 가정에도 덜 흔들립니다.', { x:5.3, y:3.6, w:4.1, h:1.1, fontSize:12, color:C.text, lineSpacingMultiple:1.12 });
+  T(s, '예시: 3장 예시 길 (450m, 평균 경사 12%)', { x:5.3, y:2.62, w:4.1, h:0.3, fontSize:11.5, bold:true, color:C.muted });   // [10/14 v15] 할머니 길과 다른 길
+  const ex12 = EX();   // [10/14 v15] 편도 오르막 옆에 왕복 배수 (HBI 정의가 왕복)
+  [['편도 오르막', ex12.slope, ex12.flat, PF, C.ink], ['왕복 = HBI', ex12.rt, ex12.flat * 2, PF_RT, C.acc]].forEach((r, i) =>
+    T(s, [{ text:`${r[0]}  `, options:{ color:C.muted, fontSize:11, bold:true } }, { text:`${r[1].toFixed(1)}분`, options:{ color:r[4], bold:true } }, { text:`  ÷  ${r[2].toFixed(1)}분  =  `, options:{ color:C.ink } }, { text:`${r[3].toFixed(2)}배`, options:{ color:r[4], bold:true } }],
+      { x:5.3, y:2.93 + i * 0.4, w:4.15, h:0.4, fontSize:15, valign:'middle' }));
+  T(s, '"분"이라 누구나 이해하고, 시설 설치 전후를 같은 잣대로 비교할 수 있습니다. 비율이라 보행속도 가정에도 덜 흔들립니다.', { x:5.3, y:3.82, w:4.1, h:0.9, fontSize:11.5, color:C.text, lineSpacingMultiple:1.12 });
   // [v6.3] 고립 위험 문턱의 근거 (5장 420m 와 같은 출처). [10/13 판정] 어르신 속도 = 결과의 elder_speed (0.7 이면 420 ÷ 0.7 = 편도 10분 딱 맞음)
   const m12 = 420 / SPD() / 60, eq12 = Math.abs(m12 - Math.round(m12)) < 0.05 ? '=' : '≈';
   T(s, [{ text:`왕복 +${RMIN()}분의 근거  `, options:{ bold:true, color:C.ink } }, { text:`후기고령자 평균 이동거리 420m ÷ 어르신 걸음 ${SPD()}m/s ${eq12} 편도 ${Math.round(m12)}분 → 왕복 ${RMIN()}분 추가 = 감당 거리 하나가 통째로 더 붙는 것입니다.`, options:{ color:C.text } }],
