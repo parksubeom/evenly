@@ -19,6 +19,11 @@ tools/prepare_deck_data.py ─ 반출 결과 파일 → 기획서에 넣을 값(
 import argparse, datetime, json, math, os, re, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# [10/14 v11] 17장 시설 비용 가정 (밖에서 다시 계산). 엘리베이터 = 서울시 2025 선정 5곳 200억 원·무악동 1곳 40억 원,
+#   경사로 = 평창군 '치유의 숲 무장애 나눔길' 1km 10억 원 (경향신문 2025.01.17) 의 m당 단가를 빌림 — 도심 계단 경사로 공사비 출처를 찾으면 바꿀 것
+ELEV_COST_EOK = 40.0
+RAMP_COST_EOK_PER_M = 0.01        # 억 원/m (= m당 100만 원)
+RAMP_MAX_RISE = 3.0               # 반출 높이 차(m) 이하면 경사로로 봄
 from evenly_common import (ROOT, TARGET_GU, TARGET_LABEL, FAKE_MARKER, RAW_EXPORT, is_fake_dir, source_of, PUBLIC_REHEARSAL, load_dongs, dong_of, read_csv, num, truthy, to5186,
                            load_sites, point_in_rings)   # [v6.3] 지도의 선정지
 
@@ -966,7 +971,11 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
                                        "있으면 기존 시설 연계 확인, 고립 위험 집이 절반 미만으로 흩어져 있으면 방문돌봄·계단 정비"), optional=True)
     iso = sorted(f for f in (os.listdir(S("")) if os.path.isdir(S("")) else []) if f.startswith("map_isochrone_") and f.endswith(".png"))
     iso = next((f for f in iso if "봉천" in f), iso[0] if iso else None)
-    B.img("V6.iso", "선정지 등시선 그림", ["map_isochrone_*.png (12_isochrone.py)"], S(iso) if iso else None)
+    # [10/14 v11] 19장: 봉천 10분 한 칸만 크게 (12 의 isochrone_<시설>.gpkg 에서 평지·경사 반영·휠체어 세 범위를 다시 그림). 못 그리면 12 의 세 칸 그림
+    isog = sorted(f for f in (os.listdir(S("")) if os.path.isdir(S("")) else []) if f.startswith("isochrone_") and f.endswith(".gpkg"))
+    isog = next((f for f in isog if "봉천" in f), isog[0] if isog else None)
+    iso1 = draw_iso_one(S(isog), 10) if isog else None
+    B.img("V6.iso", "선정지 등시선 그림 (10분, 한 칸)", ["isochrone_*.gpkg 또는 map_isochrone_*.png (12_isochrone.py)"], iso1 or (S(iso) if iso else None))
 
     # ── 20 한 사람(봉천) ──
     frow = [r for r in isum if "봉천" in r.get("facility", "") and not r.get("facility", "").startswith("ALL")]
@@ -1070,6 +1079,17 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
             od_txt, od_note = f"부담 높은 동 {mA:.2f} · 낮은 동 {mB:.2f}", f"외출 지수 중앙값 (p = {p_:.3f}, 동 단위 상관 관찰)"
         od_src = (f"외출 = 서울 생활인구 {ym_[:4]}.{ym_[4:]} 65세 이상 평일, 1 − 낮(10~17시) ÷ 새벽(3~5시)" if osrc == "생활인구" else "외출 = SKT 60세 이상 유동 ÷ 거주 (구 평균 = 1.0)") \
             + f", 부담 높은 동 {len(A_)}곳 · 낮은 동 {len(B_)}곳" + (f", 순열 검정 p = {p_:.2f}" if p_ is not None else "")
+    # [10/14 v11] 21장 큰 숫자: 최우선 방문 동 = 고립 위험 비율과 독거노인 수(서울시 동별 공개 통계)가 모두 동 중앙값보다 큰 동 (사분면의 오른쪽 위)
+    al_ = {r["adm_cd"]: num(r.get("alone65")) for r in (read_csv(os.path.join(ROOT, "data_public", "alone65.csv")) or [])}
+    pd_ = [c for c in rk if rk.get(c) is not None and al_.get(c) is not None]
+    pri_ = None
+    if len(pd_) >= 4:
+        med_ = lambda xs: (sorted(xs)[len(xs) // 2] if len(xs) % 2 else (sorted(xs)[len(xs) // 2 - 1] + sorted(xs)[len(xs) // 2]) / 2)
+        mr_, ma_ = med_([rk[c] for c in pd_]), med_([al_[c] for c in pd_])
+        pri_ = [c for c in pd_ if rk[c] > mr_ and al_[c] > ma_]
+    nmd_ = {r["adm_cd"]: r["adm_nm"].split()[-1] for r in rows_d}
+    P("V6.21.priority", "최우선 방문 동 수 (고립 위험·독거노인 모두 중앙값 위)", ["dong_hbi.csv", "data_public/alone65.csv"], f"{len(pri_)}곳" if pri_ is not None else None)
+    P("V6.21.priority_dongs", "최우선 방문 동 이름", [], "·".join(nmd_.get(c, c) for c in sorted(pri_, key=lambda c: -rk[c])) if pri_ else None, optional=True)
     P("V6.21.outing_diff", "외출 지수 두 묶음 비교 (부담 높은/낮은 동)", ["points_SKT_*_dong.csv (10) 또는 data_public/living65_outing.csv", "dong_hbi.csv"], od_txt, optional=True)
     P("V6.21.outing_note", "외출 비교 한 줄", [], od_note, optional=True)
     P("V6.21.outing_src", "외출 지수 설명", ["data_public/living65_outing.csv 또는 SKT"], od_src, optional=True)
@@ -1082,30 +1102,51 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     if crs:
         rk_ = next((k for k in crs[0] if k.startswith("n_risk")), "n_risk")
         tn = {"vertical": "수직", "elevator": "경사형", "monorail": "모노레일", "ramp": "경사로"}
+        # [10/14 v11] 시설 비용을 종류·높이로 (밖에서 다시 계산, 분석 처방 규칙 ≥ 기준은 그대로): 반출 높이 RAMP_MAX_RISE m 이하 → 경사로,
+        #   길이 = 높이 × 12 (기울기 1/12) + 높이 0.75m 마다 수평참 1.5m (장애인등편의법 경사로 기준), 비용 = 길이 × RAMP_COST_EOK_PER_M.
+        #   그 밖 → 엘리베이터 1곳 ELEV_COST_EOK. 수혜 수는 09 가 엘리베이터로 계산한 값 그대로 (경사로로 다시 계산하지 않음)
+        cr_ = (rm.get("cand_rule") or "").split(",")
+        try:
+            mp_ = float(cr_[-3]); ra_ = float(cr_[-1])
+        except (ValueError, IndexError):
+            mp_, ra_ = 5.0, 500.0
+        tlab = {"station": "역", "bus": "버스", "medical": "의료", "elderly": "노인복지", "pharmacy": "약국", "station_ev": "역 엘리베이터"}
         trows = []
+        n_fac, fd_ = 0, []
         for r in crs:
             loc = " ".join((r.get("adm_nm") or "").split()[1:]) or "-"
+            rise_ = num(r.get("rise_m"))
+            ramp_ = rise_ is not None and rise_ <= RAMP_MAX_RISE and r.get("facility_type") in ("vertical", "elevator", "ramp")
+            L_ = rise_ * 12 + math.ceil(rise_ / 0.75) * 1.5 if ramp_ else None
+            cost_ = (L_ * RAMP_COST_EOK_PER_M) if ramp_ else ELEV_COST_EOK
+            na_ = num(r.get("n_benefit_any"))
+            per_ = round(na_ / cost_, 1) if na_ is not None else None
+            rx_ = r.get("prescription", "")
+            if r.get("kind") == "후보" and rx_ != "기존 시설 연계":
+                rx_ = "시설 검토" if per_ is not None and per_ >= mp_ else ("난간·쉼터·계단 정비 + 방문돌봄" if rx_ else rx_)
+            fac_ = (f"경사로 · 높이 {r.get('rise_m')}m · 길이 약 {L_:.0f}m" if ramp_
+                    else f"{tn.get(r.get('facility_type'), r.get('facility_type') or '-')} · 높이 {r.get('rise_m') or '-'}m · {r.get('length_m') or '-'}m")
+            alt_ = None
+            if r.get("kind") != "후보":       # [10/14 v11] 선정지(봉천) 줄: 의료 기준 값 옆에 20장과 같은 기준(휠체어 수혜가 가장 큰 목적지)
+                prow_ = max((x for x in isum if x.get("facility") == r.get("facility") and x.get("target") != T0), key=lambda x: cnt_key(x.get("wheel_benefit")), default=None)
+                if prow_ and cnt_key(prow_.get("wheel_benefit")) >= 5:
+                    alt_ = {"tgt": tlab.get(prow_["target"], prow_["target"]), "wheel": cnt_txt(prow_.get("wheel_benefit"))}
+                    rx_ = f"휠체어 접근 효과 ({alt_['tgt']})"
             trows.append({"kind": r.get("kind", ""), "name": r.get("facility", ""), "loc": loc, "n_risk": r.get(rk_, ""),
-                          "fac": f"{tn.get(r.get('facility_type'), r.get('facility_type') or '-')} · 높이 {r.get('rise_m') or '-'}m · {r.get('length_m') or '-'}m",
-                          "benefit": r.get("n_benefit_any", ""), "per100m": r.get("per100m", ""), "rx": r.get("prescription", ""),
+                          "fac": fac_, "ramp": bool(ramp_), "cost": round(cost_, 2),
+                          "benefit": r.get("n_benefit_any", ""), "per100m": per_ if per_ is not None else "", "rx": rx_, "alt": alt_,
                           "wheel_now": r.get("wheel_now_m", ""), "saved": r.get("mean_saved_min", ""), "elder30": r.get("n_saved_30s", ""), "wheel": r.get("wheel_benefit", "")})
-        B.table("V6.17.cand", "후보·선정지 비교표 (09 후보 자동, 격자 단위)", ["intervention_candidates.csv (v6.3)"], trows)
-        n_fac = sum(1 for r in crs if r.get("kind") == "후보" and r.get("prescription") == "시설 검토")
-        try:                                                     # [v6.3] 처방 규칙 (05 run_meta 의 cand_rule). [10/13] 새 판 = 1억 원당, 억 원, m / 옛 판 = 고립 위험 채, 1억 원당, 억 원, m
-            cr_ = (rm.get("cand_rule") or "").split(",")
-            mr, (mp, ce, ra) = (None, cr_) if len(cr_) == 3 else (cr_[0], cr_[1:])
-            P("V6.17.cand_rule", "처방 규칙 문구", ["run_meta.csv (cand_rule, v6.3)"],
-              f"{float(ra):g}m 안 기존 시설 → 기존 시설 연계 / " + (f"고립 위험 주거 건물 {int(float(mr))}개 이상이고 " if mr else "")
-              + f"1억 원당 수혜 건물 {float(mp):g}개 이상 → 시설 검토 / 미만 → 난간·쉼터·계단 정비 + 방문돌봄 (시설 1곳 {float(ce):g}억 원 가정)", optional=True)
-        except ValueError:
-            pass
-        P("V6.17.n_facility", "자동 후보 중 '시설 검토' 수", ["intervention_candidates.csv (v6.3)"], f"{n_fac}곳")
-        fd_ = []
-        for r in crs:
-            if r.get("kind") == "후보" and r.get("prescription") == "시설 검토":
+            if r.get("kind") == "후보" and rx_ == "시설 검토":
+                n_fac += 1
                 nm_ = (r.get("adm_nm") or "").split()[-1] if r.get("adm_nm") else ""
                 if nm_ and nm_ not in fd_:
                     fd_.append(nm_)
+        B.table("V6.17.cand", "후보·선정지 비교표 (09 후보 자동, 격자 단위, 시설 비용은 종류·높이별)", ["intervention_candidates.csv (v6.3)"], trows)
+        P("V6.17.cand_rule", "처방 규칙 문구", ["run_meta.csv (cand_rule, v6.3)"],
+          f"{ra_:g}m 안 기존 시설 → 기존 시설 연계 / 1억 원당 수혜 건물 {mp_:g}개 이상 → 시설 검토 / 미만 → 난간·쉼터·계단 정비 + 방문돌봄"
+          f" (비용: 높이 {RAMP_MAX_RISE:g}m 초과 엘리베이터 {ELEV_COST_EOK:g}억 원, 이하 경사로 m당 {RAMP_COST_EOK_PER_M * 1e4:g}만 원)", optional=True)
+        P("V6.17.n_ramp", "경사로로 본 후보 수", ["intervention_candidates.csv (rise_m)"], f"{sum(1 for x in trows if x['ramp'] and x['kind'] == '후보')}곳", optional=True)
+        P("V6.17.n_facility", "자동 후보 중 '시설 검토' 수 (종류·높이별 비용)", ["intervention_candidates.csv (v6.3)"], f"{n_fac}곳")
         P("V6.17.fac_dongs", "'시설 검토' 후보가 있는 동", ["intervention_candidates.csv (v6.3)"],
           ("·".join(n[:-1] if n.endswith("동") else n for n in fd_[:-1]) + ("·" if len(fd_) > 1 else "") + fd_[-1]) if fd_ else None, optional=True)
     else:
@@ -1126,6 +1167,23 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     P("V6.14.per_house", "집당 배분 어르신", ["summary.csv (05, v6.3)"], f"집당 {num(per_h):g}명" if num(per_h) is not None else None, optional=True)
     rhos = [(k.split("왕복 ")[-1], v) for k, v in m3.items() if k.startswith("기준 민감도: 행정동 순위상관")]
     rr10 = [(k, num(v)) for k, v in rhos if f"+{RM:g}분" in k and num(v) is not None]
+    # [10/14 v11] 부록 3 문턱 줄: 5·10·15분에서 고립 위험 비율 상위 3개 동이 같은가 + 문턱별 고립 위험 건물 수 (medical)
+    tb_, cn_ = {}, {}
+    for bb in (5, 10, 15):
+        col_ = f"share_add{bb}m"
+        vs3 = sorted(((num(r.get(col_)), r["adm_nm"].split()[-1]) for r in rows_d if num(r.get(col_)) is not None and num(r.get(col_)) > 0), reverse=True)[:3]
+        tb_[bb] = [n for _, n in vs3]
+        cn_[bb] = m0.get(f"왕복 추가 {bb}분 이상 건물 수")
+    if all(tb_.get(bb) for bb in (5, 10, 15)):
+        same_ = set(tb_[5]) == set(tb_[10]) == set(tb_[15])
+        P("V6.29.band_top3", "5·10·15분 상위 3개 동 비교", ["dong_hbi.csv (share_add5m·10m·15m)"],
+          (f"5·10·15분 상위 3개 동 같음 ({'·'.join(tb_[10])})" if same_ else "5·10·15분 상위 3개 동이 바뀜"), optional=True)
+        P("V6.29.band_top3_dongs", "문턱별 상위 3개 동 (기록용, 장에는 안 씀)", ["dong_hbi.csv (share_add5m·10m·15m)"],
+          " / ".join(f"{bb}분 {'·'.join(tb_[bb])}" for bb in (5, 10, 15)), optional=True)
+        P("V6.29.band_fix", "상위 3개 동이 바뀔 때 한 줄", ["dong_hbi.csv"],
+          None if same_ else f"→ 문턱에 따라 대상이 바뀌므로 {RM:g}분은 근거로 고정", optional=True)
+    if all(cn_.get(bb) is not None for bb in (5, 10, 15)):
+        P("V6.29.band_counts", "문턱별 고립 위험 건물 수", ["summary.csv"], "고립 위험 건물 " + " · ".join(f"{bb}분 {f_int(cn_[bb])}" for bb in (5, 10, 15)) + "개", optional=True)
     P("V6.29.band_rho_short", f"고립 위험 문턱 {RM:g}분 대비 다른 문턱의 동 순위상관", ["summary.csv (05, v6.3)"],
       " · ".join(f"{[x for x in re.findall(r'[+]([0-9.]+)분', k) if float(x) != RM][0]}분 {v:.2f}" for k, v in rr10) or None)
     P("V6.29.band_rho", "기준 민감도: 5·10·15분 동 순위상관", ["summary.csv (05, v6.3)"],
@@ -1156,7 +1214,7 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         bur_ = [(cv(g, "cell_x"), cv(g, "cell_y")) for g in gT if burden(g) and cv(g, "cell_x") is not None]
         near = lambda c, y0: any(yy >= y0 and math.hypot(c[0] - px, c[1] - py) <= 200 for yy, px, py in pts_)
         n_all, n_rec = sum(1 for c in bur_ if near(c, yrs_[0])), sum(1 for c in bur_ if near(c, rf_))
-        acc_pub, acc_pub_yr = f"{n_rec}곳 / {len(bur_)}곳", f"{rf_}~{yrs_[-1]}"
+        acc_pub, acc_pub_yr = (f"{len(bur_)}곳 모두 사고다발지 밖" if n_rec == 0 else f"{len(bur_) - n_rec}곳이 사고다발지 밖 ({len(bur_)}곳 중)"), f"{rf_}~{yrs_[-1]}"   # [10/14 v11]
         acc_pub_txt = ("보행노인 사고다발지는 큰길·역 주변에 몰려 있어 언덕 위 부담 격자와 겹치지 않습니다. 사고 통계만으로는 언덕 위 어르신의 어려움이 보이지 않습니다." if n_rec == 0
                        else f"보행노인 사고다발지와 겹치는 언덕 위 부담 격자는 {len(bur_)}곳 중 {n_rec}곳입니다. 나머지 {len(bur_) - n_rec}곳은 사고 통계에 나타나지 않습니다.")
         acc_pub_src = f"전체 기간 {yrs_[0]}~{yrs_[-1]}: {n_all}곳 · 도로교통공단 보행노인 사고다발지 (반경 200m, 공개)"
@@ -1193,9 +1251,9 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     dres = next((re.search(r"DEM ([0-9.]+)m", k).group(1) for k in mm_ if gu_ and k.startswith(f"{gu_} 경사 8.3% 이상 땅 비율") and re.search(r"DEM ([0-9.]+)m", k)), "")
     # [10/13 판정 3] 대표값 = 주거 건물 비율, 구 면적 비율(산 포함)은 출처 줄
     P("V6.13.hill", "구릉지 대표값: 경사 8.3% 이상 땅 위 주거 건물 비율 (DEM 자체 계산)", ["summary.csv meta (05, 10/13)"],
-      f"주거 건물의 {hl_b:.0%}가 경사 8.3%(1/12) 이상 땅 위 (DEM {float(dres):g}m 자체 계산)" if hl_b is not None and dres else None, optional=True)
+      f"주거 건물의 {hl_b:.0%}가 경사 8.3%(1/12) 이상 땅 위" if hl_b is not None and dres else None, optional=True)   # [10/14 v11] DEM 표기는 출처 줄로
     P("V6.13.hill_area", "구릉지: 경사 8.3% 이상 땅의 구 면적 비율 (산 포함)", ["summary.csv meta (02·05, 10/13)"],
-      f"경사 8.3% 이상 땅은 {gu_} 면적의 {hl_a:.0%} ({'관악산 포함' if gu_ == '관악구' else '산 포함'})" if hl_a is not None else None, optional=True)
+      f"경사 8.3% 이상 땅은 {gu_} 면적의 {hl_a:.0%} ({'관악산 포함' if gu_ == '관악구' else '산 포함'})" + (f" · 경사는 DEM {float(dres):g}m 자체 계산" if dres else "") if hl_a is not None else None, optional=True)
     # [10/13 판정] 어르신 평지 보행속도: 결과의 run_meta elder_speed (v6.3 #bce59e 까지는 칸이 없고 0.8). 출처 문구는 inputs.json elder_speed_source[속도]
     spd_ = num(rm.get("elder_speed")) or 0.8
     P("V6.speed", "어르신 평지 보행속도 (m/s)", ["run_meta.csv (elder_speed, 10/13)"], f"{spd_:g}", optional=True)
@@ -1219,11 +1277,89 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         for w in ws_:
             rs = [r for r in wr if num(r.get("wait_s")) == w]
             s_, k = sum(num(r.get(col)) or 0 for r in rs), sum(1 for r in rs if (r.get(col) or "").strip() == "5채 미만")
-            out.append(f_int(s_) if not k else ("5 미만" if s_ == 0 and k == 1 else f"{f_int(s_ + k)}~{f_int(s_ + 4 * k)}"))
+            out.append(f_int(s_) if not k else ("5개 미만" if s_ == 0 and k == 1 else f"{f_int(s_ + k)}~{f_int(s_ + 4 * k)}"))
         return "·".join(out)
+    # [10/14 v11] 부록 3 대기 줄을 문장으로: 대기 30~90초에서 시설마다 처방(1억 원당 ≥ 기준)이 같은지. 1억 원당 = (고령자 30초 또는 휠체어 1분) ÷ 비용 인데
+    #   대기 표에는 둘의 합집합이 없어 [max(둘), 둘의 합] 범위로 보고, 범위가 기준의 한쪽에만 있으면 '같음' ('5채 미만'은 1~4)
+    def rng_(v):
+        return (1, 4) if small(v) else ((num(v), num(v)) if num(v) is not None else (0, 0))
+    chg_, nfw_ = [], set()
+    for fac in sorted({r.get("facility") for r in wr if r.get("target") == T0}):
+        sides = set()
+        for r in (x for x in wr if x.get("facility") == fac and x.get("target") == T0):
+            (a1, a2), (b1, b2) = rng_(r.get("n_saved_30s")), rng_(r.get("wheel_benefit"))
+            lo_, hi_ = max(a1, b1) / ELEV_COST_EOK, (a2 + b2) / ELEV_COST_EOK
+            sides.add("검토" if lo_ >= 5 else ("정비" if hi_ < 5 else "경계"))
+        nfw_.add(fac)
+        if len(sides) > 1 or "경계" in sides:
+            chg_.append(fac.split()[0])
+    P("V6.29.facility_txt", "대기시간 비교 문장", ["intervention_wait.csv (09)"],
+      (f"시설 효과에만 영향, 대기 {ws_[0]:g}~{ws_[-1]:g}초에서 처방은 같음" if not chg_ else f"대기에 따라 처방이 바뀔 수 있는 시설: {'·'.join(chg_)}") if wr and nfw_ else None, later="실제 결과 후")
     P("V6.29.facility", "대기시간 비교: 수혜 건물 (고령자·휠체어)", ["intervention_wait.csv (09, v6.2)"],
-      f"시설 효과만: 고령자 {agg('n_benefit')} · 휠체어 {agg('wheel_benefit')}개" if wr else None, later="실제 결과 후")
+      f"시설 효과만: 고령자 {agg('n_benefit')} · 휠체어 {agg('wheel_benefit')}" if wr else None, later="실제 결과 후")   # [10/14] 단위는 칸마다 (5개 미만)
     P("V6.29.facility_w", "대기시간 비교 문턱", [], "·".join(f"{w:g}" for w in ws_) + "초" if ws_ else None, optional=True)
+
+
+def draw_iso_one(gpkg, minutes=10):
+    """[10/14 v11] 등시선 한 칸: 평지 가정·고령자 경사 반영·휠체어의 minutes 분 범위를 겹쳐 그림 → deck/img/results/iso_one.png (실패하면 None)"""
+    try:
+        from osgeo import ogr
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from matplotlib.patches import Polygon as MPoly
+    except ImportError:
+        return None
+    ds = ogr.Open(gpkg)
+    if ds is None:
+        return None
+    lyr = ds.GetLayer(0)
+    polys, area, name = {}, {}, ""
+    for f in lyr:
+        if int(f.GetField("minutes") or 0) != minutes:
+            continue
+        g = f.GetGeometryRef()
+        name = f.GetField("name") or name
+        md = f.GetField("mode")
+        area[md] = f.GetField("area_km2")
+        rings = []
+        for k in range(g.GetGeometryCount()):
+            pg = g.GetGeometryRef(k)
+            pg = pg if pg.GetGeometryName() == "POLYGON" else pg
+            if pg.GetGeometryName() == "POLYGON":
+                rings.append(pg.GetGeometryRef(0).GetPoints())
+            else:
+                rings.append(pg.GetPoints())
+        polys[md] = rings
+    if not polys:
+        return None
+    names = {x.name for x in matplotlib.font_manager.fontManager.ttflist}   # 이름이 꼭 같은 것만 (숨은 '.Apple SD Gothic NeoI' 를 잡지 않게)
+    plt.rcParams["font.family"] = next((f for f in ["Malgun Gothic", "Apple SD Gothic Neo", "NanumGothic", "AppleGothic"] if f in names), "sans-serif")
+    sty = {"flat": ("#C9CFD0", "평지 가정"), "elder": ("#E8A27F", "어르신 (경사 반영)"), "wheel": ("#2F7D6D", "휠체어")}
+    fig, ax = plt.subplots(figsize=(4.1, 3.3), dpi=260)   # [10/14 v11] 19장 칸 비율, 여백 없이 크게
+    xs, ys = [], []
+    for md in ("flat", "elder", "wheel"):
+        for ring in polys.get(md, []):
+            pts = [(p[0], p[1]) for p in ring]
+            xs += [p[0] for p in pts]; ys += [p[1] for p in pts]
+            ax.add_patch(MPoly(pts, closed=True, facecolor=sty[md][0], edgecolor="white", linewidth=0.6, alpha=0.95 if md != "flat" else 0.8))
+    if not xs:
+        return None
+    cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+    ax.set_xlim(min(xs) - 15, max(xs) + 15); ax.set_ylim(min(ys) - 45, max(ys) + 15); ax.set_aspect("equal"); ax.axis("off")
+    st_ = [p for p in polys.get("wheel", [[]])[0]] if polys.get("wheel") else []
+    sx, sy = (sum(p[0] for p in st_) / len(st_), sum(p[1] for p in st_) / len(st_)) if st_ else (cx, cy)
+    ax.plot([sx], [sy], marker="*", markersize=13, color="#1C2321")
+    x0, y0 = min(xs), min(ys) - 30
+    ax.plot([x0, x0 + 200], [y0, y0], color="#1C2321", lw=2.2); ax.text(x0 + 100, y0 + 10, "200m", ha="center", fontsize=10, color="#1C2321")
+    from matplotlib.patches import Patch
+    ax.legend(handles=[Patch(color=sty[m][0], label=f"{sty[m][1]} {area[m]:.2f}㎢") for m in ("flat", "elder", "wheel") if m in area],
+              loc="upper center", bbox_to_anchor=(0.5, 0.0), ncol=3, fontsize=8.5, frameon=False, handlelength=1.0,
+              handletextpad=0.4, columnspacing=1.0, borderaxespad=0.0)   # [10/14 v11] 지도 아래 한 줄 (지도를 덮지 않게)
+    out = os.path.join(ROOT, "deck", "img", "results", "iso_one.png")
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    fig.savefig(out, bbox_inches="tight", pad_inches=0.03); plt.close(fig)   # 제목은 19장 글자로 (그림 안 글씨가 작아지지 않게)
+    return out
 
 
 def v6_plots(B, grid, T0, bands, R):

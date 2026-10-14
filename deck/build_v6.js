@@ -141,6 +141,7 @@ function reviewTag(s, dark) {
 }
 const tsize = t => t.length > 34 ? 19 : t.length > 27 ? 21 : 24;
 const SCOPE = REH ? (BP ? Q('V6.scope', '관악구') : `${Q('V6.scope', '관악구')}(공개 대역)`) : FALLBACK ? '관악 일대(1차 반출)' : '5개 구';      // 14·17 장의 범위 표현 (공개 대역·대비책 판에서만 바뀜)
+const TG20 = () => Q('V6.20.tgt', '지하철역').replace(/\(.*\)/, '').replace('지하철역', '역').trim();   // [10/14 v11] 2·17·20장 봉천 숫자의 기준
 const SFX = () => ((REH && !BP) || FALLBACK) ? ' · ' + SCOPE : '';   // 머리말 꼬리 (청사진 판은 v9 처럼 없음)
 // title 에 결과 값(V)이 들어가면 함수로 넘김: 장 번호를 올린 뒤에 값을 읽어야 누락이 이 장에 적힘
 function base(kicker, title, o={}) {
@@ -222,11 +223,11 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
   const nf2 = FALLBACK ? '' : V('V6.17.n_facility');   // 없으면 누락으로 적힘 (빈칸 이름표)
   const F2 = FALLBACK ? [   // [10/13] 대비책 판: 1차 반출 값만, 나머지는 2차 분석에서
     [`약 ${V('V6.fb.share13')}%`, `관악 일대 건물의 약 ${V('V6.fb.share13')}%가 평지보다 ${Math.round((Number(HB()) - 1) * 100)}% 넘게 더 걸립니다`, '1차 반출(10/2) 값', C.ink],
-    [FB_TEXT, '서울시가 고른 봉천보다 더 급한 곳', '후보 자동·1억 원당 수혜 기준', C.acc],
+    [FB_TEXT, '같은 예산으로 더 많은 집을 돕는 곳', '후보 자동 · 1억 원당 수혜\n시설 종류·높이별 비용', C.acc],   // [10/14 v11]
     [FB_TEXT, '시설 하나의 효과를 놓기 전에 잽니다', '봉천 계단의 휠체어 우회 거리', C.ink]] : [
     [`${V('V6.14.near_burden')}%`, `"가깝다"던 동네의 ${V('V6.14.near_burden')}%는 실제로 ${Math.round((Number(HB()) - 1) * 100)}% 넘게 더 걸립니다`, `${Q('V6.scope', '관악구')}에서 왕복 ${RMIN()}분 넘게 잃는 주거 건물이 ${Q('V6.14.risk_n', '___')}`, C.ink],
-    [nf2, `서울시가 고른 봉천보다 더 급한 곳이 ${has('V6.17.n_facility') ? nf2 : V('V6.17.n_facility')} 있습니다`, `${Q('V6.17.fac_dongs', '자동 후보')}, 2025 선정지 밖 · 1억 원당 수혜 기준`, C.acc],
-    [`${V('V6.20.before')} → ${V('V6.20.after')}`, '시설 하나의 효과를 놓기 전에 잽니다', `봉천 계단의 휠체어 우회 거리, 주거 건물 ${V('V6.20.wheel_n')}가 혜택`, C.ink],
+    [nf2, `같은 예산으로 더 많은 집을 돕는 곳이 ${has('V6.17.n_facility') ? nf2 : V('V6.17.n_facility')} 있습니다`, `${Q('V6.17.fac_dongs', '자동 후보')} (2025 선정지 밖)\n1억 원당 수혜 · 시설 종류·높이별 비용`, C.acc],
+    [`${V('V6.20.before')} → ${V('V6.20.after')}`, `${TG20()}까지 가는 휠체어 우회\n${V('V6.20.before')} → ${V('V6.20.after')}`, `봉천 계단 엘리베이터 1기\n주거 건물 ${V('V6.20.wheel_n')}가 혜택 (${TG20()} 기준)`, C.ink],   // [10/14 v11] 20장과 같은 기준
   ];
   F2.forEach((f, i) => { const x = 0.6 + i*3.0;
     if (i) vr(s, x-0.18, 1.5, 2.2);
@@ -346,7 +347,7 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
     T(s, d[2], { x, y:2.52, w:2.7, h:0.8, fontSize:12, color:C.text, lineSpacingMultiple:1.12 }); });
   hr(s, 0.6, 3.48, 8.8);
   bar(s, 0.6, 3.65, 1.15, C.ink); T(s, '상호제공데이터', { x:0.82, y:3.65, w:3.9, h:0.3, fontSize:12.5, bold:true, color:C.ink });
-  T(s, 'SKT 60세 이상 유동인구, KCB 소득, 교통사고 자료로 언덕 위 사람들이 실제로 덜 나가는지, 더 다치는지 확인합니다.', { x:0.82, y:3.97, w:3.9, h:0.85, fontSize:12, color:C.text, lineSpacingMultiple:1.1 });
+  T(s, 'SKT 60세 이상 유동인구, KCB 소득, 교통사고 자료가 확보되면 언덕 위 사람들이 실제로 덜 나가는지·더 다치는지 교차 확인합니다.', { x:0.82, y:3.97, w:3.9, h:0.85, fontSize:12, color:C.text, lineSpacingMultiple:1.1 });
   bar(s, 5.2, 3.65, 1.15, C.ink); T(s, '공공데이터', { x:5.42, y:3.65, w:4, h:0.3, fontSize:12.5, bold:true, color:C.ink });
   T(s, '약국·지하철 엘리베이터·버스정류소를 목적지로 쓰고, 독거노인 통계로 돌봄이 먼저 필요한 동을, 서울 생활인구·보행노인 사고다발지로 외출과 사고를 봅니다.', { x:5.42, y:3.97, w:4.0, h:0.85, fontSize:12, color:C.text, lineSpacingMultiple:1.1 });
   src(s, '자료별 기간과 형식은 부록 1'); }
@@ -372,7 +373,7 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
   vr(s, 5.05, 2.6, 2.3);
   T(s, '예시: 김순자 할머니의 귀갓길 (편도)', { x:5.3, y:2.62, w:4.1, h:0.3, fontSize:11.5, bold:true, color:C.muted });
   const ex12 = EX();
-  T(s, [{ text:`${ex12.slope.toFixed(1)}분`, options:{ color:C.acc, bold:true } }, { text:`  ÷  ${ex12.flat.toFixed(1)}분  =  `, options:{ color:C.ink } }, { text:`${PF.toFixed(2)}배`, options:{ color:C.acc, bold:true } }], { x:5.3, y:2.95, w:4.1, h:0.55, fontSize:20, valign:'middle' });
+  T(s, [{ text:`${ex12.slope.toFixed(1)}분`, options:{ color:C.acc, bold:true } }, { text:`  ÷  ${ex12.flat.toFixed(1)}분  =  `, options:{ color:C.ink } }, { text:`${PF.toFixed(2)}배`, options:{ color:C.acc, bold:true } }], { x:5.3, y:2.95, w:4.15, h:0.55, fontSize:18, valign:'middle' });   // [10/14 v11] 한 줄에
   T(s, '"분"이라 누구나 이해하고, 시설 설치 전후를 같은 잣대로 비교할 수 있습니다. 비율이라 보행속도 가정에도 덜 흔들립니다.', { x:5.3, y:3.6, w:4.1, h:1.1, fontSize:12, color:C.text, lineSpacingMultiple:1.12 });
   // [v6.3] 고립 위험 문턱의 근거 (5장 420m 와 같은 출처). [10/13 판정] 어르신 속도 = 결과의 elder_speed (0.7 이면 420 ÷ 0.7 = 편도 10분 딱 맞음)
   const m12 = 420 / SPD() / 60, eq12 = Math.abs(m12 - Math.round(m12)) < 0.05 ? '=' : '≈';
@@ -385,19 +386,17 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
   [['1차 방문','2026.10.02','자료 구조 점검, 수도권 shp 확보, 실데이터로 분석 코드 실행'],['2차 방문',V('V6.13.visit2','2026.10.___'),'관악구 정밀 분석, 봉천 시설 시뮬레이션, 결과 반출'],['현장실측',V('V6.15.date','2026.10.___'),'관악 4구간을 직접 걸어 모델 예측과 비교']].forEach((v, i) => {   // [10/13 v9] 셋째 칸 = 현장실측
     const x = 0.6 + i*2.97; hr(s, x, 1.5, 2.75, i==0 ? C.ink : C.acc, 2);
     T(s, v[0], { x, y:1.62, w:2.7, h:0.36, fontSize:15, bold:true, color: i==0 ? C.ink : C.acc });
-    T(s, v[1], { x, y:2.0, w:2.7, h:0.3, fontSize:12, bold:true, color: v[1].includes('__') ? C.accD : C.muted });
+    T(s, v[1], { x, y:2.0, w:2.7, h:0.3, fontSize:12, bold:true, color: v[1].includes('__') ? C.ink : C.muted });   // [10/14 v11] 빈 날짜는 검정
     T(s, v[2], { x, y:2.36, w:2.7, h:0.9, fontSize:12, color:C.text, lineSpacingMultiple:1.12 }); });
-  hr(s, 0.6, 3.45, 8.8);
-  bar(s, 0.6, 3.62, 0.92, C.ink); T(s, '안심구역 밖 사전 준비', { x:0.82, y:3.62, w:3.9, h:0.3, fontSize:12.5, bold:true, color:C.ink });
-  T(s, '공개데이터로 코드를 미리 시험하고, 자료 구조가 달라도 스스로 맞추는 자동 점검 도구를 준비', { x:0.82, y:3.95, w:3.9, h:0.6, fontSize:12, color:C.text, valign:'top' });
-  bar(s, 5.2, 3.62, 0.92); T(s, '반출 원칙', { x:5.42, y:3.62, w:4, h:0.3, fontSize:12.5, bold:true, color:C.acc });
-  T(s, '250m 격자·행정동 집계만 반출, 건물 5개 미만 칸 제외. 건물·필지 단위 결과와 소유 정보는 반출하지 않음', { x:5.42, y:3.95, w:4.0, h:0.6, fontSize:12, color:C.text, valign:'top' });
-  // [v6.3] 관악구를 고른 이유·1인 수행. [10/13 판정] 구릉지 비율 = DEM 으로 경사 면적 비율 자체 계산 (05 summary meta, V6.13.hill)
-  T(s, [{ text:'왜 관악구부터  ', options:{ bold:true, color:C.ink } }, { text:Q('V6.13.gwanak_reason', '서울시 2025 선정지(봉천동)가 있고, 1m 높이로 5m 결과를 검증할 수 있는 구'), options:{ color:C.text } },
-        ...(has('V6.13.hill') ? [{ text:` · ${R.fields['V6.13.hill'].value}`, options:{ color:C.text } }] : []),
-        { text:'   ·   1인 수행  ', options:{ bold:true, color:C.ink } }, { text:'코드·현장실측·기획을 한 사람이 끝까지', options:{ color:C.text } }], { x:0.6, y:4.62, w:8.8, h:0.55, fontSize:10.5, valign:'top', lineSpacingMultiple:1.1 });
+  hr(s, 0.6, 3.36, 8.8);   // [10/14 v11] 아래 네 칸: 사전 준비 · 반출 원칙 / 왜 관악구부터 · 1인 수행
+  const cell13 = (x, y, w, title, body, col, h = 0.72) => { bar(s, x, y, h, col); T(s, title, { x:x+0.22, y, w:w-0.22, h:0.26, fontSize:12, bold:true, color:col });
+    T(s, body, { x:x+0.22, y:y+0.28, w:w-0.22, h:h-0.26, fontSize:10.5, color:C.text, valign:'top', lineSpacingMultiple:1.05 }); };
+  cell13(0.6, 3.46, 4.4, '안심구역 밖 사전 준비', '공개데이터로 코드를 미리 시험하고, 자료 구조가 달라도 스스로 맞추는 자동 점검 도구를 준비', C.ink);
+  cell13(5.2, 3.46, 4.2, '반출 원칙', '250m 격자·행정동 집계만 반출, 건물 5개 미만 칸 제외. 건물·필지 단위 결과와 소유 정보는 반출하지 않음', C.acc);
+  cell13(0.6, 4.28, 4.4, '왜 관악구부터', Q('V6.13.gwanak_reason', '서울시 2025 선정지(봉천동)가 있고, 1m 높이로 5m 결과를 검증할 수 있는 구') + (has('V6.13.hill') ? '\n' + R.fields['V6.13.hill'].value : ''), C.ink, 0.86);
+  cell13(5.2, 4.28, 4.2, '1인 수행', '코드·현장실측·기획을 한 사람이 끝까지', C.ink, 0.86);
   { const n13 = [has('V6.13.hill_area') ? R.fields['V6.13.hill_area'].value : '', (has('V6.13.visit2') && has('V6.15.date')) ? '' : '방문일은 실제 일자로 기입'].filter(x => x);   // [10/13 판정 3] 구 면적 비율은 출처 줄
-    if (n13.length) src(s, n13.join(' / ')); } }   // [10/13] 작성 안내 줄: 방문일을 다 넣으면 빠짐
+    if (n13.length) src(s, n13.join(' / ')); } }
 
 // ── 14 결과 ① 사각지대 ── [10/13 v9 청사진]
 { const s = base('관악구에서 찾은 것' + SFX(), () => FALLBACK
@@ -454,15 +453,14 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
   takeaway(s, '그래서 이 결과는 믿을 만하고, 이 계산에는 LX의 5m 높이가 꼭 필요합니다.', 4.55);
   const notes16 = [has('V6.16.wheel_note') ? R.fields['V6.16.wheel_note'].value : null, has('V6.16.daehyun_note') ? R.fields['V6.16.daehyun_note'].value : null].filter(Boolean).join(' · ');
   src(s, FALLBACK ? `선정지 백분위: ${Q('V6.fb.limits', '1차 반출(10/2) 값')}`
-    : (REH ? '공개 대역(리허설) 값 · ' : '') + `선정지 백분위: 반경 300m 원 평균 비교 · 공개 대조군: 서울 도보 네트워크 + 30m 공개 지형 · 계단을 빼면 휠체어 시간 과소 계산 ${V('V6.16.stairs')}` + (notes16 ? ' · ' + notes16 : '')
-      + ` · 어르신 평지 속도 ${SPD()}m/s: ${V('V6.16.speed_src')}`); }
+    : (REH ? '공개 대역(리허설) 값 · ' : '') + '선정지 백분위: 반경 300m 원 평균 비교 · 대조군·계단·보행속도 출처는 부록 2'); }   // [10/14 v11] 한 줄만, 나머지는 부록 2
 
 // ── 17 우선 검토 후보 ──
 const NCAND = () => V('V6.17.n_cand');
 // [v6.3] 09 후보 자동 결과(intervention_candidates.csv)가 있으면 후보·선정지 비교표 (후보별 수혜·1억 원당·규모별 처방), 없으면 v6.2 격자 표
 const CANDT = (R.tables['V6.17.cand'] && R.tables['V6.17.cand'].rows && R.tables['V6.17.cand'].rows.length) ? R.tables['V6.17.cand'].rows : null;
 if (CANDT) {
-  const s = base('관악구에서 찾은 것' + SFX(), () => [{ text:'서울시가 고른 봉천보다 더 급한 곳이 ', options:{ color:C.ink } }, { text:V('V6.17.n_facility'), options:{ color:C.acc } }, { text:' 있습니다', options:{ color:C.ink } }]);   // [10/13 v9] 표는 A1 (후보 자동, 1억 원당 5)
+  const s = base('관악구에서 찾은 것' + SFX(), () => [{ text:'같은 예산으로 더 많은 집을 돕는 곳이 ', options:{ color:C.ink } }, { text:V('V6.17.n_facility'), options:{ color:C.acc } }, { text:' 있습니다', options:{ color:C.ink } }]);   // [10/14 v11]   // [10/13 v9] 표는 A1 (후보 자동, 1억 원당 5)
   // [10/13 판정] 단위 '개'(주거 건물), 수혜를 고령자(왕복 30초 이상)·휠체어(왕복 1분 이상)로 나눔. 1억 원당 = 둘 중 하나라도 해당하는 건물 ÷ 40
   const rows = [['위치', '고립 위험 주거 건물', '시설 (자동 배치)', '고령자 30초', '휠체어 1분', '1억 원당', '처방']];
   const cw = [1.5, 1.05, 1.9, 1.0, 1.0, 0.75, 1.6];
@@ -471,15 +469,17 @@ if (CANDT) {
     const site = r.kind !== '후보', fac = r.rx === '시설 검토';
     const o = site ? { color:C.muted } : {};
     rows.push([B(site ? `선정지 · ${r.name.split(' ')[0]}` : `${r.name.replace('후보', '후보 ')} · ${r.loc.split(' ').pop()}`, o), { text:unit(r.n_risk), options:o },
-               { text:r.fac, options:Object.assign({ fontSize:9.5 }, o) }, { text:unit(r.elder30), options:o }, { text:unit(r.wheel), options:o },
-               { text:(r.per100m === '' || r.per100m === null) ? '-' : `${Number(r.per100m).toFixed(1)}개`, options:o },
-               B({ '난간·쉼터·계단 정비 + 방문돌봄':'정비 + 방문돌봄' }[r.rx] || r.rx, fac ? { color:C.teal } : { color:C.muted, bold:false })]);
+               { text:r.fac, options:Object.assign({ fontSize:9.5 }, o) }, { text:unit(r.elder30), options:o },
+               { text:unit(r.wheel) + (r.alt ? ` (${r.alt.tgt} 기준 ${r.alt.wheel})` : ''), options:Object.assign(r.alt ? { fontSize:9.5 } : {}, o) },   // [10/14 v11] 봉천: 20장과 같은 기준을 옆에
+               { text:(r.per100m === '' || r.per100m === null) ? '-' : (Number(r.per100m) >= 100 ? `${Math.round(Number(r.per100m)).toLocaleString('en-US')}개` : `${Number(r.per100m).toFixed(1)}개`), options:o },
+               B({ '난간·쉼터·계단 정비 + 방문돌봄':'정비 + 방문돌봄' }[r.rx] || r.rx, fac ? { color:C.teal } : (/휠체어 접근/.test(r.rx) ? { color:C.ink, fontSize:9.5 } : { color:C.muted, bold:false }))]);
   });
-  etable(s, rows, { colW:cw, rowH:[0.34].concat(CANDT.map(() => 0.36)), fontSize:10.5 });
-  bar(s, 0.6, 4.25, 0.75);
-  T(s, [{ text:'처방 규칙  ', options:{ bold:true, color:C.ink } }, { text:Q('V6.17.cand_rule', '500m 안 기존 시설 → 기존 시설 연계 / 1억 원당 수혜 건물 5개 이상 → 시설 검토 / 미만 → 난간·쉼터·계단 정비 + 방문돌봄 (시설 1곳 40억 원 가정)'), options:{ color:C.text } }],
-    { x:0.82, y:4.25, w:8.6, h:0.75, fontSize:10.5, valign:'middle' });
-  src(s, (REH ? '공개 대역(리허설) 값 · ' : '') + '후보 = 고립 위험 주거 건물이 가장 많은 250m 격자에서 그 건물들의 길이 가장 많이 지나는 가파른 구간에 시설을 자동 배치 · 수혜(의료) = 고령자 왕복 30초 이상 · 휠체어 왕복 1분 이상 단축되는 건물(새로 도달 포함), 1억 원당 = 둘 중 하나 ÷ 40억 · 시설 양 끝 좌표는 반출하지 않음');
+  etable(s, rows, { colW:cw, rowH:[0.34].concat(CANDT.map(() => 0.34)), fontSize:10.5 });
+  bar(s, 0.6, 4.08, 0.92);
+  T(s, [{ text:'처방 규칙  ', options:{ bold:true, color:C.ink } }, { text:Q('V6.17.cand_rule', '500m 안 기존 시설 → 기존 시설 연계 / 1억 원당 수혜 건물 5개 이상 → 시설 검토 / 미만 → 난간·쉼터·계단 정비 + 방문돌봄 (시설 1곳 40억 원 가정)'), options:{ color:C.text, breakLine:true } },
+        { text:'서울시 선정지(봉천)는 역까지 가는 휠체어 접근 효과가 큰 곳입니다. 이 표는 선정을 뒤집자는 것이 아니라, 같은 예산의 비교 근거를 더합니다.', options:{ color:C.ink, bold:true } }],
+    { x:0.82, y:4.08, w:8.6, h:0.92, fontSize:10.5, valign:'middle', lineSpacingMultiple:1.1 });   // [10/14 v11]
+  src(s, (REH ? '공개 대역(리허설) 값 · ' : '') + '후보 = 고립 위험 주거 건물이 가장 많은 250m 격자에서 그 건물들의 길이 가장 많이 지나는 가파른 구간에 시설을 자동 배치 · 수혜(의료) = 고령자 왕복 30초 이상 · 휠체어 왕복 1분 이상 단축되는 건물(새로 도달 포함), 1억 원당 = 둘 중 하나 ÷ 시설 비용(부록 3) · 시설 양 끝 좌표는 반출하지 않음');
 } else { const s = base('정책 제안' + SFX(), () => FALLBACK ? '어디부터 무엇을: 우선 검토 후보' : `어디부터 무엇을: 우선 검토 후보 ${NCAND()}곳`);
   // 10/12: 열 = 위치, 고립 위험 건물 수, 왕복 추가 시간 중앙값, 500m 안 기존 시설, 처방 방향 (규칙). 1억 원당 수혜는 20장(시뮬레이션한 시설)만
   const rows = [['위치', Q('V6.17.n_head', '고립 위험 건물'), '왕복 추가 (중앙값)', '500m 안 기존 시설', '처방 방향']];
@@ -522,10 +522,13 @@ if (CANDT) {
     T(s, t[0], { x:1.05, y, w:1.25, h:0.62, fontSize:13, bold:true, color:C.ink, valign:'middle' });
     T(s, t[1], { x:2.3, y, w:3.0, h:0.62, fontSize:11.5, color:C.text, valign:'middle' }); });
   const iso = IMG('V6.iso');
-  if (iso) s.addImage({ path:iso, x:5.6, y:1.42, w:3.85, h:3.05, sizing:{ type:'contain', w:3.85, h:3.05 } });
+  if (iso && /iso_one/.test(iso)) {   // [10/14 v11] 봉천 하나만 크게: 제목은 글자로, 그림은 칸을 꽉 채움
+    T(s, '봉천 선정지에서 10분 안에 걸어 닿는 범위 (★ = 시설)', { x:5.5, y:1.38, w:3.95, h:0.28, fontSize:10.5, bold:true, color:C.ink });
+    s.addImage({ path:iso, x:5.5, y:1.7, w:3.95, h:2.8, sizing:{ type:'contain', w:3.95, h:2.8 } }); }
+  else if (iso) s.addImage({ path:iso, x:5.6, y:1.42, w:3.85, h:3.05, sizing:{ type:'contain', w:3.85, h:3.05 } });
   else slot(s, 5.6, 1.42, 3.85, 3.05, '등시선 그림 자리\n선정지에서 10분 안에 걸어 닿는 범위\n평지 가정 vs 경사 반영 vs 휠체어', 'V6.iso');
   takeaway(s, '"민원이 많은 곳"이 아니라 "효과가 큰 곳"부터 설치할 근거를 줍니다.', 4.62);
-  src(s, '비용 가정: 1곳 약 40억 원 (서울시 5곳 200억 원, 무악동 1곳 40억 원)' + (iso ? ' / 등시선: 12_isochrone 결과 (봉천 선정지)' : '')); }
+  src(s, '비용 가정: 엘리베이터 1곳 약 40억 원 (서울시 5곳 200억 원, 무악동 1곳 40억 원), 높이 3m 이하는 경사로 (부록 3)' + (iso ? ' / 등시선: 12_isochrone 결과' : '')); }
 
 // ── 20 한 사람에게 돌아가는 변화 ──
 if (Q('V6.20.mode', 'example') === 'wheel') {
@@ -539,13 +542,13 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
   T(s, '계단 아래·위를 잇는 수직 엘리베이터 1기', { x:5.5, y:1.55, w:3.8, h:0.3, fontSize:12, bold:true, color:C.white });
   T(s, V('V6.20.after'), { x:5.5, y:2.05, w:3.8, h:0.85, fontSize:46, bold:true, color:C.white });
   T(s, `엘리베이터 통과 약 ${V('V6.20.pass')} (대기 포함)`, { x:5.5, y:2.95, w:3.8, h:0.4, fontSize:12, color:C.onDark });
-  stat(s, 0.6, 3.82, 2.8, '휠체어 1분 이상 단축 건물', `${V('V6.20.wheel_n')} (${Q('V6.20.tgt', '지하철역').replace(/\(.*\)/, '')} 기준)`, { size:17 });
+  stat(s, 0.6, 3.82, 2.8, '휠체어 1분 이상 단축 건물', `${V('V6.20.wheel_n')} (${TG20()} 기준)`, { size:17 });
   vr(s, 3.45, 3.85, 0.7);
   stat(s, 3.6, 3.82, 2.8, '고령자 30초 이상 단축 건물', V('V6.20.elder30'), { size:17 });
   vr(s, 6.45, 3.85, 0.7);
-  stat(s, 6.6, 3.82, 2.8, `1억 원당 수혜 건물 (${Q('V6.20.tgt', '지하철역').replace(/\(.*\)/, '')} 기준)`, V('V6.20.per100m'), { size:17 });   // [v6.3] 17장(병원·약국 기준)과 목적지가 다름을 밝힘
+  stat(s, 6.6, 3.82, 2.8, `1억 원당 수혜 건물 (${TG20()} 기준)`, V('V6.20.per100m'), { size:17 });   // [v6.3] 17장(병원·약국 기준)과 목적지가 다름을 밝힘
   takeaway(s, has('V6.20.before') && has('V6.20.after')   // [v6.3] 정책 발견: 선정지도 고령자 시간 단축은 작고 휠체어 접근 효과가 큼 → 선정 기준에 휠체어 우회 거리
-    ? `짧은 계단 하나가 휠체어에게는 ${R.fields['V6.20.before'].value} 우회입니다. 선정 기준에 '휠체어 우회 거리'를 넣자고 제안합니다.`   // [10/13 v9] 첫 문장은 v9, 둘째는 v6.3 지시 (v9 의 '5개 구에서는 고령자 단축이 더해짐'은 계산 전이라 넣지 않음)
+    ? `짧은 계단 하나가 휠체어에게는 ${R.fields['V6.20.before'].value} 우회입니다. 같은 예산을 비교할 때 '휠체어 우회 거리'를 더하자고 제안합니다.`   // [10/13 v9] 첫 문장은 v9, 둘째는 v6.3 지시 (v9 의 '5개 구에서는 고령자 단축이 더해짐'은 계산 전이라 넣지 않음)
     : '짧은 계단 하나가 휠체어에게는 먼 길 우회입니다. 선정 기준에 \'휠체어 우회 거리\'를 넣자고 제안합니다.', 4.68);
   src(s, (REH ? '공개 대역(리허설) 값 · ' : '') + '수혜 = 고령자 30초 이상 또는 휠체어 1분 이상 단축(새 도달 포함) · 1곳 40억 원 가정 · 위치는 서울시 사업대상지 위치도 기준'
     + (has('V6.16.wheel_note') ? ' · 설치 전 경로 1,000m 초과: 공개 대역 계단 면 왜곡일 수 있음' : ''));
@@ -574,12 +577,15 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
   const pub21 = has('V6.21.outing_diff');   // [10/13 판정 B5] 외출은 주장하지 않음: 부담 높은/낮은 동 두 묶음 비교 결과만 (SKT 가 있으면 SKT, 없으면 공개 생활인구 평일)
   const sk21 = pub21 ? '' : V('V6.21.skt'), kc21 = (pub21 && !has('V6.21.kcb')) ? '' : V('V6.21.kcb');   // 장에 안 쓰는 칸은 대체 목록에도 넣지 않음      // 10/12 청사진: 외출(SKT)·소득(KCB)을 한 칸에 (둘 다 같은 대체 문구면 하나만. 둘 다 ___ 면 빈칸 둘: 누락 key 가 둘)
   const rk21 = has('V6.21.risk_dongs') ? R.fields['V6.21.risk_dongs'].value + '곳' : (FALLBACK ? V('V6.21.risk_dongs') : '-');   // 선택 키 (고위험 동 = 값이 0 보다 큰 동 중 상위 25%)
-  [has('V6.21.alone_top3_dongs') ? ['고립 위험 주거 건물이 가장 많은 동', R.fields['V6.21.alone_top3_dongs'].value] : [`고립 위험(왕복 +${RMIN()}분) 건물이 많은 동`, rk21], (has('V6.21.alone_cells') || !has('V6.21.alone_top3')) ? ['고립 위험 격자 안 혼자 사는 어르신 (추정)', V('V6.21.alone_cells')]   // [v6.3] 동 통계 × 격자 안 주거 연면적 비율
-      : ['고립 위험 상위 3개 동의 독거노인 수 (합, 공개 통계)', V('V6.21.alone_top3')],
-      pub21 ? ['외출 지수로 본 부담 높은 동 vs 낮은 동', V('V6.21.outing_diff')]
-            : ['외출(SKT)·소득(KCB)과 겹치는 동', (sk21 === kc21 && !runs(sk21)) ? sk21 : `${sk21} · ${kc21}`]].forEach((r, i) => { if (i) hr(s, 5.3, 1.45+i*0.88-0.08, 4.1); stat(s, 5.3, 1.45+i*0.88, 4.1, r[0], r[1], { size:18, laterInk:true }); });
-  if (pub21 && has('V6.21.outing_note')) T(s, R.fields['V6.21.outing_note'].value + (has('V6.21.kcb') ? ` · 저소득(KCB) 겹침 ${kc21}` : ''), { x:5.3, y:3.9, w:4.1, h:0.42, fontSize:9.5, color:C.muted, valign:'top' });
-  const yb21 = pub21 ? 4.4 : 4.2;
+  // [10/14 v11] 큰 숫자 = 최우선 방문 동 (주황 하나), 외출 결과는 아래 작은 글씨 한 줄
+  [has('V6.21.alone_top3_dongs') ? ['고립 위험 주거 건물이 가장 많은 동', R.fields['V6.21.alone_top3_dongs'].value, C.ink] : [`고립 위험(왕복 +${RMIN()}분) 건물이 많은 동`, rk21, C.ink],
+   (has('V6.21.alone_cells') || !has('V6.21.alone_top3')) ? ['고립 위험 격자 안 혼자 사는 어르신 (추정)', V('V6.21.alone_cells'), C.ink] : ['고립 위험 상위 3개 동의 독거노인 수 (합, 공개 통계)', V('V6.21.alone_top3'), C.ink],
+   ['최우선 방문 동 (언덕 부담·혼자 사는 분 모두 많은 동)', V('V6.21.priority'), C.acc]].forEach((r, i) => { if (i) hr(s, 5.3, 1.45+i*0.88-0.08, 4.1); stat(s, 5.3, 1.45+i*0.88, 4.1, r[0], r[1], { size:18, laterInk:true, color:r[2] }); });
+  const sm21 = [has('V6.21.priority_dongs') ? `최우선 방문 동: ${R.fields['V6.21.priority_dongs'].value}` : '',
+                pub21 && has('V6.21.outing_note') ? `외출: ${R.fields['V6.21.outing_note'].value}` : (has('V6.21.skt') ? `외출(SKT)이 적은 고위험 동 ${sk21}` : ''),
+                has('V6.21.kcb') ? `저소득(KCB) 겹침 ${kc21}` : ''].filter(x => x);
+  if (sm21.length) T(s, sm21.join('\n'), { x:5.3, y:3.9, w:4.1, h:0.45, fontSize:8.5, color:C.muted, valign:'top' });
+  const yb21 = 4.42;
   bar(s, 5.3, yb21, 0.5); T(s, '보건소 방문건강관리, 돌봄SOS, 방문 약료의 대상 선정에 씁니다', { x:5.52, y:yb21, w:3.9, h:0.5, fontSize:12, bold:true, color:C.ink, valign:'middle' });
   src(s, (has('V6.21.alone_cells') ? `혼자 사는 어르신 = 서울시 동별 독거노인 × 고립 위험 격자 안 주거 연면적 비율 (${Q('V6.21.alone_cells_n', '추정을 낸 동')}) / `
          : (has('V6.21.alone_top3_dongs') ? `고립 위험 상위 3개 동: ${R.fields['V6.21.alone_top3_dongs'].value} (독거노인: 서울시 동별 통계) / ` : '')) + '외출·소득은 행정동 단위 보조 지표이며 상관 관찰입니다 / ' + (pub21 ? R.fields['V6.21.outing_src'].value : 'SKT는 60세 이상 기준')); }
@@ -587,11 +593,11 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
 // ── 22 활용 ③ 교통·보행 ──
 { const s = base('어디에 쓰나', '정류장과 계단, 어디부터 손볼지 정합니다', { tsize:22 });
   const pub22 = !has('V6.22.acc') && has('V6.22.acc_pub') && has('V6.22.acc_pub_txt');   // [10/13 판정 B6] 상호제공 교통사고가 없으면 '사고 통계가 놓치는 곳' (공개 보행노인 사고다발지, 최근 5년 대표)
-  [[0.6,'마을버스 정류장','정류장까지 부담이 큰 주거지를 찾아 정류장 신설·이전 검토 지역으로 제시합니다.','정류장 검토 지역 (버스정류소 기준)',V('V6.22.bus'),'도로 폭·회차 공간은 교통 부서가 함께 확인',C.ink],[5.3, pub22 ? '사고 통계가 놓치는 곳' : '보행로·계단 정비', pub22 ? R.fields['V6.22.acc_pub_txt'].value : '부담 큰 경로가 지나는 계단·급경사 구간에 난간·쉼터·미끄럼 방지·열선 순위를 매깁니다.',...(pub22 ? [`보행노인 사고다발지(${Q('V6.22.acc_pub_yr', '최근 5년')}) 200m 안 체감 부담 격자`, V('V6.22.acc_pub'), R.fields['V6.22.acc_pub_src'].value] : ['사고가 겹치는 고부담 법정동',V('V6.22.acc'),'사고 자료: 도로교통공단 (법정동 단위)']),C.acc]].forEach(c => {
+  [[0.6,'마을버스 정류장','정류장까지 부담이 큰 주거지를 찾아 정류장 신설·이전 검토 지역으로 제시합니다.','정류장 검토 지역 (버스정류소 기준)',V('V6.22.bus'),'도로 폭·회차 공간은 교통 부서가 함께 확인',C.ink],[5.3, pub22 ? '사고 통계가 놓치는 곳' : '보행로·계단 정비', pub22 ? R.fields['V6.22.acc_pub_txt'].value : '부담 큰 경로가 지나는 계단·급경사 구간에 난간·쉼터·미끄럼 방지·열선 순위를 매깁니다.',...(pub22 ? [`체감 부담 격자 (보행노인 사고다발지 ${Q('V6.22.acc_pub_yr', '최근 5년')}, 반경 200m)`, V('V6.22.acc_pub'), R.fields['V6.22.acc_pub_src'].value] : ['사고가 겹치는 고부담 법정동',V('V6.22.acc'),'사고 자료: 도로교통공단 (법정동 단위)']),C.acc]].forEach(c => {
     hr(s, c[0], 1.5, 4.1, c[6], 2);
     T(s, c[1], { x:c[0], y:1.62, w:4.1, h:0.36, fontSize:15, bold:true, color:c[6] });
     T(s, c[2], { x:c[0], y:2.05, w:4.1, h:0.75, fontSize:12, color:C.text, lineSpacingMultiple:1.12 });
-    stat(s, c[0], 2.95, 4.1, c[3], c[4], { size:22, laterInk:true });
+    stat(s, c[0], 2.95, 4.1, c[3], c[4], { size: flat(c[4]).length > 10 ? 18 : 22, laterInk:true, color:C.ink });
     T(s, c[5], { x:c[0], y:3.75, w:4.1, h:0.6, fontSize:11, color:C.muted, valign:'top' }); });
   vr(s, 4.95, 1.5, 2.6);
   takeaway(s, '큰 공사 전에, 작은 개선으로 줄일 수 있는 부담부터 찾습니다.', 4.45); }
@@ -653,12 +659,20 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
   const xs = [0,2,4,6,8,10,12,14,16,18,20], tob = sl => 6*Math.exp(-3.5*Math.abs(sl+0.05)), flatv = tob(0);
   s.addChart(pres.charts.LINE, [{ name:'오르막 소요시간 배수', labels:xs.map(x=>x+'%'), values:xs.map(x => +(flatv/tob(x/100)).toFixed(2)) }], { x:5.25, y:1.4, w:4.2, h:2.45, chartColors:[C.acc], lineSize:2.5, lineDataSymbol:'circle', lineDataSymbolSize:5, showTitle:true, title:'오르막 경사별 소요시간 배수', titleFontSize:11, titleColor:C.ink, titleFontFace:F, catAxisLabelColor:C.muted, valAxisLabelColor:C.muted, catAxisLabelFontSize:9, valAxisLabelFontSize:9, valGridLine:{ color:'E8EAE9', size:0.5 }, catGridLine:{ style:'none' }, showLegend:false, valAxisMinVal:1 });
   T(s, [{ text:'고령자 ', options:{ bold:true, color:C.ink } }, { text:`${SPD()}m/s × Tobler 배수, 내리막은 오르막 부담의 50%, 계단 최소 25%·1.2배`, options:{ breakLine:true } }, { text:'휠체어 ', options:{ bold:true, color:C.teal } }, { text:'1.0m/s, 1/12 초과는 10배(회피), 계단 통행 불가', options:{} }], { x:5.25, y:4.0, w:4.2, h:1.0, fontSize:11, color:C.text, valign:'middle' });
-  src(s, `Tobler 보행함수 v = 6·exp(−3.5·|s+0.05|) km/h / 어르신 ${SPD()}m/s: ${V('V6.16.speed_src')} / 휠체어 경사 기준: 장애인·노인·임산부 등의 편의증진 보장에 관한 법률 시행규칙`); }   // [10/13] 속도 출처
+  T(s, [{ text:'출처·대조군 (16장)  ', options:{ bold:true, color:C.ink } }, { text:(FALLBACK ? '' : `공개 대조군: 서울 도보 네트워크 + 30m 공개 지형 · 계단을 빼면 휠체어 시간 과소 계산 ${V('V6.16.stairs')} · `) + `어르신 ${SPD()}m/s: ${V('V6.16.speed_src')}`, options:{ color:C.muted } }],
+    { x:0.6, y:4.95, w:8.8, h:0.3, fontSize:8.5 });   // [10/14 v11] 16장 출처를 여기로
+  src(s, 'Tobler 보행함수 v = 6·exp(−3.5·|s+0.05|) km/h / 휠체어 경사 기준: 장애인·노인·임산부 등의 편의증진 보장에 관한 법률 시행규칙'); }
 { const s = base('부록 3', '가정을 바꿔도 결론이 유지되는가');
   const r = (a,b,c2,d) => [B(a), b, c2, d];
   const eq29 = Math.abs(420 / SPD() / 60 - Math.round(420 / SPD() / 60)) < 0.05 ? '=' : '≈';
-  etable(s, [['가정','값','근거','바꿨을 때 (순위상관)'], r('고령자 보행속도',`${SPD()}m/s`, SPD() === 0.7 ? '경찰청 매뉴얼 (2020.11.30 개정)' : '개정 전 기준 (개정판 0.7)', { text:`${SPD() === 0.7 ? '개정 전 0.8' : '0.7'}·1.0m/s: ${V('V6.29.speed')}`, options:{ fontSize:9.5 } }), r('내리막 부담','오르막의 50%','가정 (0%·100% 비교)',V('V6.29.down')), r('계단','최소 25% 경사, 1.2배','가정 (1.5배 비교)',V('V6.29.stair')), r('휠체어 경사 한계','1/12 (8.3%)','법정 경사로 기준','해당 없음 (법정)'), r(`고립 위험 문턱`,`왕복 +${RMIN()}분`,`420m ÷ ${SPD()}m/s ${eq29} 편도 ${Math.round(420 / SPD() / 60)}분`,Q('V6.29.band_rho_short', '실제 결과 후')), r('엘리베이터 대기',`${Q('V6.29.facility_w', '30·60·90초')} 비교`,'서울시 발표 + 실측',{ text:V('V6.29.facility'), options:{ fontSize:9 } }), r('반출 최소 건물 수','5채','비식별 기준','해당 없음')],
-    { colW:[2.2,2.1,2.6,1.9], rowH:[0.34,0.4,0.4,0.4,0.4,0.4,0.4,0.4] });
+  const sm29 = t => ({ text:t, options:{ fontSize:8.5 } });   // [10/14 v11] 문턱·대기·비용 줄은 문장으로
+  const band29 = has('V6.29.band_top3') ? [R.fields['V6.29.band_top3'].value, has('V6.29.band_counts') ? R.fields['V6.29.band_counts'].value : '', has('V6.29.band_fix') ? R.fields['V6.29.band_fix'].value : ''].filter(x => x).join('\n') : Q('V6.29.band_rho_short', '실제 결과 후');
+  etable(s, [['가정','값','근거','바꿨을 때 (숫자 = 순위상관)'], r('고령자 보행속도',`${SPD()}m/s`, SPD() === 0.7 ? '경찰청 매뉴얼 (2020.11.30 개정)' : '개정 전 기준 (개정판 0.7)', { text:`${SPD() === 0.7 ? '개정 전 0.8' : '0.7'}·1.0m/s: ${V('V6.29.speed')}`, options:{ fontSize:9.5 } }), r('내리막 부담','오르막의 50%','가정 (0%·100% 비교)',V('V6.29.down')), r('계단','최소 25% 경사, 1.2배','가정 (1.5배 비교)',V('V6.29.stair')), r('휠체어 경사 한계','1/12 (8.3%)','법정 경사로 기준','해당 없음 (법정)'),
+    r(`고립 위험 문턱`,`왕복 +${RMIN()}분`,`420m ÷ ${SPD()}m/s ${eq29} 편도 ${Math.round(420 / SPD() / 60)}분`, sm29(band29)),
+    r('엘리베이터 대기',`${Q('V6.29.facility_w', '30·60·90초')} 비교`,'서울시 발표 + 실측', sm29(V('V6.29.facility_txt'))),
+    r('시설 비용', sm29('엘리베이터 40억 원\n경사로 m당 100만 원'), sm29('서울시 5곳 200억 원·무악동 40억 원\n경사로: 평창군 무장애 나눔길 1km 10억 원 (2025.01) 단가를 빌림, 도심 단가 확인 필요'), sm29('높이 3m 이하 = 경사로 (1/12, 0.75m마다 수평참 1.5m)\n수혜는 엘리베이터로 계산한 값')),
+    r('반출 최소 건물 수','5개','비식별 기준','해당 없음')],
+    { colW:[1.6,1.75,2.65,2.8], rowH:[0.3,0.34,0.3,0.3,0.3,0.6,0.34,0.62,0.3] });
   src(s, '순위상관이 0.9 이상이면 "누가 더 취약한가"의 순서가 가정에 크게 흔들리지 않는다는 뜻'); }
 { const s = base('부록 4', '경사 비용 계산 (발췌)');
   const code = ['def tobler(s):                       # 경사 s → 보행속도 km/h','    return 6.0 * np.exp(-3.5 * np.abs(s + 0.05))','FLAT = tobler(0.0)','','def elder_time(length, s, stair):    # 고령자 링크 통과 시간(초)','    s = np.where(stair, np.sign(s + 1e-9) * np.maximum(np.abs(s), 0.25), s)','    up = FLAT / tobler(np.abs(s))','    down = 1 + C.DOWNHILL_WEIGHT * (up - 1)   # 내리막은 오르막 부담의 일부','    factor = np.where(s >= 0, FLAT / tobler(s), down)','    t = length / C.ELDER_SPEED * factor','    return np.where(stair, t * C.STAIR_FACTOR, t)','','def wheel_time(length, s, stair):    # 휠체어: 1/12 초과는 사실상 회피, 계단 불가','    up = np.maximum(s, 0)','    t = length / (C.WHEEL_SPEED * np.maximum(0.4, 1 - 5 * up))','    t = np.where(np.abs(s) > C.WHEEL_LIMIT, t * C.WHEEL_STEEP_PENALTY, t)','    return np.where(stair, np.inf, t)'].join('\n');
