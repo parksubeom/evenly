@@ -38,7 +38,7 @@ const TOUCH = new Set(), SLIDES = {};
 const touch = key => { if (!BP_FRAME.has(key)) { TOUCH.add(page); if (process.env.BP_DEBUG) console.error('touch', page, key); } };
 const INPUT_KEYS = new Set(['team_name', 'team_display', 'V6.13.n_visits', 'V6.16.speed_src']);   // [10/14 v14] 방문일 = visits 의 일수   // [v6.3] 어르신 속도 출처도 입력 칸
 // [10/13] 실제 판 --later-ok (22일 판정용, docs/22일_기획서_절차.md): 자료가 원래 없을 수 있는 칸(관악 실측·상호제공)만
-//   ___ 대신 결과 키의 later 문구 ("실측 후"·"상호제공데이터 확보 시", missing 에 '대체'). 그 밖의 누락은 그대로 ___
+//   ___ 대신 결과 키의 later 문구 ("실측 후"·"자료 확보 시", missing 에 '대체'). 그 밖의 누락은 그대로 ___
 const LATER_OK = R.source === 'real' && argv.includes('--later-ok');
 const LATER_OK_RE = /^V6\.15\.\d\.(app|meas|model|slow)$|^V6\.15\.date$|^V6\.16\.meas_r$|^V6\.21\.(skt|kcb)$|^V6\.22\.acc$/;
 const BANDS = R.bands || 'mix', MINB = BANDS === 'min';
@@ -108,6 +108,7 @@ const ALLM = () => hasR('V6.allmode');
 const BLDL = () => ALLM() ? '건물(모든 건물 기준)' : '주거 건물';   // 장마다 처음
 const BLDS = () => ALLM() ? '건물' : '주거 건물';                   // 표 머리·되풀이
 const DEST = () => ALLM() ? '약국' : '병원·약국';
+const MIX17 = () => !!(R.tables['V6.17.cand'] && (R.tables['V6.17.cand'].rows || []).some(r => r.src));   // [10/20] 17장 = 부담 LX 격자 + 시설 효과 공개 보행망
 const LXS = 'LX 분석', PUBS = '공개 자료 보행망으로 계산 (같은 모델·같은 좌표)', ANAS = '해석적 계산';
 const Q = (key, dflt) => { touch(key); if (has(key)) return String(R.fields[key].value); fb(key, dflt); return dflt; };   // 기본 문구로 말이 되는 보조 값
 function IMG(key) {
@@ -237,14 +238,14 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
     [FB_TEXT, '같은 예산으로 더 많은 집을 돕는 곳', '엘리베이터 후보 (1억 원당 수혜)\n+ 경사로로 바로 풀 수 있는 곳', C.acc],   // [10/14 v12]
     [FB_TEXT, '시설 하나의 효과를 놓기 전에 잽니다', '봉천 계단의 휠체어 우회 거리', C.ink]] : [
     [`${V('V6.14.near_burden')}%`, `"가깝다"던 동네의 ${V('V6.14.near_burden')}%는 실제로 ${Math.round((Number(HB()) - 1) * 100)}% 넘게 더 걸립니다`, `${Q('V6.scope', '관악구')}에서 왕복 ${RMIN()}분 넘게 잃는 ${BLDS()}이 ${V('V6.14.risk_n')}`, C.ink],
-    [nf2, `같은 예산으로 더 많은 집을 돕는 곳이 ${has('V6.17.n_facility') ? nf2 : V('V6.17.n_facility')} 있습니다`, `${Q('V6.17.fac_split', '엘리베이터·경사로 후보').replace(' + ', ' +\n')}\n${Q('V6.17.fac_dongs', '자동 후보')} · 2025 선정지 밖`, C.acc],   // [10/14 v12]
+    [nf2, `같은 예산으로 더 많은 집을 돕는 곳이 ${has('V6.17.n_facility') ? nf2 : V('V6.17.n_facility')} 있습니다`, `${Q('V6.17.fac_split', '엘리베이터·경사로 후보').replace(' + ', ' +\n')}\n${Q('V6.17.fac_dongs', '자동 후보')} · 2025 선정지 밖` + (MIX17() ? '\n(시설 효과는 공개 자료 계산)' : ''), C.acc],   // [10/14 v12]
     [`${V('V6.20.before')} → ${V('V6.20.after')}`, '봉천 계단을 피하던 휠체어 우회 거리', hasR('V6.20.memo') ? `${Q('V6.20.tgt', '약국')}까지 가는 ${BLDS()} ${V('V6.20.any')}가 혜택` : `${TG20()}까지 가는 주거 건물 ${V('V6.20.wheel_n')}가 혜택`, C.ink],   // [10/20] 약국 192 (현장 메모)   // [10/14 v12] 238m 는 계단 양 끝 사이 우회(목적지 무관), 82개가 역 기준
   ];
   F2.forEach((f, i) => { const x = 0.6 + i*3.0;
     if (i) vr(s, x-0.18, 1.5, 2.2);
     T(s, f[0], { x, y:1.45, w:2.75, h:0.7, fontSize: f[0] === FB_TEXT ? 16 : (flat(f[0]).length > 5 ? 26 : 34), bold:true, color: f[0] === FB_TEXT ? C.muted : f[3], valign:'middle' });
     T(s, f[1], { x, y:2.2, w:2.7, h:0.85, fontSize:13, bold:true, color:C.ink, lineSpacingMultiple:1.12 });
-    T(s, f[2], { x, y:3.08, w:2.7, h:0.55, fontSize:11.5, color:C.muted, lineSpacingMultiple:1.1 }); });
+    T(s, f[2], { x, y: MIX17() ? 2.84 : 3.08, w:2.7, h: MIX17() ? 0.95 : 0.55, fontSize:11.5, color:C.muted, lineSpacingMultiple:1.1 }); });   // [10/20] 둘째 설명 네 줄
   hr(s, 0.6, 3.85, 8.8, C.ink, 1.25);
   T(s, [{ text:'어떻게  ', options:{ bold:true, color:C.muted } }, { text:`LX 수치지형도·5m 높이·필지로, 집집마다 ${DEST()}·역까지 실제로 걷는 시간을 계산했습니다.`, options:{ color:C.ink } }], { x:0.6, y:3.98, w:8.8, h:0.35, fontSize:12 });
   T(s, [{ text:'어디에  ', options:{ bold:true, color:C.muted } }, { text:'이동편의시설을 어디에 놓을지가 핵심이고, 같은 지도로 방문돌봄 대상·정류장·계단 정비·길안내까지 정합니다.', options:{ color:C.ink } }], { x:0.6, y:4.38, w:8.8, h:0.35, fontSize:12 });
@@ -347,11 +348,13 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
   etable(s, [['구분','누가 쓰나','무엇을 보나','결과물','보지 못하는 것'],
     [B('서울시 전수조사 (2024)'),'서울시·자치구','계단 경사·폭·길이, 민원','후보지 25곳','계단 없는 급경사 길, 거주자·목적지'],
     [B('서울동행맵 (2024.11~)'),'시민 개인','단차·경사·보도폭·엘리베이터','지금 가는 길 안내','지역 우선순위, 시설 효과'],
+    [B('2024 수상작 (보행약자 안전보행거리 길안내)'),'시민 개인','경사 반영 경로','길안내','어디에 시설을 놓을지, 효과·예산'],   // [10/20] 확인된 사실만 (출처 줄)
     [B('선행연구'),'연구자','지역 단위 취약지역, 이동거리 한계','취약지역 51곳','건물 단위 경로 부담, 시설 효과'],
     [B('evenly',{color:C.acc}),B('서울시·자치구 정책 담당'),B('집→필수시설 실제 경로의 오르막·계단 부담'),B('언덕 부담 지도, 우선 후보, 시설 1기 효과'),{text:'지반·규제·보상 (현장 조사 단계)',options:{color:C.muted}}]],
-    { colW:[1.65,1.45,2.2,1.75,1.75], rowH:[0.38,0.62,0.56,0.56,0.7] });
-  takeaway(s, '동행맵이 "오늘 가는 길"을 안내한다면, evenly 는 "어디에 길을 새로 낼지"를 정합니다.', 4.55);
-  src(s, '출처: 서울시 교통정보(2024.11) 서울동행맵, 서울시 보도자료(2025.06), 선행연구는 부록 1'); }
+    { y:1.4, colW:[1.65,1.45,2.2,1.75,1.75], rowH:[0.34,0.5,0.42,0.56,0.46,0.56], fontSize:10.5 });   // [10/20] 2024 수상작 줄 (여섯 줄, 글자 10.5)
+  takeaway(s, '동행맵이 "오늘 가는 길"을 안내한다면, evenly 는 "어디에 길을 새로 낼지"를 정합니다.', 4.66);
+  src(s, '2024 수상작 = 데이터안심구역 활용 공동 경진대회 최우수상 every-map 팀 「보행약자를 위한 안전보행거리 검색 및 인공지능 기반 길안내 서비스」(과기정통부 시상식 보도, 2024.11.01) / '
+       + '출처: 서울시 교통정보(2024.11) 서울동행맵, 서울시 보도자료(2025.06), 선행연구는 부록 1'); }
 
 // ── 10 데이터 ──
 { const s = base('활용 데이터', '길·높이·집, 세 가지 LX 자료로 집집마다 걷는 시간을 계산합니다', { tsize:20 });
@@ -363,10 +366,8 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
     T(s, d[1] + '  (LX 미개방)', { x, y:2.18, w:2.7, h:0.3, fontSize:11.5, bold:true, color:C.muted });
     T(s, d[2], { x, y:2.52, w:2.7, h:0.8, fontSize:12, color:C.text, lineSpacingMultiple:1.12 }); });
   hr(s, 0.6, 3.48, 8.8);
-  bar(s, 0.6, 3.65, 1.15, C.ink); T(s, '상호제공데이터', { x:0.82, y:3.65, w:3.9, h:0.3, fontSize:12.5, bold:true, color:C.ink });
-  T(s, 'SKT 60세 이상 유동인구, KCB 소득, 교통사고 자료가 확보되면 언덕 위 사람들이 실제로 덜 나가는지·더 다치는지 교차 확인합니다.', { x:0.82, y:3.97, w:3.9, h:0.85, fontSize:12, color:C.text, lineSpacingMultiple:1.1 });
-  bar(s, 5.2, 3.65, 1.15, C.ink); T(s, '공공데이터', { x:5.42, y:3.65, w:4, h:0.3, fontSize:12.5, bold:true, color:C.ink });
-  T(s, '약국·지하철 엘리베이터·버스정류소를 목적지로 쓰고, 독거노인 통계로 돌봄이 먼저 필요한 동을, 서울 생활인구·보행노인 사고다발지로 외출과 사고를 봅니다.', { x:5.42, y:3.97, w:4.0, h:0.85, fontSize:12, color:C.text, lineSpacingMultiple:1.1 });
+  bar(s, 0.6, 3.65, 1.15, C.ink); T(s, '공공데이터', { x:0.82, y:3.65, w:8.5, h:0.3, fontSize:12.5, bold:true, color:C.ink });   // [10/20] 상호제공데이터는 쓰지 않음 → 상자 하나
+  T(s, '약국·지하철 엘리베이터·버스정류소를 목적지로 쓰고, 독거노인 통계로 돌봄이 먼저 필요한 동을, 서울 생활인구·보행노인 사고다발지로 외출과 사고를 봅니다.', { x:0.82, y:3.97, w:8.5, h:0.85, fontSize:12, color:C.text, lineSpacingMultiple:1.1 });
   src(s, '자료별 기간과 형식은 부록 1'); }
 
 // ── 11 방법 ──
@@ -510,8 +511,9 @@ if (CANDT) {
   const unit = v => (v === '' || v === null || v === undefined) ? '-' : (/^[0-9.]+$/.test(String(v)) ? `${v}개` : String(v).replace('채', '개'));
   const mins = v => (v === '' || v === null || v === undefined || isNaN(Number(v))) ? '-' : `${Number(v).toFixed(1)}분`;
   const per = r => r.ramp ? { text:'소규모\n(경사로)', options:{ fontSize:9 } }   // [10/14 v12] 경사로는 1억 원당 숫자를 내지 않음
-                          : { text:(r.per100m === '' || r.per100m === null) ? '-' : (Number(r.per100m) >= 100 ? `${Math.round(Number(r.per100m)).toLocaleString('en-US')}개` : `${Number(r.per100m).toFixed(1)}개`), options:{} };
+                          : { text:(r.per100m === '' || r.per100m === null) ? '-' : isNaN(Number(r.per100m)) ? String(r.per100m) : (Number(r.per100m) >= 100 ? `${Math.round(Number(r.per100m)).toLocaleString('en-US')}개` : `${Number(r.per100m).toFixed(1)}개`), options:{} };
   const rxc = r => { const fac = r.rx === '큰 시설 검토' || r.rx === '바로 정비';
+    if (mixed && r.kind !== '후보' && r.alt && r.alt.wheel) return B(`휠체어 접근 효과 (${r.alt.tgt} ${r.alt.wheel})`, { color:C.ink, fontSize:9 });   // [10/20] 봉천 = 공개 계산, 역 기준 휠체어
     return B({ '난간·쉼터·계단 정비 + 방문돌봄':'정비 + 방문돌봄' }[r.rx] || r.rx, fac ? { color:C.teal } : (/휠체어 접근/.test(r.rx) ? { color:C.ink, fontSize:9 } : { color:C.muted, bold:false })); };
   const rows = mixed ? [['위치', `고립 위험\n${BLDS()}`, '왕복 추가\n(중앙값)', '시설', '고령자\n30초', '휠체어\n1분', '1억 원당', '처방']]
                      : [['위치', '고립 위험\n주거 건물', '시설 (자동 배치)', '고령자\n30초', '휠체어\n1분', '1억 원당', '처방']];
@@ -529,21 +531,28 @@ if (CANDT) {
       rows.push([loc, { text:unit(r.n_risk), options:o }, { text:r.fac, options:Object.assign({ fontSize:9.5 }, o) }, { text:unit(r.elder30), options:o },
                  { text:unit(r.wheel) + (r.alt ? ` (${r.alt.tgt} 기준 ${r.alt.wheel})` : ''), options:Object.assign(r.alt ? { fontSize:9.5 } : {}, o) }, p_, rxc(r)]);   // [10/14 v11] 봉천: 20장과 같은 기준을 옆에
   });
-  if (mixed) T(s, `부담(고립 위험·왕복 추가)은 ${V('V6.17.lx_burden')} 자료 · 시설 효과(고령자·휠체어·1억 원당)는 공개 자료 보행망 시뮬레이션 · 봉천은 LX 현장 메모`,
+  const memoRow = CANDT.some(r => r.memo);
+  if (mixed) T(s, memoRow ? '시설 효과(고령자·휠체어·1억 원당)는 후보 = 공개 자료 보행망 시뮬레이션 · 봉천 = LX 현장 메모'
+                          : '시설 효과는 봉천·후보 모두 공개 자료 보행망으로 같은 방식으로 계산',   // [10/20] 한 출처 안에서만 비교
                { x:0.6, y:1.3, w:8.8, h:0.24, fontSize:9, bold:true, color:C.ink });
   etable(s, rows, { y: mixed ? 1.58 : 1.4, colW:cw, rowH:[0.4].concat(CANDT.map(() => 0.29)), fontSize:9.5 });   // [10/14 v14] 맑은 고딕(줄 높이 큼)에서도 막대와 띄움
-  bar(s, 0.6, 4.06, 1.04);
+  const lxb = mixed && !memoRow && hasR('V6.17.lx_bong');   // [10/20] 각주 (LX 봉천) 자리: 막대를 줄이고 출처 줄을 위로
+  bar(s, 0.6, 4.06, lxb ? 0.92 : 1.04);
   T(s, [{ text:'처방 규칙  ', options:{ bold:true, color:C.ink } }, { text:Q('V6.17.cand_rule', '500m 안 기존 시설 → 기존 시설 연계 / 높이 차 3m 이하 → 바로 정비 (경사로) / 엘리베이터 1억 원당 수혜 건물 5개 이상 → 큰 시설 검토 / 미만 → 정비 + 방문돌봄 (엘리베이터 1곳 40억 원)'), options:{ color:C.text, breakLine:true } },
         ...(has('V6.17.ramp_note') ? [{ text:R.fields['V6.17.ramp_note'].value, options:{ color:C.ink, breakLine:true } }] : []),   // [10/14 v12] 경사로 분리 한 줄
-        { text: hasR('V6.20.memo') ? '서울시 선정지(봉천)는 휠체어가 약국 가는 길을 크게 줄여 주는 곳입니다. 이 표는 선정을 뒤집자는 것이 아니라, 같은 예산의 비교 근거를 더합니다.'
+        { text: (mixed && !memoRow) ? '이 표는 서울시 선정(봉천)을 뒤집자는 것이 아니라, 같은 예산의 비교 근거를 더합니다. 봉천의 시설 효과는 20장(LX 자료)에서 봅니다.'
+              : hasR('V6.20.memo') ? '서울시 선정지(봉천)는 휠체어가 약국 가는 길을 크게 줄여 주는 곳입니다. 이 표는 선정을 뒤집자는 것이 아니라, 같은 예산의 비교 근거를 더합니다.'
                                    : '서울시 선정지(봉천)는 역까지 가는 휠체어 접근 효과가 큰 곳입니다. 이 표는 선정을 뒤집자는 것이 아니라, 같은 예산의 비교 근거를 더합니다.', options:{ color:C.ink, bold:true } }],
-    { x:0.82, y:4.06, w:8.6, h:1.04, fontSize:9.5, valign:'middle', lineSpacingMultiple:1.05 });   // [10/14 v11]
-  src(s, (REH ? '공개 대역(리허설) 값 · ' : '') + (mixed
-      ? `후보 = 공개 자료로 미리 고른 구간 · 부담 = ${LXS} (10/19 반출 격자) · 효과 = ${PUBS} · 봉천 = ${LXS} (10/20 메모) · 1억 원당 = 수혜 ÷ 40억`
+    { x:0.82, y:4.06, w:8.6, h: lxb ? 0.92 : 1.04, fontSize:9.5, valign:'middle', lineSpacingMultiple:1.05 });   // [10/14 v11]
+  const src17 = (REH ? '공개 대역(리허설) 값 · ' : '') + (mixed
+      ? `후보 = 공개 자료로 미리 고른 구간 · 부담 = ${LXS} (10/19 반출 ${V('V6.17.lx_burden')}) · 효과 = ${PUBS}` + (memoRow ? ` · 봉천 = ${LXS} (10/20 메모)` : '') + ' · 1억 원당 = 수혜 ÷ 40억'
         + (hasR('V6.17.rank_note') ? ` · ${R.fields['V6.17.rank_note'].value}` : '')
       : (hasR('V6.v62') ? '후보 = 공개 자료로 미리 고른 구간을 안심구역 자료로 계산'   // [10/20] v17 검수
                         : '후보 = 고립 위험 주거 건물이 가장 많은 250m 격자에서 그 건물들의 길이 가장 많이 지나는 가파른 구간에 자동 배치')
-        + ' · 수혜(의료) = 고령자 왕복 30초·휠체어 1분 이상 단축(새로 도달 포함) · 1억 원당 = 수혜 ÷ 40억 (엘리베이터만) · 시설 양 끝 좌표는 반출하지 않음'));   // [10/14 v14] 두 줄 안에
+        + ' · 수혜(의료) = 고령자 왕복 30초·휠체어 1분 이상 단축(새로 도달 포함) · 1억 원당 = 수혜 ÷ 40억 (엘리베이터만) · 시설 양 끝 좌표는 반출하지 않음');   // [10/14 v14] 두 줄 안에
+  if (lxb) T(s, `※ ${R.fields['V6.17.lx_bong'].value}. 공개 보행망은 시설 효과를 작게 잡는 경향이 있어 후보의 실제 효과도 더 클 수 있음\n` + src17,
+             { x:0.6, y:5.02, w:8.2, h:0.5, fontSize:8.5, color:C.muted, valign:'bottom' });   // [10/20] 각주 + 출처 (세 줄까지)
+  else src(s, src17);
 } else { const s = base('정책 제안' + SFX(), () => FALLBACK ? '어디부터 무엇을: 우선 검토 후보' : `어디부터 무엇을: 우선 검토 후보 ${NCAND()}곳`);
   // 10/12: 열 = 위치, 고립 위험 건물 수, 왕복 추가 시간 중앙값, 500m 안 기존 시설, 처방 방향 (규칙). 1억 원당 수혜는 20장(시뮬레이션한 시설)만
   const rows = [['위치', Q('V6.17.n_head', '고립 위험 건물'), '왕복 추가 (중앙값)', '500m 안 기존 시설', '처방 방향']];
@@ -669,12 +678,13 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
   const yb21 = Math.max(ysm21 + 0.44, 3.9);   // 세 칸이면 4.16 (v14 그대로)
   bar(s, 5.3, yb21, 0.5); T(s, '보건소 방문건강관리, 돌봄SOS, 방문 약료의 대상 선정에 씁니다', { x:5.52, y:yb21, w:3.9, h:0.5, fontSize:11.5, bold:true, color:C.ink, valign:'middle' });
   src(s, (ALLM() ? `${LXS} (동 단위 고립 위험) + 공개 자료 · ` : '') + (has('V6.21.alone_cells') ? `혼자 사는 어르신 = 서울시 동별 독거노인 × 고립 위험 격자 안 주거 연면적 비율 (${Q('V6.21.alone_cells_n', '추정을 낸 동')}) / `
-         : (has('V6.21.alone_top3_dongs') ? `고립 위험 상위 3개 동: ${R.fields['V6.21.alone_top3_dongs'].value} (독거노인: 서울시 동별 통계) / ` : '')) + '외출·소득은 동 단위 보조 지표 (상관 관찰) / ' + (pub21 ? R.fields['V6.21.outing_src'].value : 'SKT는 60세 이상 기준')); }
+         : (has('V6.21.alone_top3_dongs') ? `고립 위험 상위 3개 동: ${R.fields['V6.21.alone_top3_dongs'].value} (독거노인: 서울시 동별 통계) / ` : '')) + (pub21 ? `${has('V6.21.kcb') ? '외출·소득은' : '외출은'} 동 단위 보조 지표 (상관 관찰) / ${R.fields['V6.21.outing_src'].value}`
+                : (ALLM() ? '독거노인 = 서울시 동별 공개 통계' : '외출·소득은 동 단위 보조 지표 (상관 관찰) / SKT는 60세 이상 기준'))); }   // [10/20] 실제판은 SKT·KCB 를 쓰지 않음
 
 // ── 22 활용 ③ 교통·보행 ──
 { const s = base('어디에 쓰나', '정류장과 계단, 어디부터 손볼지 정합니다', { tsize:22 });
   const pub22 = !has('V6.22.acc') && has('V6.22.acc_pub') && has('V6.22.acc_pub_txt');   // [10/13 판정 B6] 상호제공 교통사고가 없으면 '사고 통계가 놓치는 곳' (공개 보행노인 사고다발지, 최근 5년 대표)
-  [[0.6,'마을버스 정류장','정류장까지 부담이 큰 주거지를 찾아 정류장 신설·이전 검토 지역으로 제시합니다.','정류장 검토 지역 (버스정류소 기준)',V('V6.22.bus'),'도로 폭·회차 공간은 교통 부서가 함께 확인',C.ink],[5.3, pub22 ? '사고 통계가 놓치는 곳' : '보행로·계단 정비', pub22 ? R.fields['V6.22.acc_pub_txt'].value : '부담 큰 경로가 지나는 계단·급경사 구간에 난간·쉼터·미끄럼 방지·열선 순위를 매깁니다.',...(pub22 ? [`체감 부담 격자 (사고다발지 ${Q('V6.22.acc_pub_yr', '최근 5년')}, 반경 200m)`, V('V6.22.acc_pub'), R.fields['V6.22.acc_pub_src'].value] : ['사고가 겹치는 고부담 법정동',V('V6.22.acc'),'사고 자료: 도로교통공단 (법정동 단위)']),C.acc]].forEach(c => {
+  [[0.6,'마을버스 정류장','정류장까지 부담이 큰 주거지를 찾아 정류장 신설·이전 검토 지역으로 제시합니다.','정류장 검토 지역 (버스정류소 기준)',V('V6.22.bus'),'도로 폭·회차 공간은 교통 부서가 함께 확인',C.ink],[5.3, pub22 ? '사고다발지가 놓치는 곳' : '보행로·계단 정비', pub22 ? R.fields['V6.22.acc_pub_txt'].value : '부담 큰 경로가 지나는 계단·급경사 구간에 난간·쉼터·미끄럼 방지·열선 순위를 매깁니다.',...(pub22 ? [`체감 부담 격자 (사고다발지 ${Q('V6.22.acc_pub_yr', '최근 5년')}, 반경 200m)`, V('V6.22.acc_pub'), R.fields['V6.22.acc_pub_src'].value] : ['사고가 겹치는 고부담 법정동',V('V6.22.acc'),'사고 자료: 도로교통공단 (법정동 단위)']),C.acc]].forEach(c => {
     hr(s, c[0], 1.5, 4.1, c[6], 2);
     T(s, c[1], { x:c[0], y:1.62, w:4.1, h:0.36, fontSize:15, bold:true, color:c[6] });
     T(s, c[2], { x:c[0], y:2.05, w:4.1, h:0.75, fontSize:12, color:C.text, lineSpacingMultiple:1.12 });
@@ -682,7 +692,9 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
     T(s, c[5], { x:c[0], y:3.75, w:4.1, h:0.6, fontSize:11, color:C.muted, valign:'top' }); });
   vr(s, 4.95, 1.5, 2.6);
   takeaway(s, '큰 공사 전에, 작은 개선으로 줄일 수 있는 부담부터 찾습니다.', 4.45);
-  if (ALLM()) src(s, `${LXS} (정류장 검토 지역 = 10/19 반출 격자, 버스정류장 기준) · 사고다발지 = 공개 자료 (도로교통공단 보행노인 사고다발지, 반경 200m)`); }   // [10/20]
+  const ft22 = pub22 && hasR('V6.22.acc_pub_foot') ? `※ ${R.fields['V6.22.acc_pub_foot'].value}` : '';   // [10/20] 문장은 짧게, 이유는 각주
+  if (ALLM()) src(s, (ft22 ? ft22 + ' / ' : '') + `${LXS} (정류장 검토 지역 = 10/19 반출 격자) · 사고다발지 = 공개 자료 (도로교통공단 보행노인 사고다발지, 반경 200m)`);   // [10/20]
+  else if (ft22) src(s, ft22); }
 
 // ── 23 활용 ④ 길안내 ──
 { const s = base('어디에 쓰나', '지도앱의 도보 시간에 "오르막"을 더합니다');
@@ -691,7 +703,9 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
   T(s, '무엇이 달라지나', { x:4.75, y:1.62, w:4.6, h:0.3, fontSize:13, bold:true, color:C.acc });
   T(s, [{ text:'같은 450m라도 오르막과 계단을 출발 전에 알려 줍니다', options:{ bullet:{ indent:12 }, breakLine:true } }, { text:'어르신·휠체어 모드에서 계단 없는 완만한 길을 고릅니다', options:{ bullet:{ indent:12 } } }], { x:4.75, y:1.98, w:4.6, h:0.9, fontSize:12, color:C.text, paraSpaceAfter:4 });
   T(s, '제공 방식', { x:4.75, y:2.98, w:4.6, h:0.3, fontSize:13, bold:true, color:C.ink });
-  T(s, '서울동행맵 등에 지역 부담 지수와 구간 경사 정보를 공공데이터로 제공합니다. 구간 단위 원자료는 반출 제한이 있어 기관 간 협의나 공개데이터 재구축으로 연계합니다.', { x:4.75, y:3.3, w:4.6, h:1.15, fontSize:11.5, color:C.text, lineSpacingMultiple:1.1 });
+  T(s, [{ text:'서울동행맵 등에 지역 부담 지수와 구간 경사 정보를 공공데이터로 제공합니다. 구간 단위 원자료는 반출 제한이 있어 기관 간 협의나 공개데이터 재구축으로 연계합니다.', options:{ breakLine:true } },
+        { text:'길안내는 기존 제안(2024 수상작, 서울동행맵)과 연계하는 확장 활용입니다. evenly 의 핵심은 시설 입지 판단입니다.', options:{ bold:true, color:C.ink } }],   // [10/20]
+    { x:4.75, y:3.3, w:4.6, h:1.36, fontSize:11.5, color:C.text, lineSpacingMultiple:1.1, paraSpaceBefore:4, valign:'top' });
   takeaway(s, '시민에게는 "출발 전에 아는 오르막", 행정에는 "고칠 곳의 목록"이 됩니다.', 4.72); }
 
 // ── 24 화면 ──
@@ -715,11 +729,13 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
     { x:0.6, y:3.62, w:8.8, h:0.32, fontSize:11.5 });
   hr(s, 0.6, 4.0, 8.8);
   T(s, '한계와 대응', { x:0.6, y:4.06, w:4, h:0.28, fontSize:12, bold:true, color:C.muted });
+  const nx25 = [ALLM() ? '건축물대장 연결 개선(주거 기준)' : '', '사고·유동인구 원자료 결합', SPD() > 0.75 ? '현행 보행속도 0.7m/s 적용' : ''].filter(Boolean).join(', ');   // [10/20] 다음 단계 (대회 이후)
   const lim25 = [['후보 발굴까지가 역할','지반·규제·보상은 다음 단계 현장 타당성 조사로'],['1:5,000 지도·외출 자료의 한계','작은 골목 일부 누락 가능, 외출은 보조 관찰로만 사용']]
-    .concat(ALLM() ? [['이번 결과는 모든 건물 기준','대장 연결을 개선해 주거만 기준으로 다시 계산 예정']] : []);   // [10/20]
-  const g25 = lim25.length > 2 ? 0.3 : 0.4;
+    .concat(ALLM() ? [['이번 결과는 모든 건물 기준','건물 용도 연결률이 낮아 모든 건물을 출발점으로 계산']] : [])   // [10/20]
+    .concat([['다음 단계', nx25]]);
+  const g25 = lim25.length > 3 ? 0.27 : (lim25.length > 2 ? 0.3 : 0.4), f25 = lim25.length > 3 ? 10.5 : (lim25.length > 2 ? 11 : 12);
   lim25.forEach((l, i) => { const y = 4.34 + i*g25;
-    T(s, l[0], { x:0.6, y, w:3.0, h:g25, fontSize: lim25.length > 2 ? 11 : 12, bold:true, color:C.ink, valign:'middle' }); T(s, l[1], { x:3.7, y, w:5.7, h:g25, fontSize: lim25.length > 2 ? 11 : 12, color:C.text, valign:'middle' }); }); }
+    T(s, l[0], { x:0.6, y, w:2.5, h:g25, fontSize:f25, bold:true, color:C.ink, valign:'middle' }); T(s, l[1], { x:3.2, y, w:6.2, h:g25, fontSize:f25, color:C.text, valign:'middle' }); }); }
 
 // ── 26 마감 ──
 { const s = pres.addSlide(); page++; s.background = { color:C.ink };
@@ -733,12 +749,10 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
 
 // ── 부록 ──
 { const s = base('부록 1', '활용 데이터 목록');
-  // [10/14 v14] DEM 1m·버스정류소 줄 추가, 필지 기간 2026.06. 상호제공 줄은 결과에 상호제공 출력(SKT·KCB·교통사고)이 있을 때만, 있는 것만
-  const mut27 = [['SKT', '유동인구', 'V6.21.skt'], ['KCB', '소득', 'V6.21.kcb'], ['도로교통공단', '교통사고', 'V6.22.acc']].filter(m => hasR(m[2]));
+  // [10/14 v14] DEM 1m·버스정류소 줄 추가, 필지 기간 2026.06. [10/20] 상호제공데이터는 쓰지 않음 → 그 줄 없음
   const rows27 = [['구분','제공','데이터','기간·기준','용도'],
     [B('미개방',{color:C.acc}),'한국국토정보공사','수치지형도 1:5,000 (shp)','2024.11','길·계단·건물'],[B('미개방',{color:C.acc}),'한국국토정보공사','DEM 5M_수도권 (img)','2024.11','링크 경사'],
     [B('미개방',{color:C.acc}),'한국국토정보공사','DEM 1m (img)','관악구','5m 결과 검증'],[B('미개방',{color:C.acc}),'한국국토정보공사','국토정보필지_전국 (shp)','2026.06 (AL_*_202606)','건물↔대장 연결']]
-    .concat(mut27.length ? [[B('상호제공'), mut27.map(m => m[0]).join(' · '), mut27.map(m => m[1]).join('·'), '2020~2024', '보조 관찰']] : [])
     .concat([[B('공공'),'서울시 · 행정안전부','건축물대장·법정동 코드','2026','건물 용도·층수'],[B('공공'),'공공데이터포털·서울시','약국·엘리베이터·도보망','2026','목적지·대조군'],[B('공공'),'서울시','버스정류소 위치정보','2026.09','정류장 검토 (22장)'],
       [B('공공'),'행정안전부 · 서울시','고령·장애인·독거노인','2025~2026','수혜 인원 추정'],[B('공공'),'서울시 · 도로교통공단','생활인구 · 보행노인 사고다발지','2026.7 · 2012~2024','외출·사고 (공개판)']]);
   etable(s, rows27, { colW:[0.95,2.05,2.5,1.45,1.85], rowH:[0.32].concat(rows27.slice(1).map(() => 0.31)), fontSize:10 });

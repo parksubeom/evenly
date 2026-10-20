@@ -807,6 +807,9 @@ def syn_files(memo, pub, T0):
             rows.append({"facility": "봉천동 비안어린이공원 인근", "target": tk, "_src": "memo", "rise_m": b.get("rise_m"),
                          "pass_s": round(b["pass_min"] * 60) if b.get("pass_min") is not None else "",
                          **{k: v.get(k, "") for k in ("n_benefit", "n_benefit_any", "mean_saved_min", "wheel_cut_n", "wheel_cut_p50_m")}})
+    if pub and pub.get("bongcheon_public"):                # [10/20] 17장 봉천 줄 = 공개 계산 (후보와 같은 잣대). 20장은 메모 줄
+        for tg, r in pub["bongcheon_public"].items():
+            rows.append({"facility": "봉천동 비안어린이공원 인근", "target": T0 if tg in ("medical", "pharmacy") else tg, "_src": "public", **r})
     if pub and pub.get("candidates"):
         for nm, c in pub["candidates"].items():
             for tg, r in c["targets"].items():
@@ -831,7 +834,7 @@ def v62_candidates(isum, grid, T0, RM):
     수혜·높이 차는 09 summary 그대로. 처방은 아래 17장 코드가 1억 원당·높이로 다시 정함. 해당 시설이 summary 에 없으면 None"""
     sys.path.insert(0, os.path.join(ROOT, "tools"))
     import field_fix_v62 as FF
-    rowsT = {r.get("facility"): r for r in isum if r.get("target") == T0 and not str(r.get("facility", "")).startswith("ALL")}
+    rowsT = {r.get("facility"): r for r in isum if r.get("target") == T0 and not str(r.get("facility", "")).startswith("ALL") and r.get("_src") != "memo"}   # [10/20] 메모는 20장만
     hand = {c["name"]: c for c in FF.candidates()}
     if not any(n in rowsT for n in hand):
         return None
@@ -1139,6 +1142,8 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         P("V6.20.wheelcut_med", "휠체어 길 길이 감소 중앙값", nm20, f"{abs(num(pick.get('wheel_cut_p50_m'))):g}m" if num(pick.get("wheel_cut_p50_m")) is not None else None, optional=True)
         P("V6.20.tgt", "기준 목적지", [], "약국" if extra.get("allmode") else TARGET_LABEL.get(T0, T0), optional=True)
         P("V6.20.memo", "20장 메모 표지", [], "yes", optional=True)
+        P("V6.17.lx_bong", "17장 각주: LX 자료로 계산한 봉천", nm20,
+          f"LX 자료로 계산한 봉천: {'약국' if extra.get('allmode') else TARGET_LABEL.get(T0, T0)} 기준 {f_int(na20)}개(1억 원당 {na20 / 40:.1f})" if na20 is not None else None, optional=True)
         P("V6.20.mode", "20장 계산 근거", [], "wheel", optional=True)
 
     # ── 21 방문돌봄 (동 단위, 상위 25% 겹침) ──
@@ -1177,11 +1182,11 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     sq = sorted(sk.values())
     low = {c for c, v in sk.items() if len(sq) >= 4 and v <= sq[int(len(sq) * 0.25)]}
     P("V6.21.skt", "외출이 적은(SKT) 고위험 동", ["points_SKT_*_dong.csv (10)", "pop60.csv"],
-      (f"{len(hi_d & low)}곳" + (f" (ρ = {gv('CROSS.skt_rho')})" if gv("CROSS.skt_rho") else "")) if sk else None, later="상호제공데이터 확보 시")
+      (f"{len(hi_d & low)}곳" + (f" (ρ = {gv('CROSS.skt_rho')})" if gv("CROSS.skt_rho") else "")) if sk else None, later="자료 확보 시")
     kc = extra.get("kcb_by_code") or {}
     kq = sorted(kc.values())
     poor = {c for c, v in kc.items() if len(kq) >= 4 and v >= kq[int(len(kq) * 0.75)]} if KCB_HIGH_IS_POOR else set()
-    P("V6.21.kcb", "저소득(KCB)과 겹치는 고위험 동", ["join_KCB_*.csv (07)"], f"{len(hi_d & poor)}곳" if kc else None, later="상호제공데이터 확보 시")
+    P("V6.21.kcb", "저소득(KCB)과 겹치는 고위험 동", ["join_KCB_*.csv (07)"], f"{len(hi_d & poor)}곳" if kc else None, later="자료 확보 시")
     # [10/13 판정 B5] 21장 외출: 주장하지 않음. 부담 높은/낮은 동(고립 위험 비율이 동 중앙값보다 큰/나머지, 중앙값 0 이면 0 보다 큰/0) 두 묶음의
     #   외출 지수 중앙값 차이를 순열 검정(tools/outing_compare.py 와 같은 방법). SKT(안에서 낸 지수)가 있으면 SKT, 없으면 공개 서울 생활인구 65세 이상 평일
     #   (data_public/living65_outing.csv 의 outing_index_wd = 1 − 낮 10~17시 ÷ 새벽 3~5시, tools/prep_living_pop.py, 관악구 동만)
@@ -1206,7 +1211,7 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         mB = sorted(B_)[len(B_) // 2] if B_ else None
         unit_ = "생활인구" if osrc == "생활인구" else "SKT 지수"
         if p_ is not None and p_ >= 0.05:
-            od_txt, od_note = "차이 보이지 않음", f"동 단위 {unit_}로는 차이가 보이지 않음 → 건물 단위로 계산하는 이유"   # [10/14 v14] 21장 아래 혼잡: 괄호 설명 뺌
+            od_txt, od_note = "차이 보이지 않음", f"동 단위 {unit_}로는 동 안의 짧은 외출이 잡히지 않음"   # [10/20] 여기까지만
         elif p_ is not None:
             od_txt, od_note = f"부담 높은 동 {mA:.2f} · 낮은 동 {mB:.2f}", f"외출 지수 중앙값 (p = {p_:.3f}, 동 단위 상관 관찰)"
         od_src = (f"외출 = 서울 생활인구 {ym_[:4]}.{ym_[4:]} 65세 이상 평일, 1 − 낮(10~17시) ÷ 새벽(3~5시)" if osrc == "생활인구" else "외출 = SKT 60세 이상 유동 ÷ 거주 (구 평균 = 1.0)") \
@@ -1265,13 +1270,14 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
                 alt_ = {"tgt": "역", "wheel": "", "any": cnt_txt(str(r.get("any_st"))) if r.get("any_st") not in ("", None) else ""}
                 rx_ = r.get("prescription")
             elif r.get("kind") != "후보":       # [10/14 v11] 선정지(봉천) 줄: 의료 기준 값 옆에 20장과 같은 기준(휠체어 수혜가 가장 큰 목적지)
-                prow_ = max((x for x in isum if x.get("facility") == r.get("facility") and x.get("target") != T0), key=lambda x: cnt_key(x.get("wheel_benefit")), default=None)
+                prow_ = max((x for x in isum if x.get("facility") == r.get("facility") and x.get("target") != T0 and x.get("_src") != "memo"), key=lambda x: cnt_key(x.get("wheel_benefit")), default=None)
                 if prow_ and cnt_key(prow_.get("wheel_benefit")) >= 5:
                     alt_ = {"tgt": tlab.get(prow_["target"], prow_["target"]), "wheel": cnt_txt(prow_.get("wheel_benefit"))}
                     rx_ = f"휠체어 접근 효과 ({alt_['tgt']})"
             trows.append({"kind": r.get("kind", ""), "name": r.get("facility", ""), "loc": loc, "n_risk": r.get(rk_, ""),
                           "fac": fac_, "ramp": bool(ramp_), "cost": "" if ramp_ else ELEV_COST_EOK,
-                          "benefit": r.get("n_benefit_any", ""), "per100m": per_ if per_ is not None else "", "rx": rx_, "alt": alt_,
+                          "benefit": r.get("n_benefit_any", ""), "rx": rx_, "alt": alt_,
+                          "per100m": per_ if per_ is not None else ("0.1개 이하" if (not ramp_ and small(r.get("n_benefit_any"))) else ""),   # [10/20] 5채 미만(1~4) ÷ 40 → 0.1 이하
                           "wheel_now": r.get("wheel_now_m", ""), "saved": r.get("mean_saved_min", ""), "elder30": r.get("n_saved_30s", ""), "wheel": r.get("wheel_benefit", ""),
                           "src": r.get("_src", ""), "memo": bool(r.get("_memo")), "addmed": r.get("add_min_med", ""), "lx_rank": r.get("lx_rank"), "n_cells": r.get("n_cells")})
             if r.get("kind") == "후보" and rx_ in ("큰 시설 검토", "바로 정비"):
@@ -1284,7 +1290,7 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         mixed_ = any(t.get("src") for t in trows)                 # [10/20] 실제판: 부담 = LX 격자, 시설 효과 = 공개 보행망, 봉천 = 메모
         if mixed_:
             rks_ = [t["lx_rank"] for t in trows if t["kind"] == "후보" and t.get("lx_rank")]
-            P("V6.17.lx_burden", "17장 후보 격자의 LX 부담 (반출 grid_hbi)", ["grid_hbi.csv (반출, 후보 격자)"], "LX 격자" if rks_ else None)
+            P("V6.17.lx_burden", "17장 후보 격자의 LX 부담 (반출 grid_hbi)", ["grid_hbi.csv (반출, 후보 격자)"], "격자" if rks_ else None)   # [10/20] 17장 출처 줄 "부담 = LX 분석 (10/19 반출 격자)"
             if rks_:
                 nc_ = max((t.get("n_cells") or 0) for t in trows)
                 top_ = all(k <= len(rks_) for k in rks_)
@@ -1358,7 +1364,7 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
             aq = sorted(x[1] for x in lr)[int(len(lr) * 0.75)]
             acc = sum(1 for h_, a_ in lr if h_ >= hq and a_ >= aq and a_ > 0)
     P("V6.22.acc", "고령 보행자 사고가 겹치는 고부담 법정동 (HBI·사고 모두 상위 25%)", ["legal_<교통사고>.csv (11_legal_dong_join, 상호제공 교통사고)"],
-      f"{acc}곳" if acc is not None else None, later="상호제공데이터 확보 시")
+      f"{acc}곳" if acc is not None else None, later="자료 확보 시")
     # [10/13 판정 B6] 22장 "사고 통계가 놓치는 곳": 도로교통공단 보행노인 사고다발지 (data_public/acc_elder_ped_seoul.csv, tools/prep_acc_hotspots.py, 서울만, 반경 200m 원).
     #   상호제공 교통사고(legal_*)가 없을 때 씀. 대표값 = 최근(recent_from~, 기본 2020~2024): 고른 목적지(T0) 체감 부담 격자 중 가운데가 다발지 가운데에서 200m 안인 격자 수.
     #   전체 기간(2012~) 값은 아래 줄. 문장은 값에 따라 (0 이면 "겹치지 않는다", 아니면 겹친 수 그대로)
@@ -1374,13 +1380,14 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         near = lambda c, y0: any(yy >= y0 and math.hypot(c[0] - px, c[1] - py) <= 200 for yy, px, py in pts_)
         n_all, n_rec = sum(1 for c in bur_ if near(c, yrs_[0])), sum(1 for c in bur_ if near(c, rf_))
         acc_pub, acc_pub_yr = (f"{len(bur_)}곳 모두 사고다발지 밖" if n_rec == 0 else f"{len(bur_) - n_rec}곳이 사고다발지 밖 ({len(bur_)}곳 중)"), f"{rf_}~{yrs_[-1]}"   # [10/14 v11]
-        acc_pub_txt = ("보행노인 사고다발지는 큰길·역 주변에 몰려 있어 언덕 위 부담 격자와 겹치지 않습니다. 사고 통계만으로는 언덕 위 어르신의 어려움이 보이지 않습니다." if n_rec == 0
-                       else f"보행노인 사고다발지와 겹치는 언덕 위 부담 격자는 {len(bur_)}곳 중 {n_rec}곳입니다. 나머지 {len(bur_) - n_rec}곳은 사고 통계에 나타나지 않습니다.")
+        acc_pub_txt = ("사고다발지 기준만으로는 언덕 위 어르신의 어려움이 보이지 않습니다." if n_rec == 0   # [10/20] 여기까지만 (이유는 각주)
+                       else f"보행노인 사고다발지와 겹치는 언덕 위 부담 격자는 {len(bur_)}곳 중 {n_rec}곳입니다. 나머지 {len(bur_) - n_rec}곳은 사고다발지에 나타나지 않습니다.")
         acc_pub_src = f"전체 기간 {yrs_[0]}~{yrs_[-1]}: {n_all}곳 · 도로교통공단 보행노인 사고다발지 (반경 200m, 공개)"
     P("V6.22.acc_pub", "보행노인 사고다발지(최근) 200m 안 체감 부담 격자 (공개 자료)", ["data_public/acc_elder_ped_seoul.csv (tools/prep_acc_hotspots.py)", "grid_hbi.csv"], acc_pub, optional=True)
     P("V6.22.acc_pub_yr", "사고다발지 대표 기간", [], acc_pub_yr, optional=True)
     P("V6.22.acc_pub_txt", "사고 통계가 놓치는 곳 문장", [], acc_pub_txt, optional=True)
     P("V6.22.acc_pub_src", "보행노인 사고다발지 전체 기간 줄", ["data_public/acc_elder_ped_seoul.csv"], acc_pub_src, optional=True)
+    P("V6.22.acc_pub_foot", "22장 각주 (사고다발지 지정 방식)", [], "사고다발지는 사고가 몰린 곳만 지정되어 큰길·역 주변에 모이는 경향" if (acc_pub_txt and n_rec == 0) else None, optional=True)   # [10/20]
 
     # ── 13 방문일 [10/14 v14] deck/inputs.json visits: 날마다 칸 (날짜·한 일), 일수는 예비 날을 뺀 날이 모두 다녀온 것일 때만 ──
     vrows_, vn_ = visit_plan(extra.get("inputs") or {})

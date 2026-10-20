@@ -5,7 +5,7 @@ tools/real_day.py ─ [10/22 반출 결과 받은 날] 받은 반출 파일 → 
 
 [실행]  cd deck && npm run real-day -- <받은 반출 zip 또는 폴더>      (deck/py.js 가 QGIS Python 으로 실행)
         다시 돌릴 때(inputs.json 을 고친 뒤 등)는 인자 없이: npm run real-day   (results/raw_export 에 있는 것으로)
-        --later-ok : 관악 실측·상호제공 칸만 ___ 대신 "실측 후"·"상호제공데이터 확보 시" (build_v6.js --later-ok)
+        --later-ok : 관악 실측·상호제공 칸만 ___ 대신 "실측 후"·"자료 확보 시" (build_v6.js --later-ok)
 [하는 일]
   1. 놓기: zip 이면 풀고, 방식 폴더(layer·register·gisbld·all)가 든 층을 찾아 그 안을 results/raw_export/ 로 복사.
      results/raw_export 에 이미 있던 것은 results/raw_export_old/<시각>/ 로 옮김 (지우지 않음). 받은 파일은 그대로 둠
@@ -357,7 +357,7 @@ def finish(stop, soft, later_ok, t_all, built):
         sv = [m for m in lok if SURVEY_IN_RE.match(m[0])]
         verdict = ("관악 실측·상호제공 칸만 비었음 → "
                    + (f"관악 실측을 했으면 deck/inputs.json 의 mapapp_min·survey_date 를 채우고 다시 (15장 {len(sv)}칸), 아니면 " if sv else "")
-                   + "npm run real-day -- --later-ok (그 칸은 '실측 후'·'상호제공데이터 확보 시')")
+                   + "npm run real-day -- --later-ok (그 칸은 '실측 후'·'자료 확보 시')")
     else:
         verdict = "실제판 후보 → 장별 확인 목록(docs/22일_기획서_절차.md)으로 _render/final 확인"
     say(f"   ▶ {verdict}")
