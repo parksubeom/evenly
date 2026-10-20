@@ -584,7 +584,21 @@ def main():
         zc = d["z5"].copy()
         zn = cdem.sample(N[near, 0], N[near, 1])
         zc[np.where(near)[0][np.isfinite(zn)]] = zn[np.isfinite(zn)]
-        s5, zuse = edge_slope(zc, e)[0], zc
+        sc_ = edge_slope(zc, e)[0]
+        # [10/20] 경사 검사: 주택가는 1:5000 등고선이 건물 사이에서 끊겨 조각만 남아, 메운 높이가 평평해짐 →
+        #   창을 동·서로 나눠 링크 |경사| 중앙값이 공개 지형(30m, 원래 완만하게 잡힘)의 절반도 안 되면 멈춤
+        mid_ = (N[e["u"]] + N[e["v"]]) / 2
+        inw_ = (mid_[:, 0] > win[0]) & (mid_[:, 0] < win[1]) & (mid_[:, 1] > win[2]) & (mid_[:, 1] < win[3])
+        chk = {}
+        for nm_, m_ in (("서쪽", inw_ & (mid_[:, 0] < sx)), ("동쪽", inw_ & (mid_[:, 0] >= sx))):
+            chk[nm_] = (round(float(np.median(np.abs(d["s5"][m_]))), 3), round(float(np.median(np.abs(sc_[m_]))), 3))
+        meta["contour_slope_check"] = {k: {"공개지형": v[0], "등고선": v[1]} for k, v in chk.items()}
+        print("링크 |경사| 중앙값 (공개 지형 → 등고선):", " · ".join(f"{k} {v[0]} → {v[1]}" for k, v in chk.items()), flush=True)
+        flat_ = [k for k, v in chk.items() if v[1] < 0.5 * v[0]]
+        if flat_ and not a.allow_gaps:
+            raise SystemExit(f"!! {'·'.join(flat_)} 절반에서 등고선 경사가 공개 지형의 절반도 안 됨 → 주택가 등고선이 조각뿐이라 평평하게 메워짐. "
+                             "그림을 바꾸지 않음 (표고점을 더하거나 등고선은 배경으로만)")
+        s5, zuse = sc_, zc
         rep_p = os.path.join(os.path.dirname(src), "contour_gwanak_report.json")
         meta["data"]["높이"] = f"연속수치지형도 등고선 (국토지리정보원) → 5m 격자 (높이 칸 {cdem.fld}, 선정지 둘레 ±1.9km 노드만, 그 밖은 공개 지형)"
         meta["contour_report"] = json.load(open(rep_p, encoding="utf-8")) if os.path.exists(rep_p) else None
