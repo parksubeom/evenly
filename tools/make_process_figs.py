@@ -5,7 +5,11 @@ tools/make_process_figs.py ─ [10/20] 기획서 11장(분석 다섯 단계)·28
 [왜] 반출은 끝났고 안심구역 자료로는 과정 그림을 만들 수 없어서, 같은 코드(v6.2 #ddc743)를 공개 자료로 돌린
      관악 리허설의 중간 파일로 같은 봉천 일대를 그림. 그림에는 결과 숫자를 넣지 않음 (결과 장과 섞이지 않게).
      기획서 출처 줄: "과정 예시: 공개 자료로 그림 (분석은 LX 자료)"
-[실행]  (QGIS 파이썬) python tools/make_process_figs.py [--win 750] [--grid-run gwanak_v62all08]
+[실행]  (QGIS 파이썬) python tools/make_process_figs.py [--win 750] [--grid-run gwanak_v62all08] [--contours data_public/raw/contour_gwanak.gpkg]
+        --contours : [10/20] 연속수치지형도 등고선(tools/extract_contours.py 결과)으로 높이를 다시 만들어 ③ 경사 색·④ 경로·⑤ 격자를 다시 계산하고
+                     모든 지도 칸에 등고선 배경을 깜. 28장 터널 단면도 등고선 높이. 창 안에 등고선이 빠진 곳(공개 지형 기복이 있는데
+                     등고선이 없는 100m 칸)이 3% 넘으면 멈춤 (덜 받아진 묶음으로 그림이 틀리지 않게). --allow-gaps 는 시험용 (--out 과 함께)
+        --out      : 그림을 둘 폴더 (기본 deck/v6_source)
 [읽는 것] (모두 공개 자료, 실제 반출 results/raw_export 는 읽지 않음)
   - data_public/rehearsal/박수범/수치지형도2/*/N3L_A0020000(길)·N3A_C0390000(계단 면) : 연속수치지형도 도로중심선 + OSM 계단 (make_public_rehearsal.py)
   - data_public/rehearsal/박수범/hbi6/work/network.npz, work/all/dest_nodes.npz : 그 자료로 02_network 가 만든 30m 보행망·경사·약국 노드
@@ -39,6 +43,8 @@ YEL = "#E3B23C"
 SLOPE_BINS = [(0.03, TEAL), (1 / 12, YEL), (9.9, ACC)]   # 경사 |s|: 3% 미만 초록 · 1/12(휠체어 한계)까지 노랑 · 넘으면 빨강
 SITE_NAME = "봉천동 비안어린이공원 인근"                  # tools/field_fix_v62.py 후보 좌표 표의 선정지 줄 (계단 양 끝 a·b)
 PX = 1.64                                                # 11장 한 칸 그림 크기 (인치, build_v6.js 와 같게)
+CBG = None                                               # [10/20] 등고선 배경 (contour_bg 가 채움)
+CONT_C, CONT_C25 = "#E3DED4", "#CEC6B6"                  # 등고선 색 (주곡선 · 25m 계곡선)
 
 
 def srs(code):
@@ -89,12 +95,99 @@ def poly_rings(g):
     return sum((poly_rings(g.GetGeometryRef(i)) for i in range(g.GetGeometryCount())), [])
 
 
+# ── [10/20] 연속수치지형도 등고선 ──────────────────────────────────────────
+S5179 = None
+
+
+def contour_lines(src, win5186, pad=30):
+    """등고선(5179) 중 창(5186) 둘레만 → [(5186 점 배열, 높이)]"""
+    global S5179
+    S5179 = S5179 or srs(5179)
+    c = [osr.CoordinateTransformation(S5186, S5179).TransformPoint(x, y)[:2] for x in (win5186[0] - pad, win5186[1] + pad) for y in (win5186[2] - pad, win5186[3] + pad)]
+    ds = ogr.Open(src); lyr = ds.GetLayer(0)
+    lyr.SetSpatialFilterRect(min(p[0] for p in c), min(p[1] for p in c), max(p[0] for p in c), max(p[1] for p in c))
+    ct = osr.CoordinateTransformation(S5179, S5186)
+    out = []
+    for f in lyr:
+        g = f.GetGeometryRef().Clone(); g.Transform(ct)
+        z = f.GetField("CONT")
+        out += [(xy, z) for xy in line_parts(g) if len(xy) >= 2]
+    return out
+
+
+def draw_contours(ax, win):
+    """모든 지도 칸 맨 아래 옅은 등고선 (5m 주곡선, 25m 마다 조금 진하게). 등고선 모드가 아니면 아무것도 안 함"""
+    if not CBG:
+        return
+    lines = contour_lines(CBG, win)
+    thin = [xy for xy, z in lines if z is None or abs(z / 25 - round(z / 25)) > 1e-6]
+    bold = [xy for xy, z in lines if z is not None and abs(z / 25 - round(z / 25)) <= 1e-6]
+    ax.add_collection(LineCollection(thin, colors=CONT_C, linewidths=0.45, zorder=0.5))
+    ax.add_collection(LineCollection(bold, colors=CONT_C25, linewidths=0.7, zorder=0.6))
+
+
+class ContourDEM:
+    """등고선 → 5m 격자 (make_public_rehearsal.dem_from_contours 와 같은 방법: 선을 높이로 그리고 빈 칸을 주변 값으로 메움)"""
+    def __init__(self, src, win5186, pad=2000.0, res=5.0):
+        global S5179
+        S5179 = S5179 or srs(5179)
+        c = [osr.CoordinateTransformation(S5186, S5179).TransformPoint(x, y)[:2] for x in (win5186[0] - pad, win5186[1] + pad) for y in (win5186[2] - pad, win5186[3] + pad)]
+        self.bb = (min(p[0] for p in c), min(p[1] for p in c), max(p[0] for p in c), max(p[1] for p in c))
+        # make_public_rehearsal.dem_from_contours 와 같은 방법 (그 모듈은 analysis/hbi 의 lib 를 불러 번들 lib 와 섞이므로 여기 옮겨 씀)
+        x0, y1 = math.floor(self.bb[0] / res) * res, math.ceil(self.bb[3] / res) * res
+        nx, ny = int(math.ceil((self.bb[2] - x0) / res)), int(math.ceil((y1 - self.bb[1]) / res))
+        ds = gdal.OpenEx(src, gdal.OF_VECTOR); lyr = ds.GetLayer(0)
+        r = gdal.GetDriverByName("MEM").Create("", nx, ny, 1, gdal.GDT_Float32)
+        r.SetGeoTransform((x0, res, 0, y1, 0, -res)); r.SetProjection(S5179.ExportToWkt())
+        bd = r.GetRasterBand(1); bd.SetNoDataValue(-9999); bd.Fill(-9999)
+        gdal.RasterizeLayer(r, [1], lyr, options=["ATTRIBUTE=CONT", "ALL_TOUCHED=TRUE"])
+        gdal.FillNodata(bd, None, maxSearchDist=max(nx, ny), smoothingIterations=0)
+        self.Z, self.x0, self.y1, self.fld = bd.ReadAsArray().astype(float), x0, y1, "CONT"
+        self.res = res
+        self.ct = osr.CoordinateTransformation(S5186, S5179)
+
+    def sample(self, x5186, y5186):
+        P = np.asarray(self.ct.TransformPoints(np.c_[x5186, y5186].tolist()))[:, :2] if len(x5186) else np.zeros((0, 2))
+        c = (P[:, 0] - self.x0) / self.res - 0.5; r = (self.y1 - P[:, 1]) / self.res - 0.5
+        ok = (c >= 0) & (r >= 0) & (c < self.Z.shape[1] - 1) & (r < self.Z.shape[0] - 1)
+        z = np.full(len(P), np.nan)
+        j, i = np.floor(c[ok]).astype(int), np.floor(r[ok]).astype(int)
+        fx, fy = c[ok] - j, r[ok] - i
+        Z = self.Z
+        z[ok] = (Z[i, j] * (1 - fx) * (1 - fy) + Z[i, j + 1] * fx * (1 - fy) + Z[i + 1, j] * (1 - fx) * fy + Z[i + 1, j + 1] * fx * fy)
+        return z
+
+
+def contour_gaps(src, win5186, cell=100.0, relief_min=8.0):
+    """창 안 100m 칸 중 공개 지형(리허설 5m 격자) 기복이 relief_min 넘는데 등고선 점이 하나도 없는 칸의 비율 (덜 받아진 묶음 찾기)"""
+    dem = gdal.Open(glob.glob(os.path.join(REH, "수치표고모델_5m", "*.img"))[0])
+    gt = dem.GetGeoTransform(); T = dem.GetRasterBand(1).ReadAsArray().astype(float); T[T < -1000] = np.nan
+    lines = contour_lines(src, win5186, pad=0)
+    ct = osr.CoordinateTransformation(S5186, srs(5179))
+    nx = ny = int(round((win5186[1] - win5186[0]) / cell))
+    cnt = np.zeros((ny, nx)); rel = np.zeros((ny, nx))
+    for xy, _ in lines:
+        j = ((xy[:, 0] - win5186[0]) / cell).astype(int); i = ((xy[:, 1] - win5186[2]) / cell).astype(int)
+        ok = (i >= 0) & (i < ny) & (j >= 0) & (j < nx)
+        np.add.at(cnt, (i[ok], j[ok]), 1)
+    for i in range(ny):
+        for j in range(nx):
+            xs = win5186[0] + (j + np.array([0.1, 0.5, 0.9])) * cell; ys = win5186[2] + (i + np.array([0.1, 0.5, 0.9])) * cell
+            P = np.asarray(ct.TransformPoints([(x, y) for x in xs for y in ys]))[:, :2]
+            cc = ((P[:, 0] - gt[0]) / gt[1]).astype(int); rr = ((P[:, 1] - gt[3]) / gt[5]).astype(int)
+            v = T[np.clip(rr, 0, T.shape[0] - 1), np.clip(cc, 0, T.shape[1] - 1)]
+            rel[i, j] = np.nanmax(v) - np.nanmin(v)
+    need = rel > relief_min
+    return float((need & (cnt == 0)).sum() / max(1, need.sum())), int((need & (cnt == 0)).sum()), int(need.sum())
+
+
 def panel(win, size=PX, dpi=400):
     fig = plt.figure(figsize=(size, size), dpi=dpi)
     ax = fig.add_axes([0, 0, 1, 1])
     ax.set_xlim(win[0], win[1]); ax.set_ylim(win[2], win[3]); ax.set_aspect("equal")
     ax.axis("off")
     ax.add_patch(Rectangle((win[0], win[2]), win[1] - win[0], win[3] - win[2], fill=False, ec=LINE, lw=0.8, zorder=50))
+    draw_contours(ax, win)
     return fig, ax
 
 
@@ -173,6 +266,7 @@ def pair(win=None, size=P28, dpi=400):
         if win:
             ax.set_xlim(win[0], win[1]); ax.set_ylim(win[2], win[3]); ax.set_aspect("equal")
             ax.add_patch(Rectangle((win[0], win[2]), win[1] - win[0], win[3] - win[2], fill=False, ec=LINE, lw=0.8, zorder=50))
+            draw_contours(ax, win)
     c = 0.5                                               # 가운데 화살표 (글자 없이)
     fig.add_artist(MPoly([[c - 0.012, 0.40], [c + 0.016, 0.5], [c - 0.012, 0.60]], closed=True, transform=fig.transFigure, color=MUTED))
     return fig, axs
@@ -327,7 +421,7 @@ def draw_stair(N, e, site):
     return {"n_stair_links": int((sel & e["is_stair"]).sum()), "n_stair_connect": int((sel & (e["kind"] == 1)).sum())}
 
 
-def draw_tunnel():
+def draw_tunnel(cdem=None):
     """다리·터널: OSM 터널(관악구, 걸을 수 있는 길) 중 터널 위 언덕이 가장 높은 것 → 공개 지형 5m 높이 단면.
     전 = 땅 높이(DEM)를 그대로 따르면 언덕을 넘음 / 후 = 터널 안은 경사 0 (양쪽 입구를 곧게)"""
     from evenly_common import load_dongs, dong_of, to5186
@@ -370,7 +464,12 @@ def draw_tunnel():
         if not 60 <= L <= 450:
             continue
         cum = np.concatenate([[0], np.cumsum(seg)]); ts = np.linspace(0, L, max(30, int(L / 2)))
-        zs = np.array([zat(x, y) for x, y in zip(np.interp(ts, cum, P[:, 0]), np.interp(ts, cum, P[:, 1]))])
+        xs_, ys_ = np.interp(ts, cum, P[:, 0]), np.interp(ts, cum, P[:, 1])
+        if cdem is not None:                                       # [10/20] 등고선 높이 (5179 → 5186 로 바꿔 표본)
+            q = np.asarray(osr.CoordinateTransformation(sr, S5186).TransformPoints(np.c_[xs_, ys_].tolist()))[:, :2]
+            zs = cdem.sample(q[:, 0], q[:, 1])
+        else:
+            zs = np.array([zat(x, y) for x, y in zip(xs_, ys_)])
         if np.isnan(zs).any():
             continue
         hill = zs.max() - max(zs[0], zs[-1]) - abs(zs[0] - zs[-1])
@@ -395,14 +494,51 @@ def draw_tunnel():
         ax.scatter([ts[0], ts[-1]], [zs[0], zs[-1]], s=8, c=INK, zorder=4, linewidths=0)
     fig.add_artist(MPoly([[0.5 - 0.012, 0.40], [0.5 + 0.016, 0.5], [0.5 - 0.012, 0.60]], closed=True, transform=fig.transFigure, color=MUTED))
     save(fig, "proc28_4.png")
-    return {"osm_way": wid, "name": name, "length_m": round(float(ts[-1])), "_설명": "공개 지형 5m 단면, 세로는 과장 (축 숫자 없음)"}
+    return {"osm_way": wid, "name": name, "length_m": round(float(ts[-1])),
+            "_설명": ("등고선 5m 격자" if cdem is not None else "공개 지형 5m") + " 단면, 세로는 과장 (축 숫자 없음)"}
+
+
+def grid_from_slopes(N, e, s, giant, site, dests, half=1600.0, cell=250.0, min_bld=5):
+    """[10/20] 같은 경사 s 로 약국까지 왕복 HBI 를 다시 계산해 250m 칸 평균 (03_hbi·05_export 와 같은 규칙: 건물 → 60m 안 가장 가까운 연결망 노드,
+    HBI = 고령자 경사 반영 왕복 ÷ 평지 가정 왕복, 칸에 건물 5개 이상). 건물 점 = 공개 리허설 all 방식 건물 (work/all/buildings_hbi.gpkg 의 위치만)"""
+    M = load_model()
+    from lib.qgraph import NearestIndex
+    r = M.run_scenario(len(N), e, s, np.asarray(dests))
+    hb_node = np.where(r["t_flat"] == 0, 1.0, r["t_elder"] / np.where(r["t_flat"] == 0, 1, r["t_flat"]))
+    gi = np.where(giant)[0]
+    idx = NearestIndex(N[gi])
+    ds = ogr.Open(os.path.join(H6, "work", "all", "buildings_hbi.gpkg")); lyr = ds.GetLayer(0)
+    lyr.SetSpatialFilterRect(site[0] - half, site[1] - half, site[0] + half, site[1] + half)
+    pts = np.array([f.GetGeometryRef().GetPoint_2D() for f in lyr])
+    dd, ii = idx.query(pts, 60.0)
+    ok = ii >= 0
+    hb = hb_node[gi[ii[ok]]]
+    P = pts[ok][np.isfinite(hb)]; hb = hb[np.isfinite(hb)]
+    key = np.floor(P / cell).astype(int)
+    out = {}
+    for (kx, ky), h in zip(map(tuple, key), hb):
+        out.setdefault((kx, ky), []).append(h)
+    cells = []
+    for (kx, ky), hs in out.items():
+        if len(hs) >= min_bld:
+            x0, y0 = kx * cell, ky * cell
+            cells.append((np.array([[x0, y0], [x0 + cell, y0], [x0 + cell, y0 + cell], [x0, y0 + cell], [x0, y0]]), float(np.mean(hs))))
+    return cells
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--win", type=float, default=750, help="11장 그림 한 변 (m). 선정지 계단(양 끝 가운데)이 가운데")
     ap.add_argument("--grid-run", default="gwanak_v62all08")
+    ap.add_argument("--contours", help="[10/20] 연속수치지형도 등고선 (tools/extract_contours.py 의 contour_gwanak.gpkg)")
+    ap.add_argument("--allow-gaps", action="store_true", help="등고선 빠진 곳이 있어도 그림 (시험용, --out 과 함께만)")
+    ap.add_argument("--out", help="그림 폴더 (기본 deck/v6_source)")
     a = ap.parse_args()
+    global OUT, CBG
+    if a.out:
+        OUT = os.path.abspath(a.out)
+    if a.allow_gaps and not a.out:
+        raise SystemExit("--allow-gaps 는 시험용 → --out <다른 폴더> 와 함께 (기획서 그림 자리에 빈 곳 있는 등고선 그림을 두지 않게)")
     if not os.path.exists(os.path.join(REH, "공개대역_README.txt")):
         raise SystemExit(f"공개 대역 자료가 아님: {REH}")
     gdir = os.path.join(ROOT, "results", "public_rehearsal", a.grid_run, "all")
@@ -425,11 +561,34 @@ def main():
     win = (round(sx - hw), round(sx + hw), round(sy - hw), round(sy + hw))
     meta["win_5186"] = win
     meta["site_5186"] = [round(sx, 1), round(sy, 1)]
+    meta["contour"] = bool(a.contours)
 
     d = np.load(os.path.join(H6, "work", "network.npz"))
     N, giant = d["nodes"], d["giant"]
     e = {kk[2:]: d[kk] for kk in d.files if kk.startswith("e_")}
-    s5 = d["s5"]
+    s5, zuse = d["s5"], d["z5"]
+    cdem = None
+    if a.contours:
+        src = os.path.abspath(a.contours)
+        share, ngap, nneed = contour_gaps(src, win)
+        meta["contour_gaps_11"] = {"share": round(share, 3), "cells": ngap, "relief_cells": nneed}
+        print(f"등고선 빠진 곳 (11장 창, 100m 칸): {ngap}/{nneed} ({share:.0%})", flush=True)
+        if share > 0.03 and not a.allow_gaps:
+            raise SystemExit(f"!! 11장 창 안에 등고선이 빠진 100m 칸이 {ngap}/{nneed} ({share:.0%}) → 등고선 묶음이 덜 받아졌을 수 있음 "
+                             "(data_public/raw/contour_gwanak_report.json). 온전한 zip 을 받아 tools/extract_contours.py 다시")
+        CBG = src
+        cdem = ContourDEM(src, win)
+        load_model()
+        from lib.qnetwork import edge_slope                     # 번들 그대로 (교량·터널 0, ±40% 자름)
+        near = (np.abs(N[:, 0] - sx) < 1900) & (np.abs(N[:, 1] - sy) < 1900)
+        zc = d["z5"].copy()
+        zn = cdem.sample(N[near, 0], N[near, 1])
+        zc[np.where(near)[0][np.isfinite(zn)]] = zn[np.isfinite(zn)]
+        s5, zuse = edge_slope(zc, e)[0], zc
+        rep_p = os.path.join(os.path.dirname(src), "contour_gwanak_report.json")
+        meta["data"]["높이"] = f"연속수치지형도 등고선 (국토지리정보원) → 5m 격자 (높이 칸 {cdem.fld}, 선정지 둘레 ±1.9km 노드만, 그 밖은 공개 지형)"
+        meta["contour_report"] = json.load(open(rep_p, encoding="utf-8")) if os.path.exists(rep_p) else None
+        meta["_source"] = "과정 예시: 공개 자료(연속수치지형도 등고선)로 그림"
     sel = in_win(N, e["u"], e["v"], win) & giant[e["u"]] & giant[e["v"]]
 
     roads = sum((line_parts(g) for g in read_layer("N3L_A0020000", win)), [])
@@ -480,7 +639,7 @@ def main():
             E1 = set(zip(P1[:-1], P1[1:])); E2 = set(zip(P2[:-1], P2[1:]))
             share = len(E1 & E2) / max(1, len(E1 | E2))
             L1 = sum(math.dist(N[i], N[j]) for i, j in E1); L2 = sum(math.dist(N[i], N[j]) for i, j in E2)
-            if L2 < 250 or L1 > 2.2 * L2 or d["z5"][o] < d["z5"][p_] + 10:   # 집은 약국보다 10m 넘게 높은 곳 (언덕 위 집)
+            if L2 < 250 or L1 > 2.2 * L2 or zuse[o] < zuse[p_] + 10:   # 집은 약국보다 10m 넘게 높은 곳 (언덕 위 집)
                 continue
             score = (1 - share) * min(L2, 600)
             if best is None or score > best[0]:
@@ -500,15 +659,19 @@ def main():
     save(fig, "proc11_4.png")
 
     # ⑤ 250m 격자 색 (공개 자료 보행망, 약국) — 연할수록 부담 적음. 숫자 없음
-    ds = ogr.Open(os.path.join(gdir, "grid_hbi_pharmacy.gpkg"))
-    lyr = ds.GetLayer(0)
     cells = []
-    for f in lyr:
-        hb = f.GetField("hbi_mean")
-        if hb is None:
-            continue
-        r = poly_rings(f.GetGeometryRef())[0]
-        cells.append((r, float(hb)))
+    if cdem is not None:
+        cells = grid_from_slopes(N, e, s5, giant, (sx, sy), dn["pharmacy"])
+        meta["data"]["격자"] = "같은 등고선 경사로 다시 계산 (번들 lib/model.run_scenario, 약국, 건물 → 60m 안 가장 가까운 노드, 250m 칸 건물 5개 이상)"
+    else:
+        ds = ogr.Open(os.path.join(gdir, "grid_hbi_pharmacy.gpkg"))
+        lyr = ds.GetLayer(0)
+        for f in lyr:
+            hb = f.GetField("hbi_mean")
+            if hb is None:
+                continue
+            r = poly_rings(f.GetGeometryRef())[0]
+            cells.append((r, float(hb)))
     hv = np.array([h for _, h in cells])
     lo, hi = np.percentile(hv, 5), np.percentile(hv, 95)        # 관악 전체 격자 기준 (창 밖 포함) 색 범위
     from matplotlib.colors import LinearSegmentedColormap
@@ -528,10 +691,10 @@ def main():
     meta["p28_cross"] = draw_cross(N, e, deg, roads_all, hits, (sx, sy))
     meta["p28_gap"] = draw_gap(N, e, (sx, sy))
     meta["p28_stair"] = draw_stair(N, e, (sx, sy))
-    meta["p28_tunnel"] = draw_tunnel()
+    meta["p28_tunnel"] = draw_tunnel(cdem)
     meta["data"]["터널"] = "© OpenStreetMap contributors (ODbL), data_public/raw/osm_bridges_gwanak.json"
     json.dump(meta, open(os.path.join(OUT, "proc_figs_meta.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    print("→ deck/v6_source/proc11_1~5.png, proc28_1~4.png", json.dumps({k: meta[k] for k in ("route", "p28_cross", "p28_gap", "p28_stair", "p28_tunnel")}, ensure_ascii=False), "창", win)
+    print(f"→ {os.path.relpath(OUT, ROOT)}/proc11_1~5.png, proc28_1~4.png", json.dumps({k: meta[k] for k in ("route", "p28_cross", "p28_gap", "p28_stair", "p28_tunnel")}, ensure_ascii=False), "창", win)
 
 
 if __name__ == "__main__":

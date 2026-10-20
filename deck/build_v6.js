@@ -109,6 +109,9 @@ const BLDL = () => ALLM() ? '건물(모든 건물 기준)' : '주거 건물';   
 const BLDS = () => ALLM() ? '건물' : '주거 건물';                   // 표 머리·되풀이
 const DEST = () => ALLM() ? '약국' : '병원·약국';
 const MIX17 = () => !!(R.tables['V6.17.cand'] && (R.tables['V6.17.cand'].rows || []).some(r => r.src));   // [10/20] 17장 = 부담 LX 격자 + 시설 효과 공개 보행망
+// [10/20] 11·28장 과정 그림 메타 (tools/make_process_figs.py). contour = 연속수치지형도 등고선으로 그렸는지 → 출처 줄
+const PFM = (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'v6_source', 'proc_figs_meta.json'), 'utf8')); } catch (e) { return {}; } })();
+const PFC = !!PFM.contour;
 const LXS = 'LX 분석', PUBS = '공개 자료 보행망으로 계산 (같은 모델·같은 좌표)', ANAS = '해석적 계산';
 const Q = (key, dflt) => { touch(key); if (has(key)) return String(R.fields[key].value); fb(key, dflt); return dflt; };   // 기본 문구로 말이 되는 보조 값
 function IMG(key) {
@@ -375,7 +378,7 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
 { const s = base('분석 방법', '다섯 단계로 "체감 거리"를 계산합니다');
   const r_ = (t, o = {}) => ({ text:t, options:o }), k_ = (t, c) => r_(t, { color:c, bold:true });
   const P11 = [
-    ['수치지형도', [r_('도로중심선('), k_('회색', C.muted), r_(')과 계단('), k_('주황', C.acc), r_(')을 꺼냅니다. 점선 원 = 봉천 선정지')]],
+    ['수치지형도', [r_('도로중심선('), k_('회색', C.muted), r_(')과 계단('), k_('주황', C.acc), r_(PFC ? ')을 꺼냅니다. 옅은 선 = 등고선, 점선 원 = 봉천 선정지' : ')을 꺼냅니다. 점선 원 = 봉천 선정지')]],
     ['30m 조각 보행망', [r_('길과 계단을 30m 조각(점 = 노드)으로 나눠 하나의 보행망으로 잇습니다')]],
     ['조각마다 경사', [r_('조각마다 오르막·내리막 경사를 붙입니다', { breakLine:true }), k_('■', C.teal), r_('평지 '), k_('■', 'E3B23C'), r_('완만 '), k_('■', C.acc), r_('1/12 넘음')]],
     ['경로 비교', [r_('같은 집(●)에서 약국('), k_('■', C.teal), r_(')까지, 평지 가정 길('), k_('회색', C.muted), r_(')과 경사 반영 길('), k_('주황', C.acc), r_(')이 갈립니다')]],
@@ -386,8 +389,10 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
     if (i < 4) T(s, '›', { x:x+1.64, y:2.3, w:0.15, h:0.4, fontSize:15, bold:true, color:C.muted, align:'center', valign:'middle' });
     T(s, p[1], { x, y:3.42, w:1.64, h:0.98, fontSize:10, color:C.text, lineSpacingMultiple:1.1 }); });
   T(s, '안심구역 안에서 자동 점검 뒤 실행하고, 250m 격자·행정동 집계만 반출합니다. 경사 모델은 부록 2, 가정값과 민감도는 부록 3', { x:0.6, y:4.5, w:8.8, h:0.3, fontSize:10.5, color:C.muted });
-  src(s, '과정 예시: 공개 자료로 그림 (분석은 LX 자료) · 봉천 선정지 둘레 750m, 다섯 칸 같은 축척 (막대 100m) · 길 = 국토지리정보원 연속수치지형도, 계단 = © OpenStreetMap contributors, '
-       + '높이 = 공개 지형 타일, 격자 = 공개 자료 보행망 계산 (약국)'); }
+  src(s, PFC ? '과정 예시: 공개 자료(연속수치지형도 등고선)로 그림 · 분석은 LX 자료 · 봉천 선정지 둘레 750m, 다섯 칸 같은 축척 (막대 100m) · 길 = 연속수치지형도 도로중심선, '
+             + '계단 = © OpenStreetMap contributors, 격자 = 같은 등고선 경사로 계산 (약국)'
+             : '과정 예시: 공개 자료로 그림 (분석은 LX 자료) · 봉천 선정지 둘레 750m, 다섯 칸 같은 축척 (막대 100m) · 길 = 국토지리정보원 연속수치지형도, 계단 = © OpenStreetMap contributors, '
+             + '높이 = 공개 지형 타일, 격자 = 공개 자료 보행망 계산 (약국)'); }   // [10/20] 등고선 그림이면 출처 줄이 바뀜
 
 // ── 12 HBI ──
 { const s = base('핵심 지표', '언덕 부담 지수는 "평지보다 몇 배 걸리는가"입니다', { tsize:22 });
@@ -781,8 +786,7 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
   src(s, '선행연구: 이희연 외(2015) 서울도시연구 / 구릉지 고령자 이동취약지역 연구 / 이소민·오성훈(2025) / 강현미·박소현(2009)'); }
 { const s = base('부록 2', '전처리와 경사 모델');
   // [10/20] 왼쪽 = 전처리 과정 그림 네 칸 (전 → 후, 공개 자료로 그린 실제 예: tools/make_process_figs.py → v6_source/proc28_1~4.png)
-  const PF = (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'v6_source', 'proc_figs_meta.json'), 'utf8')); } catch (e) { return {}; } })();
-  const tn28 = (PF.p28_tunnel && PF.p28_tunnel.name) ? ` (예: ${PF.p28_tunnel.name})` : '';
+  const tn28 = (PFM.p28_tunnel && PFM.p28_tunnel.name) ? ` (예: ${PFM.p28_tunnel.name})` : '';
   [['교차점 분할', '겹쳐 지나가는 선을 교차점에서 잘라 노드(주황 원)를 만듭니다'],
    ['끊긴 끝점 10m 연결', '막다른 끝을 10m 안의 다른 길과 이어 줍니다 (주황 점선)'],
    ['계단', '계단 면 안 링크 = 계단(주황). 고령자 1.2배, 휠체어는 못 지남'],
@@ -792,7 +796,8 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
     T(s, '전 → 후', { x:x+1.3, y, w:0.8, h:0.22, fontSize:8, color:C.muted, align:'right' });
     s.addImage({ path:img(`proc28_${i+1}.png`), x, y:y+0.25, w:2.1, h:0.92 });
     T(s, c[1], { x, y:y+1.19, w:2.1, h:0.34, fontSize:8.5, color:C.text, lineSpacingMultiple:1.05 }); });
-  T(s, '과정 예시: 공개 자료로 그림 (분석은 LX 자료) · 길 = 국토지리정보원 연속수치지형도, 계단·터널 = © OpenStreetMap contributors, 높이 = 공개 지형 타일',
+  T(s, PFC ? '과정 예시: 공개 자료(연속수치지형도 등고선)로 그림 · 분석은 LX 자료 · 길 = 연속수치지형도 도로중심선, 계단·터널 = © OpenStreetMap contributors'
+            : '과정 예시: 공개 자료로 그림 (분석은 LX 자료) · 길 = 국토지리정보원 연속수치지형도, 계단·터널 = © OpenStreetMap contributors, 높이 = 공개 지형 타일',
     { x:0.6, y:4.54, w:4.45, h:0.36, fontSize:8, color:C.muted, lineSpacingMultiple:1.05 });   // [10/20] 그림 바로 아래 출처
   const xs = [0,2,4,6,8,10,12,14,16,18,20], tob = sl => 6*Math.exp(-3.5*Math.abs(sl+0.05)), flatv = tob(0);
   s.addChart(pres.charts.LINE, [{ name:'오르막 소요시간 배수', labels:xs.map(x=>x+'%'), values:xs.map(x => +(flatv/tob(x/100)).toFixed(2)) }], { x:5.25, y:1.4, w:4.2, h:2.2, chartColors:[C.acc], lineSize:2.5, lineDataSymbol:'circle', lineDataSymbolSize:5, showTitle:true, title:'오르막 경사별 소요시간 배수', titleFontSize:11, titleColor:C.ink, titleFontFace:F, catAxisLabelColor:C.muted, valAxisLabelColor:C.muted, catAxisLabelFontSize:9, valAxisLabelFontSize:9, valGridLine:{ color:'E8EAE9', size:0.5 }, catGridLine:{ style:'none' }, showLegend:false, valAxisMinVal:1 });
