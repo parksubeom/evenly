@@ -51,8 +51,8 @@ td.ck, th.ck { text-align: center; }
 <tr><td class="ck"></td><td>2·4·14</td><td>"가까운 동네" 부담 비율 · 고립 위험 건물 수 · 은천동 왕복 추가 중앙값 · 결과 지도 · 가장 급한 동</td><td>반출 summary·grid_hbi·dong_hbi</td></tr>
 <tr><td class="ck"></td><td>15</td><td>네 구간 모델 성인·어르신(0.8) 시간</td><td>반출 validation_routes</td></tr>
 <tr><td class="ck"></td><td>16·28</td><td>봉천 백분위 · 휠체어 우회(모델) · 높이 빼면 바뀌는 상위 10% · 계단 빼면 · 공개 대조군 놓침 %</td><td>반출 validation_* · 공개 대조군 = real-day 가 계산</td></tr>
-<tr><td class="ck"></td><td>17</td><td>후보·봉천 격자의 고립 위험 건물·왕복 추가 (+ LX 순위 각주)</td><td>반출 grid_hbi</td></tr>
-<tr><td class="ck"></td><td>2·20·24</td><td>설치 전 휠체어 길 (238m 자리) · 24장 화면 지도 격자 ("격자 ___" 표시가 없어지면 반출 격자)</td><td>반출 validation_routes (봉천 계단) · grid_hbi</td></tr>
+<tr><td class="ck"></td><td>17</td><td>후보·봉천 격자의 고립 위험 건물·왕복 추가 (+ 각주 "LX 기준 순위: 후보 1 ○위 …")</td><td>반출 grid_hbi</td></tr>
+<tr><td class="ck"></td><td>2·20·24</td><td>설치 전 휠체어 길 (238m 자리) · 24장 화면 지도 격자·범례 (반출 격자만) · 24장 후보 줄 "고립 위험 건물 ○개(LX)"</td><td>반출 validation_routes (봉천 계단) · grid_hbi</td></tr>
 <tr><td class="ck"></td><td>21·22·29</td><td>최우선 방문 동 · 정류장 검토 지역 · 사고다발지 겹침 · 문턱별 상위 3개 동(있는 구간만)</td><td>반출 dong_hbi·grid_hbi + 공개 자료</td></tr>
 </table>
 
@@ -88,7 +88,7 @@ npm run real-day -- <받은 zip 또는 폴더></div>
 <tr><td class="ck"></td><td>16</td><td>봉천 백분위 · 휠체어 우회 · DEM 1m 순위상관 0.991 · 높이 빼면 % · 공개 대조군 % · 셋째 줄 "같은 봉천 계단 높이 차 5.1m → 11.1m (DEM 1m 11.0m)"</td><td>휠체어 m 이 0·빈 칸</td></tr>
 <tr><td class="ck"></td><td>17·19</td><td>표 위 "시설 효과는 봉천·후보 모두 공개 자료 보행망으로 같은 방식으로 계산", 봉천 줄 = 공개 계산 (수직 5.1m · 약국 5개 미만 · 역 85개), 각주 "LX 봉천 약국 192개(1억 원당 4.8) … 5.1m · 11.1m (16장)" + LX 순위, 19장 등시선 "공개 보행망"</td><td>위치가 관악 밖</td></tr>
 <tr><td class="ck"></td><td>18·23</td><td>18장 행정 결정 다섯 줄 + 길안내 연계 한 줄 · 23장 법 조문(교통약자법 제7·8·25조)·고시 번호·서울시 단계 출처 줄</td><td>출처 줄이 장 밖으로</td></tr>
-<tr><td class="ck"></td><td>20·2·24</td><td>238m(반출) → 31m, 높이 11.1m, 통과 1.0분, 약국 192개·1억 원당 4.8개, 역 34개 · 2장 "약국까지 가는 건물 192개" · 24장 같은 숫자·후보 목록 = 17장</td><td></td></tr>
+<tr><td class="ck"></td><td>20·2·24</td><td>238m(반출) → 31m, 높이 11.1m, 통과 1.0분, 약국 192개·1억 원당 4.8개, 역 34개 · 2장 "약국까지 가는 건물 192개" · 24장 같은 숫자 · 후보 목록 = 17장 후보를 고립 위험 건물(LX) 많은 순 3곳, 지도 번호와 같음</td><td></td></tr>
 <tr><td class="ck"></td><td>25·29</td><td>행정 도입 단계 다섯 칸 · 한계 "이번 결과는 모든 건물 기준"·"다음 단계" 줄 · 부록 3 속도 줄 "현행 0.7m/s 이면 ×8/7, HBI 같음", 민감도 메모 값</td><td>표가 장 밖으로</td></tr>
 </table>
 

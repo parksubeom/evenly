@@ -69,26 +69,7 @@ def main():
     put("V6.fb.share18", "1차 HBI 1.8 이상 비율", [fvn], f"{fv['share_hbi_18_up'] * 100:.1f}", optional=True)
     put("V6.fb.n_dong", "1차 행정동 수", [fvn], str(fv["n_dong"]), optional=True)
     put("V6.15.date", "현장실측 날짜", ["deck/inputs.json 의 survey_date"], inp.get("survey_date"), later="2026.10.__")
-    images_ = {k: v for k, v in (base_.get("images") or {}).items() if k != "V6.24.map"}   # 24장 지도는 아래에서 격자 없이 다시
-    try:                                                # [10/20] 24장 화면 지도: 격자 없이 배경지도·이름만 (1차 반출에는 격자가 없음)
-        import dash_map as DM
-        from evenly_common import to5186, read_csv
-        sites = read_csv(os.path.join(ROOT, "analysis", "hbi", "external", "sites.csv")) or []
-        st_ = next((r for r in sites if "봉천" in r.get("name", "") and r.get("lon")), None)
-        ct_ = (tables_.get("V6.17.cand") or {}).get("rows") or []      # 17장 후보 1~3 (공개 자료로 고른 구간, 24장 목록과 같은 번호)
-        cands_ = []
-        for i_, r_c in enumerate([r for r in ct_ if r.get("kind") == "후보"][:3], 1):
-            try:
-                cands_.append((i_, float(r_c["cell_x"]), float(r_c["cell_y"])))
-            except (KeyError, TypeError, ValueError):
-                pass
-        if st_:
-            p_, bm_ = DM.draw_dash_map(os.path.join(DECK, "img", "results", "v6_dash_fallback.png"), [], cands_, to5186(float(st_["lon"]), float(st_["lat"])))
-            images_["V6.24.map"] = {"path": os.path.relpath(p_, DECK).replace(os.sep, "/"), "label": "24장 화면 지도 (배경지도만)", "need": ["deck/basemap/"]}
-            if bm_:
-                put("V6.24.basemap", "24장 배경지도 출처", [], bm_, optional=True)
-    except Exception as e_:
-        print(f"  24장 화면 지도 생략: {e_}")
+    images_ = dict(base_.get("images") or {})          # [10/21] 24장 화면 지도도 반출 없는 계산 그대로 (격자 없이 배경지도·이름·17장 후보 3곳)
     out = {"source": "fallback", "src": os.path.relpath(fv_p, ROOT), "bands": "mix", "fields": F, "images": images_, "tables": tables_}
     os.makedirs(os.path.join(DECK, "data"), exist_ok=True)
     json.dump(out, open(os.path.join(DECK, "data", "results.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)

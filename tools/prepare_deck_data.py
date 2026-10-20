@@ -1302,6 +1302,15 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         if mixed_:
             rks_ = [t["lx_rank"] for t in trows if t["kind"] == "후보" and t.get("lx_rank")]
             P("V6.17.lx_burden", "17장 후보 격자의 LX 부담 (반출 grid_hbi)", ["grid_hbi.csv (반출, 후보 격자)"], "격자" if rks_ else None)   # [10/20] 17장 출처 줄 "부담 = LX 분석 (10/19 반출 격자)"
+            # [10/21] 17장 각주 "LX 기준 순위: 후보 1 ○위 · 2 ○위 …" (후보 번호 순, 반출 격자 전체 중 고립 위험 건물 순위, 같은 값은 같은 순위)
+            cr_ = [t for t in trows if t["kind"] == "후보"]
+            nc_r = max((t.get("n_cells") or 0) for t in trows)
+            no_ = lambda t: re.sub(r"\D", "", t["name"]) or t["name"]           # "후보1" → "1"
+            lr_ = None
+            if rks_:
+                lr_ = ("후보 " + " · ".join(f"{no_(t)} {t['lx_rank']}위" if t.get("lx_rank") else f"{no_(t)} -" for t in cr_)
+                       + f" ({nc_r}칸 중" + (", - = 건물 5개 미만 칸" if any(not t.get("lx_rank") for t in cr_) else "") + ")")
+            P("V6.17.lx_ranks", "17장 각주: 후보 격자의 LX 고립 위험 순위 (후보 번호 순)", ["grid_hbi.csv (반출, 후보 격자)"], lr_)
             if rks_:
                 nc_ = max((t.get("n_cells") or 0) for t in trows)
                 top_ = all(k <= len(rks_) for k in rks_)
@@ -1610,8 +1619,9 @@ def draw_iso_one(gpkg, minutes=10):
 
 
 def v6_dash(B, grid, T0, R, source):
-    """[10/20] 24장 화면 지도 (tools/dash_map.py): 배경지도 + 반투명 격자(14장과 같은 구간) + 동·역·관악산 이름 + 17장 후보 1~3 + 서울 속 관악구.
-    격자 = 반출(grid_hbi.csv). 실제판인데 반출이 아직 없으면(미리 빌드) 공개 계산 격자로 미리 보고 V6.24.grid 를 비워 둠 (22일 반출로 다시 그림)"""
+    """[10/20] 24장 화면 지도 (tools/dash_map.py): 배경지도 + 반투명 격자(14장과 같은 구간) + 동·역·관악산 이름 + 17장 후보 3곳 + 서울 속 관악구.
+    격자 = 반출(grid_hbi.csv)만. [10/21] 반출이 없으면(미리 빌드·대비책 판) 격자 없이 (공개 격자를 실제판 칸에 넣지 않음), V6.24.grid 없음 → 범례도 없음.
+    후보 3곳 = 고립 위험 건물(반출 격자) 많은 순, 숫자가 없으면 17장 순서 → V6.24.cands (24장 목록과 같은 3곳), 지도 번호 = 17장 후보 번호"""
     try:
         import dash_map as DM
     except Exception:
@@ -1627,12 +1637,7 @@ def v6_dash(B, grid, T0, R, source):
         except ValueError:
             RM = 10.0
         return hb, RM
-    rows, hb, RM, from_export = [g for g in grid if g.get("target") == T0], *meta_of(R("run_meta.csv")), bool(grid)
-    if not rows and source == "real":
-        pd_ = os.path.join(ROOT, "results", "public_rehearsal", "gwanak_v62all08", "all")
-        pg = read_csv(os.path.join(pd_, "grid_hbi.csv")) or []
-        rows = [g for g in pg if g.get("target") == T0]
-        hb, RM = meta_of(read_csv(os.path.join(pd_, "run_meta.csv")))
+    rows, hb, RM = [g for g in grid if g.get("target") == T0], *meta_of(R("run_meta.csv"))
     tr = f"share_add{RM:g}m".replace(".", "_")
     cells = []
     for g in rows:
@@ -1641,7 +1646,13 @@ def v6_dash(B, grid, T0, R, source):
             continue
         cells.append((cx, cy, 2 if (num(g.get(tr)) or 0) >= 0.5 else (1 if (num(g.get("hbi_mean")) or 0) >= hb else 0)))
     ct = (B.tables.get("V6.17.cand") or {}).get("rows") or []
-    cands = [(i, num(r["cell_x"]), num(r["cell_y"])) for i, r in enumerate([r for r in ct if r.get("kind") == "후보"][:3], 1) if num(r.get("cell_x")) is not None]
+    cn_ = [r for r in ct if r.get("kind") == "후보"]
+    if any(num(r.get("n_risk")) is not None for r in cn_):                       # [10/21] 고립 위험 건물 많은 순 (같으면 17장 순서)
+        cn_ = [r for _, r in sorted(enumerate(cn_), key=lambda t: (-(num(t[1].get("n_risk")) if num(t[1].get("n_risk")) is not None else -1), t[0]))]
+    pick = cn_[:3]
+    lab = lambda r, i: (re.sub(r"\D", "", r.get("name", "")) or str(i))
+    cands = [(lab(r, i), num(r["cell_x"]), num(r["cell_y"])) for i, r in enumerate(pick, 1) if num(r.get("cell_x")) is not None]
+    B.fields["V6.24.cands"] = {"value": "|".join(r["name"] for r in pick) or None, "label": "24장 후보 목록·지도 3곳 (고립 위험 건물 많은 순)", "need": [], "optional": True}
     st_ = next((x for x in load_sites() if "봉천" in x["name"]), None)
     if not st_:
         return
@@ -1649,8 +1660,8 @@ def v6_dash(B, grid, T0, R, source):
     B.img("V6.24.map", "24장 화면 지도 (배경지도 + 격자)", ["grid_hbi.csv", "deck/basemap/"], out)
     if bm:
         BASEMAP_USED["24"] = bm
-    B.fields["V6.24.grid"] = {"value": ("반출 격자" if from_export else ("격자" if rows and source != "real" else None)),
-                              "label": "24장 화면 격자 (반출 grid_hbi, 22일 real-day 에서 다시 그림)", "need": ["grid_hbi.csv (반출)"]}
+    B.fields["V6.24.grid"] = {"value": "반출 격자" if cells else None, "optional": True,
+                              "label": "24장 화면 격자를 그렸는지 (반출 grid_hbi, 있으면 범례)", "need": ["grid_hbi.csv (반출)"]}
 
 
 def v6_plots(B, grid, T0, bands, R):
