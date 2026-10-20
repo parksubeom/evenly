@@ -29,87 +29,79 @@ td.ck, th.ck { text-align: center; }
 </head>
 <body>
 <div class="page">
-<h1>10/22(목) 기획서 마감일 — 반출 결과 받기부터 제출까지 (1시간)</h1>
-<p class="meta">마감 <b>18:00</b> · 판정 <b>12:00</b> (실제판 / 대비책 판 중 하나) · 결과는 오전 도착 예상 (10/19 반출 신청 → 심사 3~4일) · 시간 어림: 받기 5분 + 한 명령 1분 + 장별 확인 30분 + 제출 15분</p>
+<h1>10/22(목) 기획서 마감일 — 반출 결과 받기부터 제출까지</h1>
+<p class="meta">마감 <b>18:00</b> · 판정 <b>12:00</b> (실제판 / 대비책 판) · 반출 = 10/19 all 방식 01~05 (마지막 반출) · 어르신 <b>0.8m/s</b> (19일 계산 그대로, 현행 0.7 은 부록 3) · 미리 빌드: <code>deliverables/_prebuild_real.pptx</code> (반출 칸만 빈칸)</p>
+<div class="top"><b>원칙</b> 숫자는 셋 중 하나에서만: (가) 10/19 반출 파일 (나) 10/20 현장 메모 <code>deck/inputs_memo_1020.json</code> (센터 허락) (다) 공개 자료 계산 <code>deck/public_calc/</code>. 출처 줄 = "LX 분석" / "공개 자료 보행망으로 계산 (같은 모델·같은 좌표)" / "해석적 계산". 임의 값 금지, pptx 를 손으로 고치지 않음. 실제판에 "리허설"·"청사진"·"가상"(4·24장 제외)·노트 "[청사진 메모]" 0건.</div>
 
-<div class="top"><b>원칙</b> 기획서에 숫자를 손으로 쓰지 않습니다 (pptx 를 열어 고치지 않음). 값이 이상하면 결과 파일로 원인을 찾고, 10분 안에 설명이 안 되면 대비책 판으로 갑니다. 리허설 값은 어느 판에도 들어가지 않습니다.</div>
-
-<h2>0. 10/21(수) 밤까지 끝낼 것</h2>
+<h2>0. 10/21(수) 밤까지 (사용자 → 실측 값 전달 뒤 반영)</h2>
 <table class="small">
-<tr><th class="ck">✓</th><th style="width:27%">할 일</th><th>어떻게</th></tr>
-<tr><td class="ck"></td><td>방문일 (13장)</td><td><code>deck/inputs.json</code> 의 <code>"visits"</code>: 다녀온 날마다 <code>"done": true</code> (10/19·10/20·10/21). 10/22 는 <code>"optional": true</code> (가면 <code>done: true</code>, 안 가면 그대로 → 실제판에 안 나오고 일수에 안 셈). 날짜·<code>"work"</code>(한 일)가 바뀌었으면 고침. 13장 '총 ○일' = done 날 수</td></tr>
-<tr><td class="ck"></td><td>관악 실측 (15장, 실측을 했을 때만)</td><td>같은 파일에 <code>"survey_date": "2026.10.__ (요일)"</code>, <code>"mapapp_min": {"비안어린이공원": 분, "봉천역": 분, "도림천": 분, "낙성대": 분}</code> (기록지의 지도앱 칸, 숫자만). 잰 분은 10/19 안심구역에서 od_pairs 에 넣은 것이 반출로 옴</td></tr>
-<tr><td class="ck"></td><td>15장 사진 4장</td><td><code>docs/photos/15_1</code>~<code>15_4</code> (.jpg·.png·.heic): 1 봉천 계단 · 2 봉천역 오르막 · 3 도림천 · 4 낙성대. 얼굴·번지판·번호판이 없는 것. 빌드가 바로 세우고 촬영 정보(GPS)를 지운 사본만 씀. 없으면 '사진 자리' 점선</td></tr>
-<tr><td class="ck"></td><td>대비책 판 완성</td><td><code>cd ~/Downloads/evenly/deck</code> → <code>npm run fallback-pdf</code> → 화면에 <b>누락 0건</b>·<b>결과: 통과</b> → <code>_render/fallback/s-NN.png</code> 훑기. 제출 파일 <code>deliverables/언덕위우리동네_기획서_대비책.pdf</code></td></tr>
-<tr><td class="ck"></td><td>관악만 결과일 때 문구</td><td>3장 "5개 구 집집마다 … 계산합니다", 20장 끝 줄 "큰 계단(5개 구)에서는 고령자 시간 단축이 더해집니다" 를 그대로 둘지 정함 (관악만이면 결과로 뒷받침되지 않는 문장)</td></tr>
-<tr><td class="ck"></td><td>5개 구 결과일 때만</td><td>중구 금호터널 옆 옹벽 수직 엘리베이터 설치 여부 → <code>data_public/existing_facilities.csv</code> (17장 '500m 안 기존 시설'. 일정 체크리스트 "5개 구 분석 전 확인")</td></tr>
-<tr><td class="ck"></td><td>제출 준비</td><td>개인정보 동의서 서명본(PDF), 대회 접수 페이지 로그인·파일 올리는 곳 확인</td></tr>
+<tr><th class="ck">✓</th><th style="width:24%">할 일</th><th>어떻게</th></tr>
+<tr><td class="ck"></td><td>관악 실측 (15·3장)</td><td><code>deck/inputs.json</code>: <code>"survey_date"</code>, <code>"mapapp_min"</code>·<code>"measured_min"</code>(보통 걸음)·<code>"slow_min"</code>(천천히) = <code>{"비안어린이공원": 분, "봉천역": 분, "도림천": 분, "낙성대": 분}</code> (숫자만). 들어오면 15장이 실측 배치(지도앱·보통·모델 성인·천천히·모델 어르신), 13장 현장실측 줄, 3장 '실측 비교는 15장'</td></tr>
+<tr><td class="ck"></td><td>15장 사진 4장</td><td><code>docs/photos/15_1~15_4</code> (1 봉천 계단 · 2 봉천역 오르막 · 3 도림천 · 4 낙성대). 얼굴·번지판·번호판 없는 것. 없으면 실제판은 사진 자리 없이 표를 넓힘</td></tr>
+<tr><td class="ck"></td><td>현장 메모·방문일 확인</td><td><code>deck/inputs_memo_1020.json</code> 값이 메모와 같은지 (09 봉천·08 민감도·연결률), 센터 허락 메일 보관. 방문일 <code>visits</code> = 10/02·10/19·10/20 (3일)</td></tr>
+<tr><td class="ck"></td><td>미리 빌드 다시 (실측 넣은 뒤)</td><td><code>cd ~/Downloads/evenly/deck</code> → <code>npm run build:real</code> → <code>node py.js ../tools/check_deck.py ../deliverables/언덕위우리동네_기획서_final.pptx --missing data/missing.txt</code> (반출 칸만 빈칸이면 정상)</td></tr>
+<tr><td class="ck"></td><td>대비책 판·제출 준비</td><td><code>npm run fallback-pdf</code> → 누락 0·통과. 개인정보 동의서 서명본, 접수 페이지 로그인·올리는 곳 확인</td></tr>
 </table>
 
-<h2>0-1. 채울 칸 목록 (3·13·15·16·21·22·부록 1) — 리허설 판에서 빈칸·대체 문구로 남던 장</h2>
+<h2>0-1. 22일에 반출로 채워질 칸 (지금 미리 빌드의 빈칸 28개, 반출이 오면 자동)</h2>
 <table class="small">
-<tr><th class="ck">✓</th><th style="width:6%">장</th><th style="width:30%">칸</th><th style="width:40%">어디서 채워지나</th><th>안 채워지면</th></tr>
-<tr><td class="ck"></td><td>3</td><td>출처 줄 '현장 실측 구간 값으로 교체 예정'</td><td>실측 분(<code>validation_routes.csv</code>)이 오면 자동으로 빠짐</td><td>실측을 안 했으면 그대로 (예시 계산)</td></tr>
-<tr><td class="ck"></td><td>13</td><td>날짜 칸 · '총 ○일' · 현장실측 날짜</td><td><code>inputs.json</code> <code>visits</code> 의 <code>done</code> (0번), <code>survey_date</code></td><td>'총 ___일' → real-day 가 "inputs.json 을 채우고 다시"</td></tr>
-<tr><td class="ck"></td><td>15</td><td>네 구간 지도앱·실측·모델, 측정일, 사진 4장</td><td><code>mapapp_min</code>·<code>survey_date</code> (inputs.json), 실측 분 = 반출 <code>validation_routes.csv</code>, 사진 <code>docs/photos/15_1~4</code></td><td>실측을 안 했으면 <code>--later-ok</code> → '실측 후'</td></tr>
-<tr><td class="ck"></td><td>16</td><td>실측 r · 공개데이터 놓침 %</td><td>r = 실측 3구간 이상이면 자동, 놓침 % = real-day 의 공개 대조군 비교</td><td>'실측 후' / '실제 결과 후' 가 남으면 원인 확인</td></tr>
-<tr><td class="ck"></td><td>21</td><td>외출(SKT) · 소득(KCB)</td><td>상호제공 반출에 있으면 자동. 없으면 공개 생활인구 줄만</td><td><code>--later-ok</code> 면 '상호제공데이터 확보 시'</td></tr>
-<tr><td class="ck"></td><td>22</td><td>교통사고 법정동</td><td>상호제공 교통사고가 있으면 자동. 없으면 '사고 통계가 놓치는 곳' (공개 사고다발지)</td><td>공개판 그대로</td></tr>
-<tr><td class="ck"></td><td>부록 1</td><td>상호제공 줄</td><td>결과에 SKT·KCB·교통사고 출력이 있을 때만, 있는 것만 자동으로 나옴</td><td>줄이 없음 (정상)</td></tr>
+<tr><th class="ck">✓</th><th style="width:8%">장</th><th style="width:52%">칸</th><th>원천</th></tr>
+<tr><td class="ck"></td><td>2·4·14</td><td>"가까운 동네" 부담 비율 · 고립 위험 건물 수 · 은천동 왕복 추가 중앙값 · 결과 지도 · 가장 급한 동</td><td>반출 summary·grid_hbi·dong_hbi</td></tr>
+<tr><td class="ck"></td><td>15</td><td>네 구간 모델 성인·어르신(0.8) 시간</td><td>반출 validation_routes</td></tr>
+<tr><td class="ck"></td><td>16·28</td><td>봉천 백분위 · 휠체어 우회(모델) · 높이 빼면 바뀌는 상위 10% · 계단 빼면 · 공개 대조군 놓침 %</td><td>반출 validation_* · 공개 대조군 = real-day 가 계산</td></tr>
+<tr><td class="ck"></td><td>17</td><td>후보·봉천 격자의 고립 위험 건물·왕복 추가 (+ LX 순위 각주)</td><td>반출 grid_hbi</td></tr>
+<tr><td class="ck"></td><td>2·20</td><td>설치 전 휠체어 길 (238m 자리)</td><td>반출 validation_routes (봉천 계단)</td></tr>
+<tr><td class="ck"></td><td>21·22·29</td><td>최우선 방문 동 · 정류장 검토 지역 · 사고다발지 겹침 · 문턱별 상위 3개 동(있는 구간만)</td><td>반출 dong_hbi·grid_hbi + 공개 자료</td></tr>
 </table>
 
 <h2>1. 받기 → 한 명령 (오전, 결과가 오면 바로)</h2>
 <div class="two">
 <div>
-<p>받은 zip 이나 폴더를 다운로드 폴더에 <b>그대로</b> 둡니다 (풀지 않아도 됨). 터미널에서:</p>
 <div class="c">cd ~/Downloads/evenly/deck
 npm run real-day -- <받은 zip 또는 폴더></div>
-<p class="small"><code>&lt;받은 zip 또는 폴더&gt;</code> 자리: <code>-- </code> 뒤 한 칸 띄우고 Finder 에서 받은 파일을 <b>터미널 창으로 끌어다 놓으면</b> 주소가 들어감 (이름에 빈칸이 있어도 됨) → Enter. <b>상호제공을 따로 반출했으면</b> 한 칸 띄우고 그 zip 도 끌어다 놓음 (<code>-- &lt;본 분석&gt; &lt;상호제공&gt;</code>)</p>
-<p class="small">하는 일 (리허설 13초): <code>results/raw_export</code> 에 놓기 (있던 것은 <code>raw_export_old/</code> 로 옮김) → 반출 점검 (판 <b>v6.2 #ddc743</b>, 대표 방식, 결과 점검표 빨강, 파일) → 고령인구·독거노인·공개 대조군 → 기획서 → check_deck → 렌더링 → <code>deliverables/언덕위우리동네_기획서_final.pdf</code>. ▶ 위에 <code>v6.2 출력: 후보 손 입력 5곳</code> (0곳·<code>!! 어르신 평지 보행속도 0.8</code> 이면 19일 추가 수정이 빠진 것)</p>
+<p class="small"><code>-- </code> 뒤 한 칸 띄우고 받은 파일을 터미널 창으로 끌어다 놓음 → Enter. 하는 일: <code>results/raw_export</code> 에 놓기 → 반출 점검 (판 v6.2 #ddc743, 대표 방식 all) → 고령인구·독거노인·공개 대조군·외출 → 기획서 (반출 + 메모 + 공개 계산) → 빈칸 대조 → <b>글자 점검</b> (check_real_text) → 렌더링 → <code>deliverables/언덕위우리동네_기획서_final.pdf</code>·<code>.pptx</code></p>
 </div>
 <div>
 <table class="small">
-<tr><th style="width:42%">맨 아래 <b>▶</b> 줄</th><th>할 일</th></tr>
-<tr><td>실제판 후보</td><td>2. 장별 확인</td></tr>
-<tr><td>deck/inputs.json 을 채우고 다시</td><td>위 줄에 나온 칸 채우고 <code>npm run real-day</code> (인자 없이)</td></tr>
-<tr><td>관악 실측·상호제공 칸만 비었음</td><td>실측을 했고 15장이 비었으면 inputs.json → <code>npm run real-day</code>. 아니면 <code>npm run real-day -- --later-ok</code> (그 칸만 '실측 후'·'상호제공데이터 확보 시')</td></tr>
-<tr><td>대비책 판 — 이유 …</td><td>이유를 메모 → 12:00 에 대비책 판</td></tr>
+<tr><th style="width:44%">맨 아래 ▶ 위 줄</th><th>뜻</th></tr>
+<tr><td>어르신 평지 보행속도 0.8m/s (기대 0.8m/s 와 같음)</td><td>정상 (0.8 아니면 원인 확인)</td></tr>
+<tr><td>v6.2 출력: 후보 손 입력 5곳을 17장 표로</td><td>정상 (부담 = LX, 효과 = 공개 계산)</td></tr>
+<tr><td>금지 글자 0곳 · 노트 0장 · 대체 문구 0곳</td><td>정상 (대체 문구가 남으면 판정이 멈춤)</td></tr>
+<tr><td>▶ 실제판 후보</td><td>2. 장별 확인</td></tr>
+<tr><td>▶ 관악 실측 칸만 비었음</td><td>실측 값을 inputs.json 에 → <code>npm run real-day</code>. 실측을 못 했으면 그대로 (15장 = 모델만 배치)</td></tr>
+<tr><td>▶ 대비책 판 — 이유 …</td><td>이유 메모 → 12:00 에 대비책 판</td></tr>
 </table>
-<p class="small">기록: <code>_render/final/real_day_report.txt</code>. 받은 파일이 output 폴더가 아니면 "방식 폴더가 없습니다" 로 멈춤</p>
 </div>
 </div>
 
-<h2>2. 장별 확인 (30분) — <code>_render/final/s-01.png</code> ~ <code>s-30.png</code> (Finder 에서 스페이스로 넘김) 또는 같은 PDF</h2>
+<h2>2. 장별 확인 (30분) — <code>_render/final/s-01.png</code> ~ <code>s-30.png</code> (사용자 검토)</h2>
 <table class="small">
-<tr><th class="ck">✓</th><th style="width:5%">장</th><th style="width:53%">볼 것</th><th>멈출 신호 (→ 원인 찾기, 10분 안에 설명 안 되면 대비책 판)</th></tr>
-<tr><td class="ck"></td><td>전체</td><td>30장 · 오른쪽 위 '가상 수치'·'공개 대역' 표시 없음 · <code>___</code> 없음 · 글자 잘림·겹침 없음 · 3·4·12장 같은 숫자 다른 뜻 없음 ('!! 4장' 경고)</td><td>하나라도 있음</td></tr>
-<tr><td class="ck"></td><td>1·26</td><td>팀 표시 "서울평평단 (박수범)"</td><td></td></tr>
-<tr><td class="ck"></td><td>13</td><td>방문 날짜 칸 (10/02·10/19·10/20·10/21, 갔으면 10/22) · '총 ○일' · '예정' 글자 없음 · 아래 '방문일은 다녀온 날로 기입' 줄 없음</td><td>'총 ___일' (visits 의 done 이 빠짐)</td></tr>
-<tr><td class="ck"></td><td>14</td><td>제목 %, 지도 (분석한 구만, 평지·체감 부담·고립 위험 세 색), 고립 위험 건물 수·비율, 어르신 추정, 부담이 가장 큰 동</td><td>지도 빈 칸 · 동 이름이 분석한 구 밖</td></tr>
-<tr><td class="ck"></td><td>15</td><td>사진 4장 (얼굴·번지 없음), 네 구간 지도앱·실측·모델, 측정일 · <b>천천히 잰 분</b>(v6.3 기록지)은 밖에서 반출 <code>validation_routes.csv</code> 의 <code>elder_min</code>(모델 0.7m/s)과 견줘 메모만</td><td>모델이 실측의 절반 아래나 두 배 위</td></tr>
-<tr><td class="ck"></td><td>16</td><td>선정지 (관악만: "봉천동 상위 n%" / 5개 구: "상위 10% n곳") · 휠체어 우회 "모델 ○m" · r · 공개데이터 놓침 % · DEM 상위 10%</td><td>휠체어 m 이 0 이거나 빈 칸</td></tr>
-<tr><td class="ck"></td><td>17·19</td><td>선정지 + 후보 줄 (고립 위험 건물·시설·고령자 30초·휠체어 1분·1억 원당·처방 세 단계: 큰 시설 검토 / 바로 정비 / 정비 + 방문돌봄) · 19장 "후보 ○곳 중 ○곳" · 등시선 그림 (봉천)</td><td>위치가 분석한 구 밖</td></tr>
-<tr><td class="ck"></td><td>20</td><td>봉천 휠체어 길 전 → 후, 높이 차, 1억 원당 수혜 "x.x동", 끝 줄 문구 (0번 결정대로)</td><td>높이 차 1m 미만·10m 넘음 (실제 DEM 약 5m)</td></tr>
-<tr><td class="ck"></td><td>21·22</td><td>고립 위험 동 수, 상위 3개 동 독거노인 합, SKT·KCB · 정류장 검토 지역, 사고 법정동</td><td></td></tr>
-<tr><td class="ck"></td><td>29</td><td>민감도 순위상관 3개, 문턱별 상위 3개 동·건물 수, 대기 30~90초 문장</td><td>표가 장 아래로 넘침</td></tr>
+<tr><th class="ck">✓</th><th style="width:6%">장</th><th style="width:56%">볼 것</th><th>멈출 신호</th></tr>
+<tr><td class="ck"></td><td>전체</td><td>30장 · <code>___</code> 없음 · 글자 잘림·겹침 없음 · "건물(모든 건물 기준)"·목적지 "약국" 표기 · 출처 줄 (LX 분석 / 공개 자료 보행망 / 해석적 계산)</td><td>하나라도 어긋남</td></tr>
+<tr><td class="ck"></td><td>3·12·1</td><td>0.8m/s: 7·9·14분, 12장 14.3 ÷ 9.4 = 1.52배 · 왕복 26.1 ÷ 18.8 = 1.39배, "420m ÷ 0.8m/s ≈ 편도 약 9분"</td><td></td></tr>
+<tr><td class="ck"></td><td>13</td><td>방문 3일 (10/02·10/19·10/20), 실측 했으면 현장실측 줄</td><td></td></tr>
+<tr><td class="ck"></td><td>14</td><td>지도·고립 위험 건물 수·가장 급한 동, 각주 "연결률(대장 45%·건물 칸 25%) … HBI 중앙값 차이 약 0.01", 어르신 추정 칸 없음</td><td>지도 빈 칸</td></tr>
+<tr><td class="ck"></td><td>15</td><td>실측 배치 또는 모델만 배치, 사진 (얼굴·번지 없음)</td><td>모델이 실측의 절반 아래·두 배 위</td></tr>
+<tr><td class="ck"></td><td>16</td><td>봉천 백분위 · 휠체어 우회 · DEM 1m 순위상관 0.991 · 높이 빼면 % · 공개 대조군 %</td><td>휠체어 m 이 0·빈 칸</td></tr>
+<tr><td class="ck"></td><td>17·19</td><td>표 위 "부담은 LX … 시설 효과는 공개 자료 보행망", 봉천 줄 "약국 192개 · 역 34개", 각주 LX 순위, 19장 등시선 "공개 보행망"</td><td>위치가 관악 밖</td></tr>
+<tr><td class="ck"></td><td>20·2</td><td>238m(반출) → 31m, 높이 11.1m, 통과 1.0분, 약국 192개·1억 원당 4.8개, 역 34개 · 2장 "약국까지 가는 건물 192개"</td><td></td></tr>
+<tr><td class="ck"></td><td>25·29</td><td>한계 "이번 결과는 모든 건물 기준" · 부록 3 속도 줄 "현행 0.7m/s 이면 ×8/7, HBI 같음", 민감도 메모 값</td><td>표가 장 밖으로</td></tr>
 </table>
 
 <div class="two">
 <div>
 <h2>3. 12:00 판정</h2>
 <ul>
-<li><b>실제판</b>: ▶ 가 "실제판 후보" 이고 장별 확인에 멈출 신호가 남지 않음</li>
-<li><b>대비책 판</b>: 그 밖 모두 (12:00 까지 결과가 안 옴, ▶ 가 대비책 판, 멈출 신호를 설명 못 함)</li>
-<li>12:00 뒤에 결과가 와도 판정은 바꾸지 않음 (확인 30분과 제출 여유를 지키려고)</li>
+<li><b>실제판</b>: ▶ 실제판 후보 이고 장별 확인에 멈출 신호 없음</li>
+<li><b>대비책 판</b>: 그 밖 모두 (결과가 안 옴, 설명 못 하는 신호). 12:00 뒤 결과가 와도 바꾸지 않음</li>
 <li>판정: 실제판 / 대비책 판 · 이유 ______________________</li>
 </ul>
 </div>
 <div>
-<h2>4. 제출 (15분, 목표 13:00)</h2>
+<h2>4. 제출 (18:00 전, 목표 15:00)</h2>
 <ul>
-<li>올릴 파일: 실제판 <code>deliverables/언덕위우리동네_기획서_final.pdf</code> / 대비책 판 <code>…_대비책.pdf</code> (30장 = 30p 이내) + 개인정보 동의서</li>
-<li><b>PDF 를 냅니다</b>: 렌더링으로 확인한 그 파일 (pptx 는 심사 PC 의 맑은 고딕으로 열려 줄바꿈이 다를 수 있어, 접수처가 요구할 때만 같은 이름 .pptx)</li>
-<li>올린 뒤 접수 확인 화면 저장, <code>shasum -a 256 &lt;올린 파일&gt;</code> 값 메모 → ____________</li>
+<li>올릴 파일: <code>deliverables/언덕위우리동네_기획서_final.pdf</code> + 같은 이름 <code>.pptx</code> (대비책이면 <code>…_대비책</code>) + 개인정보 동의서. PDF = 렌더링으로 확인한 그 파일</li>
+<li>올린 뒤 접수 확인 화면 저장, <code>shasum -a 256 &lt;올린 파일&gt;</code> → ____________</li>
 </ul>
 </div>
 </div>

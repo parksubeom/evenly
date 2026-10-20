@@ -68,9 +68,13 @@ CAND_CELLS = {"후보1": (194875.0, 543375.0), "후보2": (194875.0, 543625.0), 
               "후보4": (193625.0, 541875.0), "후보5": (195875.0, 543375.0)}
 
 
-def apply(hbi):
+# [10/20] 실제 19일에 들어간 것: 134줄(민감도 0.8)만. 107줄(0.7)은 저장되지 않아 0.8 로 계산됨 (docs/2차방문_결과.md)
+EDIT_SETS = {"v62": [0, 1, 2], "v62_1019": [1]}
+
+
+def apply(hbi, which="v62"):
     """리허설 폴더(hbi6)에 EDITS 를 그대로 (메모장으로 '=' 오른쪽만 바꾼 것과 같게). 고치기 전 글자가 다르면 멈춤"""
-    for e in EDITS:
+    for e in [EDITS[i] for i in EDIT_SETS[which]]:
         p = os.path.join(hbi, e["file"])
         raw = open(p, "rb").read()
         bom = raw.startswith(b"\xef\xbb\xbf")

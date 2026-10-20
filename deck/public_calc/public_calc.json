@@ -1,0 +1,264 @@
+{
+ "_source": "공개 자료 보행망으로 계산 (같은 모델·같은 좌표)",
+ "_조건": "v6.2 #ddc743 번들 그대로 + config.py 134줄 민감도 0.8 (19일과 같음), 어르신 0.8m/s, all 방식, 후보1~5 손 입력 → run_all --from 09 --modes all",
+ "_from": "results/public_rehearsal/gwanak_v62all08 (번들 hbi_code_bundle_v6.2.txt sha256 81456e04d3514a3f…)",
+ "elder_speed": 0.8,
+ "mode": "all",
+ "candidates": {
+  "후보1": {
+   "type": "elevator",
+   "straight_m": 53.8,
+   "targets": {
+    "medical": {
+     "n_benefit": "0",
+     "n_benefit_any": "503",
+     "n_saved_30s": "0",
+     "n_saved_60s": "0",
+     "wheel_benefit": "503",
+     "wheel_cut_n": "503",
+     "wheel_cut_p50_m": "127",
+     "mean_saved_min": "",
+     "rise_m": "11.1",
+     "pass_s": "113.9"
+    },
+    "station": {
+     "n_benefit": "0",
+     "n_benefit_any": "503",
+     "n_saved_30s": "0",
+     "n_saved_60s": "0",
+     "wheel_benefit": "503",
+     "wheel_cut_n": "503",
+     "wheel_cut_p50_m": "183",
+     "mean_saved_min": "",
+     "rise_m": "11.1",
+     "pass_s": "113.9"
+    },
+    "bus": {
+     "n_benefit": "0",
+     "n_benefit_any": "44",
+     "n_saved_30s": "0",
+     "n_saved_60s": "0",
+     "wheel_benefit": "44",
+     "wheel_cut_n": "57",
+     "wheel_cut_p50_m": "",
+     "mean_saved_min": "",
+     "rise_m": "11.1",
+     "pass_s": "113.9"
+    }
+   }
+  },
+  "후보2": {
+   "type": "elevator",
+   "straight_m": 114.3,
+   "targets": {
+    "medical": {
+     "n_benefit": "30",
+     "n_benefit_any": "145",
+     "n_saved_30s": "37",
+     "n_saved_60s": "30",
+     "wheel_benefit": "145",
+     "wheel_cut_n": "146",
+     "wheel_cut_p50_m": "-51",
+     "mean_saved_min": "1.63",
+     "rise_m": "17.6",
+     "pass_s": "174.3"
+    },
+    "station": {
+     "n_benefit": "32",
+     "n_benefit_any": "147",
+     "n_saved_30s": "39",
+     "n_saved_60s": "32",
+     "wheel_benefit": "145",
+     "wheel_cut_n": "146",
+     "wheel_cut_p50_m": "-51",
+     "mean_saved_min": "",
+     "rise_m": "17.6",
+     "pass_s": "174.3"
+    },
+    "bus": {
+     "n_benefit": "0",
+     "n_benefit_any": "0",
+     "n_saved_30s": "0",
+     "n_saved_60s": "0",
+     "wheel_benefit": "0",
+     "wheel_cut_n": "5채 미만",
+     "wheel_cut_p50_m": "",
+     "mean_saved_min": "",
+     "rise_m": "17.6",
+     "pass_s": "174.3"
+    }
+   }
+  },
+  "후보3": {
+   "type": "vertical",
+   "straight_m": 18.9,
+   "targets": {
+    "medical": {
+     "n_benefit": "0",
+     "n_benefit_any": "595",
+     "n_saved_30s": "0",
+     "n_saved_60s": "0",
+     "wheel_benefit": "595",
+     "wheel_cut_n": "632",
+     "wheel_cut_p50_m": "1",
+     "mean_saved_min": "",
+     "rise_m": "2.3",
+     "pass_s": "47.4"
+    },
+    "station": {
+     "n_benefit": "0",
+     "n_benefit_any": "185",
+     "n_saved_30s": "0",
+     "n_saved_60s": "0",
+     "wheel_benefit": "185",
+     "wheel_cut_n": "337",
+     "wheel_cut_p50_m": "-43",
+     "mean_saved_min": "",
+     "rise_m": "2.3",
+     "pass_s": "47.4"
+    },
+    "bus": {
+     "n_benefit": "0",
+     "n_benefit_any": "138",
+     "n_saved_30s": "0",
+     "n_saved_60s": "0",
+     "wheel_benefit": "138",
+     "wheel_cut_n": "165",
+     "wheel_cut_p50_m": "1",
+     "mean_saved_min": "",
+     "rise_m": "2.3",
+     "pass_s": "47.4"
+    }
+   }
+  },
+  "후보4": {
+   "type": "elevator",
+   "straight_m": 104.1,
+   "targets": {
+    "medical": {
+     "n_benefit": "160",
+     "n_benefit_any": "388",
+     "n_saved_30s": "201",
+     "n_saved_60s": "160",
+     "wheel_benefit": "379",
+     "wheel_cut_n": "396",
+     "wheel_cut_p50_m": "-17",
+     "mean_saved_min": "1.22",
+     "rise_m": "15.8",
+     "pass_s": "164.2"
+    },
+    "station": {
+     "n_benefit": "927",
+     "n_benefit_any": "1218",
+     "n_saved_30s": "1011",
+     "n_saved_60s": "927",
+     "wheel_benefit": "311",
+     "wheel_cut_n": "326",
+     "wheel_cut_p50_m": "-446",
+     "mean_saved_min": "1.22",
+     "rise_m": "15.8",
+     "pass_s": "164.2"
+    },
+    "bus": {
+     "n_benefit": "0",
+     "n_benefit_any": "0",
+     "n_saved_30s": "0",
+     "n_saved_60s": "0",
+     "wheel_benefit": "0",
+     "wheel_cut_n": "0",
+     "wheel_cut_p50_m": "",
+     "mean_saved_min": "",
+     "rise_m": "15.8",
+     "pass_s": "164.2"
+    }
+   }
+  },
+  "후보5": {
+   "type": "vertical",
+   "straight_m": 43.0,
+   "targets": {
+    "medical": {
+     "n_benefit": "73",
+     "n_benefit_any": "154",
+     "n_saved_30s": "103",
+     "n_saved_60s": "73",
+     "wheel_benefit": "154",
+     "wheel_cut_n": "154",
+     "wheel_cut_p50_m": "3",
+     "mean_saved_min": "1.28",
+     "rise_m": "7.7",
+     "pass_s": "52.8"
+    },
+    "station": {
+     "n_benefit": "0",
+     "n_benefit_any": "95",
+     "n_saved_30s": "0",
+     "n_saved_60s": "0",
+     "wheel_benefit": "95",
+     "wheel_cut_n": "161",
+     "wheel_cut_p50_m": "-57",
+     "mean_saved_min": "",
+     "rise_m": "7.7",
+     "pass_s": "52.8"
+    },
+    "bus": {
+     "n_benefit": "0",
+     "n_benefit_any": "70",
+     "n_saved_30s": "0",
+     "n_saved_60s": "0",
+     "wheel_benefit": "70",
+     "wheel_cut_n": "73",
+     "wheel_cut_p50_m": "",
+     "mean_saved_min": "",
+     "rise_m": "7.7",
+     "pass_s": "52.8"
+    }
+   }
+  }
+ },
+ "bongcheon_public": {
+  "medical": {
+   "n_benefit": "0",
+   "n_benefit_any": "5채 미만",
+   "n_saved_30s": "0",
+   "n_saved_60s": "0",
+   "wheel_benefit": "5채 미만",
+   "wheel_cut_n": "5채 미만",
+   "wheel_cut_p50_m": "",
+   "mean_saved_min": "",
+   "rise_m": "5.1",
+   "pass_s": "51.7"
+  },
+  "station": {
+   "n_benefit": "0",
+   "n_benefit_any": "85",
+   "n_saved_30s": "5채 미만",
+   "n_saved_60s": "0",
+   "wheel_benefit": "85",
+   "wheel_cut_n": "92",
+   "wheel_cut_p50_m": "",
+   "mean_saved_min": "",
+   "rise_m": "5.1",
+   "pass_s": "51.7"
+  },
+  "bus": {
+   "n_benefit": "0",
+   "n_benefit_any": "5채 미만",
+   "n_saved_30s": "0",
+   "n_saved_60s": "0",
+   "wheel_benefit": "5채 미만",
+   "wheel_cut_n": "6",
+   "wheel_cut_p50_m": "",
+   "mean_saved_min": "",
+   "rise_m": "5.1",
+   "pass_s": "51.7"
+  }
+ },
+ "isochrone_gpkg": "deck/public_calc/isochrone_봉천.gpkg",
+ "hbi_median_by_mode": {
+  "layer": 1.186,
+  "all": 1.174,
+  "diff": 0.012,
+  "_from": "results/public_rehearsal/gwanak_v62f (공개 대역, 0.8m/s, 약국, 경계 제외)"
+ }
+}

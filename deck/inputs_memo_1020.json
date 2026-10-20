@@ -1,0 +1,30 @@
+{
+ "_source": "현장 메모(센터 허락, 10/20)",
+ "_설명": "10/20 안심구역 현장 메모 값 (LX, all 방식, 0.8m/s). 반출하지 않은 09·08 결과를 센터 허락으로 적어 온 것. 기획서 표기는 'LX 분석'. 값은 docs/2차방문_결과.md 와 같게만 고침",
+ "mode": "all",
+ "elder_speed": 0.8,
+ "check_link_rate": {"register": "45%", "layer": "25%"},
+ "09_bongcheon": {
+  "type": "vertical",
+  "rise_m": 11.1,
+  "rise_dem1m_m": 11.0,
+  "pass_min": 1.0,
+  "wait_s": 45,
+  "straight_m": 31,
+  "pharmacy": {"n_benefit_any": 192, "wheel_cut_n": 202, "wheel_cut_p50_m": -49},
+  "station": {"n_benefit": 28, "mean_saved_min": 2.3, "n_benefit_any": 34},
+  "wait_pharmacy_wheel": {"30": 194, "60": 186, "90": 180}
+ },
+ "08_sensitivity": {
+  "base_median": 1.070,
+  "rows": [
+   {"scenario": "보행속도 0.8m/s", "rank_corr": 1.0, "top10_match_pct": 100},
+   {"scenario": "보행속도 1.0m/s", "rank_corr": 1.0, "top10_match_pct": 100},
+   {"scenario": "내리막 부담 0%(Tobler 원식)", "rank_corr": 0.96, "top10_match_pct": 93.6},
+   {"scenario": "내리막 부담 100%", "rank_corr": 1.0, "top10_match_pct": 98.8},
+   {"scenario": "계단 가중 1.5", "rank_corr": 1.0, "top10_match_pct": 98.1},
+   {"scenario": "경사 절단 30%", "rank_corr": 1.0, "top10_match_pct": 97.5},
+   {"scenario": "DEM 1m (1m 범위 안 집만)", "rank_corr": 0.991, "top10_match_pct": 93.0}
+  ]
+ }
+}

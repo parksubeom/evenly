@@ -39,7 +39,10 @@ OPT = ["isochrone_summary.csv", "siting_summary.csv", "dong_context.csv", "parce
        "intervention_candidates.csv"]                     # [v6.3] 09 후보 자동 (17장)
 INPUT_RE = re.compile(r"^(team_name|team_display|V6\.13\.n_visits)$")          # deck/inputs.json 에서 꼭 채울 칸 (팀명·방문일: visits 의 done)
 SURVEY_IN_RE = re.compile(r"^V6\.15\.(\d\.app|date)$")                                # 실측을 했으면 inputs.json (mapapp_min·survey_date)
-LATER_OK_RE = re.compile(r"^V6\.15\.\d\.(app|meas|model)$|^V6\.15\.date$|^V6\.16\.meas_r$|^V6\.21\.(skt|kcb)$|^V6\.22\.acc$")   # build_v6.js 와 같게
+LATER_OK_RE = re.compile(r"^V6\.15\.\d\.(app|meas|model|slow)$|^V6\.15\.date$|^V6\.16\.meas_r$|^V6\.21\.(skt|kcb)$|^V6\.22\.acc$")   # build_v6.js 와 같게
+
+MEMO = os.path.join(ROOT, "deck", "inputs_memo_1020.json")          # [10/20] 10/20 현장 메모 (센터 허락)
+PUBCALC = os.path.join(ROOT, "deck", "public_calc", "public_calc.json")   # [10/20] 공개 자료 계산 (tools/extract_public_calc.py)
 
 LOG = []
 
@@ -277,7 +280,8 @@ def main():
     # 4. 기획서
     say("\n[4] 기획서 (prepare → build → check_deck → 렌더링)")
     ok, _ = run("결과 → results.json (prepare_deck_data --expect real)",
-                [py, os.path.join(ROOT, "tools", "prepare_deck_data.py"), "--src", RAW, "--expect", "real"])
+                [py, os.path.join(ROOT, "tools", "prepare_deck_data.py"), "--src", RAW, "--expect", "real"]
+                + (["--memo", MEMO] if os.path.exists(MEMO) else []) + (["--public", PUBCALC] if os.path.exists(PUBCALC) else []))   # [10/20] (나) 현장 메모 · (다) 공개 계산
     if not ok:
         stop.append("prepare_deck_data 실패")
         return finish(stop, soft, later_ok, t_all, built=False)
@@ -291,6 +295,14 @@ def main():
     ok, out = run("빈칸 대조 (check_deck)", [py, os.path.join(ROOT, "tools", "check_deck.py"), PPTX, "--missing", MISSING])
     if not ok:
         stop.append("check_deck 통과 못 함")
+    p_ = subprocess.run([py, os.path.join(ROOT, "tools", "check_real_text.py"), PPTX], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+    say("\n── 실제판 글자 점검 (check_real_text: 리허설·청사진·가상·노트·대체 문구)")
+    for l in [x for x in p_.stdout.splitlines() if x.strip()][-12:]:
+        say("   " + l)
+    if p_.returncode == 1:
+        stop.append("금지 글자 또는 [청사진 메모] 노트")
+    elif p_.returncode == 2 and not later_ok:
+        stop.append("대체 문구가 남음 (빈칸으로 셈)")
     ok, _ = run("렌더링 (render_deck → _render/final)", [py, os.path.join(ROOT, "tools", "render_deck.py"), PPTX, "--out", RENDER])
     rp = os.path.join(RENDER, NAME + ".pdf")
     if ok and os.path.exists(rp):
@@ -325,8 +337,11 @@ def finish(stop, soft, later_ok, t_all, built):
         rj = json.load(open(os.path.join(ROOT, "deck", "data", "results.json"), encoding="utf-8"))
         fv = lambda k: ((rj.get("fields") or {}).get(k) or {}).get("value")
         spd = fv("V6.speed")
-        if spd and abs(float(spd) - 0.7) > 0.01:
-            say(f"   !! 어르신 평지 보행속도 {spd}m/s — 19일 현장 수정(config.py ELDER_SPEED = 0.7)이 빠졌는지 확인. 12장 '420m ÷ 0.7m/s = 편도 10분' 근거와 맞지 않음")
+        exp_ = float(json.load(open(MEMO, encoding="utf-8")).get("elder_speed") or 0.7) if os.path.exists(MEMO) else 0.7   # [10/20] 19일 실제 = 0.8 (메모)
+        if spd and abs(float(spd) - exp_) > 0.01:
+            say(f"   !! 어르신 평지 보행속도 {spd}m/s — 기대 {exp_:g}m/s (현장 메모) 와 다름. 12장 근거·부록 3 확인")
+        elif spd:
+            say(f"   어르신 평지 보행속도 {spd}m/s (기대 {exp_:g}m/s 와 같음)")
         if fv("V6.v62"):
             nc = sum(1 for r in ((rj.get("tables") or {}).get("V6.17.cand") or {}).get("rows") or [] if r.get("kind") == "후보")
             say(f"   v6.2 출력: 후보 손 입력 {nc}곳을 17장 표로" + ("" if nc else

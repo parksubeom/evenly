@@ -53,7 +53,8 @@ def main():
     ap.add_argument("--bundle", default="hbi_code_bundle_v6.1.txt", help="--root 안의 번들 파일 이름 (후보 번들 시험용)")
     ap.add_argument("--facility", action="append", default=[], metavar="이름=a_lon,a_lat,b_lon,b_lat",
                     help="[10/12] setup 뒤 external/interventions.csv 의 그 이름 줄에 양 끝 좌표를 넣음 (안내서 단계 7 처럼). 여러 번 가능")
-    ap.add_argument("--field-fix", choices=["v62"], help="[10/14] setup 뒤·check 전 현장 수정 (tools/field_fix_v62.py: config.py 0.7·민감도 0.8, mapping 15분 구간)")
+    ap.add_argument("--field-fix", choices=["v62", "v62_1019"], help="[10/14] setup 뒤·check 전 현장 수정 (tools/field_fix_v62.py: v62 = config.py 0.7·민감도 0.8·mapping 15분 구간, v62_1019 = 19일 실제로 들어간 134줄 민감도만)")
+    ap.add_argument("--hand-modes", default="auto", help="[10/20] 후보 손 입력 뒤 run_all --from 09 의 --modes (19일 실제 = all)")
     ap.add_argument("--hand-candidates", action="store_true",
                     help="[10/14] 12·13·14 뒤 external/interventions.csv 끝에 후보 다섯 줄 손 입력 → run_all --from 09 --modes auto (19일 추가 수정 한 장 2번)")
     a = ap.parse_args()
@@ -85,7 +86,7 @@ def main():
             fill_facilities(os.path.join(H, "external", "interventions.csv"), a.facility)
         if name == "check" and a.field_fix:             # [10/14] 19일 추가 수정 한 장 1번 (setup 뒤, check 전)
             import field_fix_v62
-            field_fix_v62.apply(H)
+            field_fix_v62.apply(H, a.field_fix)
         rc, out, sec = run(a.py, args, cwd, os.path.join(logs, f"L_{name}.log"), inp)
         res[name] = {"rc": rc, "sec": sec}
         print(f"{name}: 끝남 {rc} ({sec}초)", flush=True)
@@ -95,7 +96,9 @@ def main():
     if a.hand_candidates and res.get("run_all", {}).get("rc") == 0:   # [10/14] 19일 추가 수정 한 장 2번 (본 분석·12~14 뒤)
         import field_fix_v62
         field_fix_v62.append_candidates(H)
-        rc, out, sec = run(a.py, ["run_all.py", "--from", "09", "--modes", "auto"], H, os.path.join(logs, "L_09hand.log"))
+        rc, out, sec = run(a.py, ["run_all.py", "--from", "09", "--modes", a.hand_modes], H, os.path.join(logs, "L_09hand.log"))
+        if a.hand_modes != "auto":                       # [10/20] 등시선(12)도 그 방식으로 다시 (봉천 선정지)
+            run(a.py, ["12_isochrone.py", "--mode", a.hand_modes.split(",")[0]], H, os.path.join(logs, "L_12hand.log"))
         res["09hand"] = {"rc": rc, "sec": sec}
         print(f"09hand: 끝남 {rc} ({sec}초)", flush=True)
     bpath = os.path.join(root, a.bundle)

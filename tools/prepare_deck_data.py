@@ -167,6 +167,8 @@ def main():
     ap.add_argument("--bands", choices=["mix", "hbi", "min"], default="mix",
                     help="[v6 기획서] 구간 기준: mix = 체감 부담 HBI 1.3 + 고립 위험 왕복 추가 10분 (기본, 10/12 판정) / hbi = HBI 1.3·1.8 / min = 왕복 추가 5·10분 (비교용)."
                          " 문턱은 결과의 run_meta.csv (mapping 의 hbi_band·extra_min_bands)")
+    ap.add_argument("--memo", help="[10/20] 현장 메모 값 (deck/inputs_memo_1020.json, 출처 '현장 메모(센터 허락, 10/20)'). 반출에 없는 09·08 자리에만 씀")
+    ap.add_argument("--public", help="[10/20] 공개 자료 계산 값 (deck/public_calc/public_calc.json, tools/extract_public_calc.py). 후보 시설 효과·등시선·두 방식 HBI 비교")
     a = ap.parse_args()
     src = os.path.abspath(a.src)
     if not os.path.isdir(src):
@@ -236,6 +238,19 @@ def main():
     abl = {(r["scenario"].strip(), r["metric"].strip()): num(r["value"]) for r in (R("validation_ablation.csv") or [])}
     targets = [t for t in ["medical", "bus", "elderly", "station", "station_ev", "pharmacy"] if t in sm or any(g["target"] == t for g in grid)]
     T0 = "medical" if "medical" in targets else (targets[0] if targets else "medical")
+    # [10/20] 실제판 = (가) 반출 + (나) 현장 메모 + (다) 공개 자료 계산. 메모·공개 계산은 반출에 없는 파일 자리에만 (반출 값이 있으면 반출)
+    MEMO = json.load(open(a.memo, encoding="utf-8")) if a.memo and os.path.exists(a.memo) else None
+    PUB = json.load(open(a.public, encoding="utf-8")) if a.public and os.path.exists(a.public) else None
+    rm0 = {r["key"]: r["value"] for r in (R("run_meta.csv") or []) if r.get("key")}
+    ALLMODE = (rm0.get("rep_mode") or attr_mode or (MEMO or {}).get("mode") or "") == "all"
+    if ALLMODE and "medical" not in targets and "pharmacy" in targets:   # all 방식: 의료시설이 건물로 안 잡혀 약국 점만 → 기준 목적지 = 약국
+        T0 = "pharmacy"
+    SYN = syn_files(MEMO, PUB, T0) if (MEMO or PUB) else {}
+    R0 = R
+    R = lambda n: (lambda rows: rows if rows is not None else SYN.get(n))(R0(n))
+    if SYN:
+        print(f"[10/20] 반출에 없으면 메모·공개 계산으로: {', '.join(f'{k} {len(v)}줄' for k, v in SYN.items())}"
+              f" · all 방식 {'예' if ALLMODE else '아니오'} · 기준 목적지 {T0}")
     m0 = sm.get(T0, {})
 
     # ── 기획서 입력값 (팀명·방문일) ──
@@ -596,7 +611,7 @@ def main():
             skt_by_code[code] = v
     kcb_by_code = {r["adm_cd"]: num(r.get(kcb_key)) for r in (kcb_rows or []) if num(r.get(kcb_key)) is not None} if (kcb_rows and KCB_EXPECT in (kcb_key or "")) else {}
     v6_keys(B, S, R, sm, grid, T0, source, a.bands, routes, site_rows, ew, isum, opt_file,
-            {"skt_by_code": skt_by_code, "kcb_by_code": kcb_by_code, "inputs": inp, "abl": abl})
+            {"skt_by_code": skt_by_code, "kcb_by_code": kcb_by_code, "inputs": inp, "abl": abl, "memo": MEMO, "pub": PUB, "allmode": ALLMODE})
 
     # ── 그림 ──
     plots = make_plots(B, grid, targets, T0, vs, site_rows, skt_plot, rho, p_rho)
@@ -606,6 +621,10 @@ def main():
                              ("sites", "선정지 백분위 막대", ["validation_sites.csv", "matplotlib"]), ("skt", "외출 지수 산점도", ["points_SKT_*_dong.csv", "pop60.csv", "matplotlib"])]:
             B.img(k, lab, need, None)
 
+    if ALLMODE:                                          # [10/20] all 방식: 값 글자의 '주거 건물' → '건물' (기획서가 '모든 건물 기준'을 밝힘)
+        for f_ in B.fields.values():
+            if isinstance(f_.get("value"), str):
+                f_["value"] = f_["value"].replace("주거 건물", "건물").replace("주거의", "건물의")
     data = {"source": source, "src": os.path.relpath(src, ROOT), "attr_mode": attr_mode, "bands": a.bands, "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
             "targets": targets, "base_target": T0, "fields": B.fields, "images": B.images, "tables": B.tables, "missing": B.missing()}
     os.makedirs(os.path.dirname(OUT_JSON), exist_ok=True)
@@ -775,6 +794,35 @@ def make_plots(B, grid, targets, T0, vs, site_rows, skt_plot, skt_rho, skt_p):
 #  later = 공개 대역 판(source=rehearsal)에서 원래 채울 수 없는 칸에 보일 말 ("실제 결과 후" 등). 실제 판에서는 ___ 그대로(누락)
 #  구간 기준 bands: hbi = HBI 1.3(부담)·1.8(고립 위험) / min = 왕복 추가 5분(부담)·10분(고립 위험)
 #  정의 표: docs/기획서_v6_결과키.md
+def syn_files(memo, pub, T0):
+    """[10/20] 반출에 없는 파일 자리에 넣을 줄 (출처 칸 _src: memo = 현장 메모 LX, public = 공개 자료 보행망 계산).
+    intervention_summary.csv: 봉천(메모, 기준 목적지 = 약국 T0·역) + 후보1~5(공개 계산, 의료 = 약국 점 → T0·역·버스)
+    sensitivity.csv: 08 민감도 (메모)"""
+    out = {}
+    rows = []
+    if memo and memo.get("09_bongcheon"):
+        b = memo["09_bongcheon"]
+        for tk, tg in ((T0, "pharmacy"), ("station", "station")):
+            v = b.get(tg) or {}
+            rows.append({"facility": "봉천동 비안어린이공원 인근", "target": tk, "_src": "memo", "rise_m": b.get("rise_m"),
+                         "pass_s": round(b["pass_min"] * 60) if b.get("pass_min") is not None else "",
+                         **{k: v.get(k, "") for k in ("n_benefit", "n_benefit_any", "mean_saved_min", "wheel_cut_n", "wheel_cut_p50_m")}})
+    if pub and pub.get("candidates"):
+        for nm, c in pub["candidates"].items():
+            for tg, r in c["targets"].items():
+                tk = T0 if tg in ("medical", "pharmacy") else tg
+                if any(x["facility"] == nm and x["target"] == tk for x in rows):
+                    continue
+                rows.append({"facility": nm, "target": tk, "_src": "public", **r})
+    if rows:
+        out["intervention_summary.csv"] = rows
+    if memo and memo.get("08_sensitivity"):
+        sv = memo["08_sensitivity"]
+        out["sensitivity.csv"] = [{"scenario": "기본값", "hbi_median": sv.get("base_median"), "rank_corr_vs_base": 1.0, "top10_overlap": 1.0, "_src": "memo"}] + \
+            [{"scenario": r["scenario"], "hbi_median": "", "rank_corr_vs_base": r["rank_corr"], "top10_overlap": r["top10_match_pct"] / 100, "_src": "memo"} for r in sv.get("rows", [])]
+    return out
+
+
 def v62_candidates(isum, grid, T0, RM):
     """[10/14] v6.2 출력 (intervention_candidates.csv 없음): 19일 손 입력 후보(후보1~5, tools/field_fix_v62.py)와 좌표가 있는 입력 시설(봉천)을
     v6.3 후보·선정지 비교표와 같은 칸으로 (v6.3 09 의 규칙을 밖에서): 격자 = 후보는 v6.3 이 고른 출발 격자, 입력 시설은 양 끝 가운데가 든 격자 /
@@ -797,6 +845,8 @@ def v62_candidates(isum, grid, T0, RM):
     dongs = load_dongs()
     gk = {(num(g.get("cell_x")), num(g.get("cell_y"))): g for g in grid if g.get("target") == T0}
     rk = f"n_add{RM:g}m".replace(".", "_")
+    order = sorted((num(g.get(rk)) or 0 for g in gk.values()), reverse=True)    # [10/20] LX 격자 고립 위험 순위 (같은 값은 같은 순위)
+    rank_of = lambda v: (order.index(v) + 1) if v is not None and v in order else None
     out = []
     for nm, r in rowsT.items():
         m = meta.get(nm)
@@ -814,7 +864,12 @@ def v62_candidates(isum, grid, T0, RM):
         g = gk.get((cx, cy)) or {}
         nb_ = num(g.get("n_bld"))
         near = min((math.hypot(x - cx, y - cy) for x, y in ex), default=None)
-        out.append({"kind": "후보" if cand else ("이미 있는 시설" if (m.get("status") or "").strip().lower() == "existing" else "선정지·입력 시설"),
+        memo_ = r.get("_src") == "memo"
+        st_any = next((x.get("n_benefit_any") for x in isum if x.get("facility") == nm and x.get("target") == "station"), "")
+        out.append({"_src": r.get("_src", ""), "_memo": memo_, "any_st": st_any if memo_ else "",
+                    "add_min_med": g.get("add_min_med", "") if nb_ and nb_ >= 5 else "",
+                    "lx_rank": rank_of(num(g.get(rk))) if (cand and nb_ and nb_ >= 5) else None, "n_cells": len(order),
+                    "kind": "후보" if cand else ("이미 있는 시설" if (m.get("status") or "").strip().lower() == "existing" else "선정지·입력 시설"),
                     "facility": nm, "adm_cd": d_["adm_cd"] if d_ else "", "adm_nm": d_["adm_nm"] if d_ else "", "cell_x": cx, "cell_y": cy,
                     "n_bld_cell": g.get("n_bld", "") if nb_ and nb_ >= 5 else "", f"n_risk_{RM:g}m": g.get(rk, "") if nb_ and nb_ >= 5 else "",
                     "facility_type": (m.get("type") or "").strip().lower(), "rise_m": r.get("rise_m", ""),
@@ -822,7 +877,8 @@ def v62_candidates(isum, grid, T0, RM):
                     "n_benefit_any": r.get("n_benefit_any", ""), "n_saved_30s": r.get("n_saved_30s", ""), "wheel_benefit": r.get("wheel_benefit", ""),
                     "mean_saved_min": r.get("mean_saved_min", ""), "per100m": "",
                     "existing_m": int(round(near / 50) * 50) if near is not None and near <= 3000 else "",
-                    "prescription": "기존 시설 연계" if near is not None and near <= 500 else "난간·쉼터·계단 정비 + 방문돌봄"})
+                    "prescription": ("휠체어 접근 효과 (약국)" if memo_ else
+                                     ("기존 시설 연계" if near is not None and near <= 500 else "난간·쉼터·계단 정비 + 방문돌봄"))})
     out.sort(key=lambda r: (r["kind"] == "후보", r["facility"]))
     return out or None
 
@@ -1039,6 +1095,9 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
             return f"5{unit} 미만"
         return f"{f_int(num(v))}{unit}" if num(v) is not None else None
     pick = max(frow, key=lambda r: cnt_key(r.get("wheel_benefit"))) if frow else None
+    memo20 = next((r for r in frow if r.get("_src") == "memo" and r.get("target") == T0), None)   # [10/20] 봉천 = 현장 메모 (약국 기준)
+    if memo20:
+        pick = memo20
     iv = bool(bc and pick and num(pick.get("pass_s")) is not None)
     P("V6.20.mode", "20장 계산 근거", [], "wheel" if iv else "example", optional=True)
     if iv:
@@ -1060,6 +1119,27 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         prow = next((r for r in isum if r.get("facility") == pick["facility"] and r.get("target") == T0), None)
         nb0 = num(prow.get("n_benefit")) if prow else None
         P("V6.20.n_benefit", "고령자 1분 이상 단축 건물 (기준 목적지)", ["intervention_summary.csv"], cnt_txt(prow.get("n_benefit")) if prow else None, optional=True)
+
+    if memo20:                                           # [10/20] 20장: 반출(238m 설치 전) + 현장 메모(높이·통과·약국 192·역 34)
+        mb = (extra.get("memo") or {}).get("09_bongcheon") or {}
+        st20 = next((r for r in frow if r.get("_src") == "memo" and r.get("target") == "station"), {})
+        nm20 = ["10/20 현장 메모 (09 봉천, LX)"]
+        if not bc:
+            P("V6.20.before", "설치 전 휠체어 경로", ["validation_routes.csv (반출, 봉천 선정지 계단)"], None)
+        P("V6.20.after", "설치 후 (계단 양 끝 직선)", ["validation_routes.csv (반출)" if bc else nm20[0]],
+          f"{round(num(bc['straight_m'])):,}m" if (bc and num(bc.get("straight_m"))) else (f"{mb['straight_m']:g}m" if mb.get("straight_m") else None))
+        P("V6.20.rise", "높이 차 (DEM 5m)", nm20, f"{mb['rise_m']:.1f}m" if mb.get("rise_m") is not None else None)
+        P("V6.20.pass", "통과 시간 (대기 포함)", nm20, f"{mb['pass_min']:.1f}분" if mb.get("pass_min") is not None else None)
+        P("V6.20.wait", "대기", nm20, f"{mb['wait_s']:g}초" if mb.get("wait_s") is not None else None, optional=True)
+        na20 = num(pick.get("n_benefit_any"))
+        P("V6.20.any", "고령자 30초 또는 휠체어 1분 이상 단축 건물 (약국)", nm20, f"{f_int(na20)}개" if na20 is not None else None)
+        P("V6.20.any_st", "같은 기준, 역까지", nm20, f"{f_int(num(st20.get('n_benefit_any')))}개" if num(st20.get("n_benefit_any")) is not None else None, optional=True)
+        P("V6.20.per100m", "1억 원당 수혜 건물 (1곳 40억 원 가정, 약국)", nm20, f"{na20 / 40:.1f}개" if na20 is not None else None)
+        P("V6.20.wheelcut", "휠체어 길이 준 건물 (약국)", nm20, f"{f_int(num(pick.get('wheel_cut_n')))}개" if num(pick.get("wheel_cut_n")) is not None else None, optional=True)
+        P("V6.20.wheelcut_med", "휠체어 길 길이 감소 중앙값", nm20, f"{abs(num(pick.get('wheel_cut_p50_m'))):g}m" if num(pick.get("wheel_cut_p50_m")) is not None else None, optional=True)
+        P("V6.20.tgt", "기준 목적지", [], "약국" if extra.get("allmode") else TARGET_LABEL.get(T0, T0), optional=True)
+        P("V6.20.memo", "20장 메모 표지", [], "yes", optional=True)
+        P("V6.20.mode", "20장 계산 근거", [], "wheel", optional=True)
 
     # ── 21 방문돌봄 (동 단위, 상위 25% 겹침) ──
     def q75(vs):
@@ -1178,10 +1258,13 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
             rx_ = r.get("prescription", "")
             if r.get("kind") == "후보" and rx_ != "기존 시설 연계":
                 rx_ = "바로 정비" if ramp_ else ("큰 시설 검토" if per_ is not None and per_ >= mp_ else ("정비 + 방문돌봄" if rx_ else rx_))
-            fac_ = (f"경사로 · 높이 {r.get('rise_m')}m · 약 {L_:.0f}m" if ramp_
-                    else f"{tn.get(r.get('facility_type'), r.get('facility_type') or '-')} · 높이 {r.get('rise_m') or '-'}m · {r.get('length_m') or '-'}m")
+            fac_ = (f"경사로 {r.get('rise_m')}m · 약 {L_:.0f}m" if ramp_                      # [10/20] 시설 칸 짧게 (표 끝과 막대가 겹치지 않게)
+                    else f"{tn.get(r.get('facility_type'), r.get('facility_type') or '-')} {r.get('rise_m') or '-'}m · {r.get('length_m') or '-'}m")
             alt_ = None
-            if r.get("kind") != "후보":       # [10/14 v11] 선정지(봉천) 줄: 의료 기준 값 옆에 20장과 같은 기준(휠체어 수혜가 가장 큰 목적지)
+            if r.get("_memo"):                # [10/20] 봉천 = 현장 메모 (약국 기준 + 역 기준 괄호)
+                alt_ = {"tgt": "역", "wheel": "", "any": cnt_txt(str(r.get("any_st"))) if r.get("any_st") not in ("", None) else ""}
+                rx_ = r.get("prescription")
+            elif r.get("kind") != "후보":       # [10/14 v11] 선정지(봉천) 줄: 의료 기준 값 옆에 20장과 같은 기준(휠체어 수혜가 가장 큰 목적지)
                 prow_ = max((x for x in isum if x.get("facility") == r.get("facility") and x.get("target") != T0), key=lambda x: cnt_key(x.get("wheel_benefit")), default=None)
                 if prow_ and cnt_key(prow_.get("wheel_benefit")) >= 5:
                     alt_ = {"tgt": tlab.get(prow_["target"], prow_["target"]), "wheel": cnt_txt(prow_.get("wheel_benefit"))}
@@ -1189,7 +1272,8 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
             trows.append({"kind": r.get("kind", ""), "name": r.get("facility", ""), "loc": loc, "n_risk": r.get(rk_, ""),
                           "fac": fac_, "ramp": bool(ramp_), "cost": "" if ramp_ else ELEV_COST_EOK,
                           "benefit": r.get("n_benefit_any", ""), "per100m": per_ if per_ is not None else "", "rx": rx_, "alt": alt_,
-                          "wheel_now": r.get("wheel_now_m", ""), "saved": r.get("mean_saved_min", ""), "elder30": r.get("n_saved_30s", ""), "wheel": r.get("wheel_benefit", "")})
+                          "wheel_now": r.get("wheel_now_m", ""), "saved": r.get("mean_saved_min", ""), "elder30": r.get("n_saved_30s", ""), "wheel": r.get("wheel_benefit", ""),
+                          "src": r.get("_src", ""), "memo": bool(r.get("_memo")), "addmed": r.get("add_min_med", ""), "lx_rank": r.get("lx_rank"), "n_cells": r.get("n_cells")})
             if r.get("kind") == "후보" and rx_ in ("큰 시설 검토", "바로 정비"):
                 n_big += rx_ == "큰 시설 검토"
                 n_quick += rx_ == "바로 정비"
@@ -1197,6 +1281,16 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
                 if nm_ and nm_ not in fd_:
                     fd_.append(nm_)
         B.table("V6.17.cand", "후보·선정지 비교표 (09 후보 자동, 격자 단위, 경사로는 1억 원당 비교에서 뺌)", ["intervention_candidates.csv (v6.3)"], trows)
+        mixed_ = any(t.get("src") for t in trows)                 # [10/20] 실제판: 부담 = LX 격자, 시설 효과 = 공개 보행망, 봉천 = 메모
+        if mixed_:
+            rks_ = [t["lx_rank"] for t in trows if t["kind"] == "후보" and t.get("lx_rank")]
+            P("V6.17.lx_burden", "17장 후보 격자의 LX 부담 (반출 grid_hbi)", ["grid_hbi.csv (반출, 후보 격자)"], "LX 격자" if rks_ else None)
+            if rks_:
+                nc_ = max((t.get("n_cells") or 0) for t in trows)
+                top_ = all(k <= len(rks_) for k in rks_)
+                P("V6.17.rank_note", "후보 격자의 LX 순위 (정직하게)", ["grid_hbi.csv (반출)"],
+                  (f"후보 격자는 LX 결과에서도 고립 위험 건물이 가장 많은 {len(rks_)}칸" if top_ else
+                   f"후보 격자 LX 고립 위험 순위 {'·'.join(str(k) for k in rks_)}위 ({nc_}칸 중, 공개 자료로 미리 고른 칸)"), optional=True)
         P("V6.17.cand_rule", "처방 규칙 문구", ["run_meta.csv (cand_rule, v6.3)"],
           f"{ra_:g}m 안 기존 시설 → 기존 시설 연계 / 높이 차 {RAMP_MAX_RISE:g}m 이하 → 바로 정비 (경사로) / 엘리베이터 1억 원당 수혜 건물 {mp_:g}개 이상 → 큰 시설 검토"
           f" / 미만 → 정비 + 방문돌봄 (엘리베이터 1곳 {ELEV_COST_EOK:g}억 원)", optional=True)
@@ -1234,16 +1328,21 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         vs3 = sorted(((num(r.get(col_)), r["adm_nm"].split()[-1]) for r in rows_d if num(r.get(col_)) is not None and num(r.get(col_)) > 0), reverse=True)[:3]
         tb_[bb] = [n for _, n in vs3]
         cn_[bb] = m0.get(f"왕복 추가 {bb}분 이상 건물 수")
-    if all(tb_.get(bb) for bb in (5, 10, 15)):
-        same_ = set(tb_[5]) == set(tb_[10]) == set(tb_[15])
-        P("V6.29.band_top3", "5·10·15분 상위 3개 동 비교", ["dong_hbi.csv (share_add5m·10m·15m)"],
-          (f"5·10·15분 상위 3개 동 같음 ({'·'.join(tb_[10])})" if same_ else "5·10·15분 상위 3개 동이 바뀜"), optional=True)
-        P("V6.29.band_top3_dongs", "문턱별 상위 3개 동 (기록용, 장에는 안 씀)", ["dong_hbi.csv (share_add5m·10m·15m)"],
-          " / ".join(f"{bb}분 {'·'.join(tb_[bb])}" for bb in (5, 10, 15)), optional=True)
+    bb_ = [bb for bb in (5, 10, 15) if tb_.get(bb)]              # [10/20] 반출에 있는 구간만 (19일 mapping 에 15분이 없으면 5·10분)
+    if extra.get("allmode") and not (len(bb_) >= 2 and RM in bb_):
+        P("V6.29.band_top3", "문턱별 상위 3개 동 비교", ["dong_hbi.csv (반출, share_add5m·10m)"], None)
+    if len(bb_) >= 2 and RM in bb_:
+        same_ = all(set(tb_[bb]) == set(tb_[bb_[0]]) for bb in bb_)
+        lab_ = "·".join(f"{bb:g}" for bb in bb_)
+        P("V6.29.band_top3", f"{lab_}분 상위 3개 동 비교", [f"dong_hbi.csv (share_add{lab_}m)"],
+          (f"{lab_}분 상위 3개 동 같음 ({'·'.join(tb_[RM])})" if same_ else f"{lab_}분 상위 3개 동이 바뀜"), optional=not extra.get("allmode"))
+        P("V6.29.band_top3_dongs", "문턱별 상위 3개 동 (기록용, 장에는 안 씀)", ["dong_hbi.csv"],
+          " / ".join(f"{bb}분 {'·'.join(tb_[bb])}" for bb in bb_), optional=True)
         P("V6.29.band_fix", "상위 3개 동이 바뀔 때 한 줄", ["dong_hbi.csv"],
           None if same_ else f"→ 문턱에 따라 대상이 바뀌므로 {RM:g}분은 근거로 고정", optional=True)
-    if all(cn_.get(bb) is not None for bb in (5, 10, 15)):
-        P("V6.29.band_counts", "문턱별 고립 위험 건물 수", ["summary.csv"], "고립 위험 건물 " + " · ".join(f"{bb}분 {f_int(cn_[bb])}" for bb in (5, 10, 15)) + "개", optional=True)
+    cb_ = [bb for bb in (5, 10, 15) if cn_.get(bb) is not None]
+    if len(cb_) >= 2:
+        P("V6.29.band_counts", "문턱별 고립 위험 건물 수", ["summary.csv"], "고립 위험 건물 " + " · ".join(f"{bb}분 {f_int(cn_[bb])}" for bb in cb_) + "개", optional=True)
     P("V6.29.band_rho_short", f"고립 위험 문턱 {RM:g}분 대비 다른 문턱의 동 순위상관", ["summary.csv (05, v6.3)"],
       " · ".join(f"{[x for x in re.findall(r'[+]([0-9.]+)분', k) if float(x) != RM][0]}분 {v:.2f}" for k, v in rr10) or None)
     P("V6.29.band_rho", "기준 민감도: 5·10·15분 동 순위상관", ["summary.csv (05, v6.3)"],
@@ -1293,11 +1392,18 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     keys15 = [("비안어린이공원", "계단 · 봉천 선정지"), ("봉천역", "오르막 · 봉천역"), ("도림천", "평지 · 도림천"), ("낙성대", "오르막 · 낙성대")]
     inp = extra.get("inputs") or {}
     app = inp.get("mapapp_min") or {}
+    mi_, sl_ = inp.get("measured_min") or {}, inp.get("slow_min") or {}   # [10/20] 10/21 실측은 안심구역 밖 기록 (inputs.json): 보통 걸음·천천히
+    has_meas = False
     for i, (kw, _) in enumerate(keys15):
         r = next((x for x in routes if kw in x.get("name", "")), None)
+        mv = num(r.get("measured_min")) if r and num(r.get("measured_min")) is not None else num(mi_.get(kw))
+        has_meas = has_meas or mv is not None or num(sl_.get(kw)) is not None
         P(f"V6.15.{i}.app", f"현장실측 {kw} 지도앱 시간", ["deck/inputs.json 의 mapapp_min"], (f"{app[kw]}분" if kw in app else None), later="실측 후")
-        P(f"V6.15.{i}.meas", f"현장실측 {kw} 실측", ["validation_routes.csv (measured_min)"], f"{num(r['measured_min']):g}분" if r and num(r.get("measured_min")) is not None else None, later="실측 후")
-        P(f"V6.15.{i}.model", f"현장실측 {kw} 모델(성인)", ["validation_routes.csv (adult_min)"], f"{num(r['adult_min']):.1f}분" if r and num(r.get("adult_min")) is not None and num(r.get("measured_min")) is not None else None, later="실측 후")
+        P(f"V6.15.{i}.meas", f"현장실측 {kw} 보통 걸음", ["validation_routes.csv (measured_min) 또는 deck/inputs.json 의 measured_min (10/21)"], f"{mv:g}분" if mv is not None else None, later="실측 후")
+        P(f"V6.15.{i}.slow", f"현장실측 {kw} 천천히", ["deck/inputs.json 의 slow_min (10/21)"], f"{num(sl_[kw]):g}분" if num(sl_.get(kw)) is not None else None, later="실측 후", optional=True)
+        P(f"V6.15.{i}.model", f"현장실측 {kw} 모델(성인 1.1m/s)", ["validation_routes.csv (adult_min, 반출)"], f"{num(r['adult_min']):.1f}분" if r and num(r.get("adult_min")) is not None else None, later="실측 후")
+        P(f"V6.15.{i}.elder", f"현장실측 {kw} 모델(어르신)", ["validation_routes.csv (elder_min, 반출)"], f"{num(r['elder_min']):.1f}분" if r and num(r.get("elder_min")) is not None else None, later="실제 결과 후")
+    P("V6.15.has_meas", "10/21 실측 있음", ["deck/inputs.json (measured_min·slow_min)"], "yes" if has_meas else None, optional=True)
     P("V6.15.wait", "대현산 모노레일 대기", ["deck/inputs.json 의 monorail_wait_s"], f"{inp['monorail_wait_s']}초" if inp.get("monorail_wait_s") else None, later="실제 결과 후")
     P("V6.15.ride", "대현산 모노레일 탑승", ["deck/inputs.json 의 monorail_ride_s"], f"{inp['monorail_ride_s']}초" if inp.get("monorail_ride_s") else None, later="실제 결과 후")
     P("V6.15.date", "현장실측 날짜", ["deck/inputs.json 의 survey_date"], inp.get("survey_date"), later="2026.10.__")
@@ -1322,18 +1428,38 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         if vr_:
             spd_ = round(vr_[0][0] / (vr_[0][1] * 60) / 0.05) * 0.05   # 0.1분 반올림 → 0.05m/s 단위로
             spd_src = f"validation_routes.csv (가장 긴 경로 {vr_[0][0]:g}m ÷ 평지 {vr_[0][1]:g}분)"
+        elif (extra.get("memo") or {}).get("elder_speed"):       # [10/20] 반출 전 미리 빌드: 현장 메모의 속도 (19일 = 0.8)
+            spd_ = float(extra["memo"]["elder_speed"])
+            spd_src = "현장 메모 (10/20, 19일 계산 속도)"
         else:
             spd_ = 0.8
             spd_src = "알 수 없음 (run_meta·validation_routes 없음) → 0.8 로 봄"
     spd_ = round(spd_, 2)
-    if abs(spd_ - 0.7) > 0.01:
-        print(f"!! 어르신 평지 보행속도가 {spd_:g}m/s ({spd_src}) — 12장 '420m ÷ 0.7m/s = 편도 10분' 근거와 맞지 않습니다."
-              " 19일 현장 수정(config.py ELDER_SPEED = 0.7)이 빠졌는지 확인", flush=True)
+    exp_spd = float((extra.get("memo") or {}).get("elder_speed") or 0.7)   # [10/20] 19일 실제 = 0.8 (메모). 메모 없으면 v6.3 판단 0.7
+    if abs(spd_ - exp_spd) > 0.01:
+        print(f"!! 어르신 평지 보행속도가 {spd_:g}m/s ({spd_src}) — 기대 {exp_spd:g}m/s 와 다름 (12장 근거·부록 3 확인)", flush=True)
     P("V6.speed", "어르신 평지 보행속도 (m/s)", [spd_src], f"{spd_:g}", optional=True)
     ss_ = inp.get("elder_speed_source")
     P("V6.16.speed_src", f"어르신 평지 보행속도 {spd_:g}m/s 의 출처", [f"deck/inputs.json 의 elder_speed_source[\"{spd_:g}\"]"],
       (ss_.get(f"{spd_:g}") if isinstance(ss_, dict) else ss_), later="출처 기입 예정")
-    P("V6.13.gwanak_reason", "관악구를 고른 이유 문구", ["deck/inputs.json 의 gwanak_reason"], inp.get("gwanak_reason"), optional=True)   # [10/12 청사진] 밑줄 2개 = 빈칸 표시 아님
+    P("V6.13.gwanak_reason", "관악구를 고른 이유 문구", ["deck/inputs.json 의 gwanak_reason"], inp.get("gwanak_reason"), optional=True)
+    # ── [10/20] 실제판: all 방식 표기, 현장 메모·공개 계산 칸 ──
+    memo, pub, allm = extra.get("memo") or {}, extra.get("pub") or {}, bool(extra.get("allmode"))
+    P("V6.allmode", "모든 건물 기준(all 방식)", ["run_meta.csv rep_mode 또는 현장 메모"], "yes" if allm else None, optional=True)
+    P("V6.dest", "기준 목적지 이름", [], "약국" if allm else "병원·약국", optional=True)
+    dm_ = next((r for r in (memo.get("08_sensitivity") or {}).get("rows", []) if r["scenario"].startswith("DEM 1m")), None)
+    P("V6.16.dem1m", "DEM 1m 로 다시 계산한 순위상관 (1m 범위 안 집)", ["10/20 현장 메모 (08 민감도)"],
+      f"{dm_['rank_corr']:.3f}".rstrip("0").rstrip(".") if dm_ else None, optional=not memo)
+    lr_ = memo.get("check_link_rate") or {}
+    hm_ = pub.get("hbi_median_by_mode") or {}
+    P("V6.14.mode_note", "모든 건물 기준인 이유·영향", ["10/19 check 화면 (현장 메모)", "공개 자료 계산 (주거만 vs 모든 건물)"],
+      (f"건물 용도 연결률(대장 {lr_.get('register', '?')}·건물 칸 {lr_.get('layer', '?')})이 낮아 모든 건물을 출발점으로 계산."
+       + (f" 공개 자료로 본 주거만 기준과의 HBI 중앙값 차이 약 {hm_['diff']:.2f}" if hm_.get("diff") is not None else "")) if allm and lr_ else None, optional=True)
+    # 19장 등시선: 반출에 없으면 공개 자료 보행망 (같은 모델·같은 좌표)
+    if not B.images.get("V6.iso", {}).get("path") and pub.get("isochrone_gpkg") and os.path.exists(os.path.join(ROOT, pub["isochrone_gpkg"])):
+        iso_p = draw_iso_one(os.path.join(ROOT, pub["isochrone_gpkg"]), 10)
+        B.img("V6.iso", "선정지 등시선 그림 (10분, 공개 자료 보행망)", ["deck/public_calc/isochrone_봉천.gpkg (공개 자료 계산)"], iso_p)
+        P("V6.iso_src", "19장 등시선 출처", [], "공개 자료 보행망으로 계산 (같은 모델·같은 좌표)", optional=True)   # [10/12 청사진] 밑줄 2개 = 빈칸 표시 아님
 
     # ── 29 민감도 (순위상관) ──
     sens = {r["scenario"].strip(): num(r.get("rank_corr_vs_base")) for r in (R("sensitivity.csv") or [])}
@@ -1373,6 +1499,12 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     P("V6.29.facility", "대기시간 비교: 수혜 건물 (고령자·휠체어)", ["intervention_wait.csv (09, v6.2)"],
       f"시설 효과만: 고령자 {agg('n_benefit')} · 휠체어 {agg('wheel_benefit')}" if wr else None, later="실제 결과 후")   # [10/14] 단위는 칸마다 (5개 미만)
     P("V6.29.facility_w", "대기시간 비교 문턱", [], "·".join(f"{w:g}" for w in ws_) + "초" if ws_ else None, optional=True)
+    mw_ = ((extra.get("memo") or {}).get("09_bongcheon") or {}).get("wait_pharmacy_wheel")
+    if not wr and mw_:                                     # [10/20] 09 대기 비교 = 현장 메모 (봉천, 약국)
+        ks_ = sorted(mw_, key=float)
+        P("V6.29.facility_w", "대기시간 비교 문턱", ["10/20 현장 메모"], "·".join(ks_) + "초", optional=True)
+        P("V6.29.facility_txt", "대기시간 비교 문장", ["10/20 현장 메모 (09 봉천, 약국)"],
+          f"시설 효과에만 영향: 봉천 휠체어 수혜 {' → '.join(f_int(mw_[k]) for k in ks_)}개 (약국)")
 
 
 def draw_iso_one(gpkg, minutes=10):
