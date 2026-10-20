@@ -738,10 +738,49 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
        + '서울시 균형발전정책과 보도(2025.06.16: 전수조사 후보 25곳·선정위원회·타당성 조사 및 기본계획 용역·투자심사·착공)'); }
 
 // ── 24 화면 ──
+// [10/20] 관악 결과로 돌아가는 화면: 지도 = prepare 의 V6.24.map (배경지도 + 반투명 격자, 22일 반출 격자로 다시 그림),
+//   설치 효과 숫자 = 20장과 같은 키, 후보 목록 = 17장 표(V6.17.cand)와 같은 이름·순서. "가상 수치" 없음 (숫자가 본문 값과 같음)
 { const s = base('evenly 화면', '담당자는 이렇게 씁니다', { tsize:24 });
   T(s, '동을 고르고, 후보를 보고, 시설을 놓아 보면 효과가 바로 나옵니다', { x:4.9, y:0.64, w:4.55, h:0.62, fontSize:12, color:C.muted, valign:'middle', align:'right' });
-  s.addImage({ path:img('dashboard_v6.png'), x:0.6, y:1.38, w:8.8, h:3.72 });
-  src(s, '화면 예시(구상), 가상 수치 / 본선에서는 실제 결과 격자로 동작하는 데모로 시연'); }
+  const r_ = (t, o = {}) => ({ text:t, options:o });
+  box(s, 0.6, 1.38, 8.8, 3.72, C.white, C.line);                                     // 화면 틀
+  T(s, [r_('evenly', { bold:true, color:C.acc }), r_('   고지대 이동편의시설 후보 검토', { color:C.muted })], { x:0.75, y:1.45, w:3.6, h:0.28, fontSize:11, valign:'middle' });
+  T(s, '지역', { x:4.35, y:1.47, w:0.4, h:0.24, fontSize:8.5, color:C.muted, valign:'middle', align:'right' });
+  ['관악구', '광진구', '강서구', '종로구', '중구'].forEach((g, i) => { const x = 4.82 + i * 0.6, on = i === 0;
+    s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x, y:1.47, w:0.55, h:0.24, rectRadius:0.04, fill:{ color: on ? C.acc : C.soft }, line:{ color: on ? C.acc : C.line, width:0.5 } });
+    T(s, g, { x, y:1.47, w:0.55, h:0.24, fontSize:8.5, bold:on, color: on ? C.white : 'A9AFAD', align:'center', valign:'middle' }); });
+  T(s, '다음 단계', { x:7.85, y:1.47, w:0.75, h:0.24, fontSize:8, color:'A9AFAD', valign:'middle' });
+  hr(s, 0.6, 1.8, 8.8);
+  const m24 = IMG('V6.24.map');
+  if (m24) s.addImage({ path:m24, x:0.72, y:1.9, w:5.0, h:2.62 });
+  else slot(s, 0.72, 1.9, 5.0, 2.62, '화면 지도 자리\n관악구 250m 격자 · 배경지도', 'V6.24.map');
+  if (!FALLBACK) [[0, `평지 수준 (HBI ${HB()} 미만)`], [1, `체감 부담 (${HB()} 이상)`], [2, `고립 위험 (왕복 +${RMIN()}분)`]].forEach(([k, t], i) => { const x = 0.75 + i * 1.68;
+    s.addShape(pres.shapes.RECTANGLE, { x, y:4.66, w:0.14, h:0.14, fill:{ color:['8CB8A0', 'F2B134', 'E4572E'][k], transparency:28 }, line:{ color:['8CB8A0', 'F2B134', 'E4572E'][k], transparency:28 } });
+    T(s, t, { x:x + 0.19, y:4.6, w:1.48, h:0.26, fontSize:8.5, color:C.text, valign:'middle' }); });
+  vr(s, 5.88, 1.92, 3.08);
+  const X = 6.02, Wr = 3.28;
+  T(s, '선택한 곳', { x:X, y:1.9, w:Wr, h:0.2, fontSize:8.5, color:C.muted });
+  T(s, '봉천동 비안어린이공원 인근 계단', { x:X, y:2.08, w:Wr, h:0.3, fontSize:11.5, bold:true, color:C.ink });
+  s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x:X, y:2.44, w:Wr, h:0.34, rectRadius:0.06, fill:{ color:C.acc }, line:{ color:C.acc } });
+  T(s, '수직 엘리베이터 놓아 보기  ▶', { x:X, y:2.44, w:Wr, h:0.34, fontSize:10.5, bold:true, color:C.white, align:'center', valign:'middle' });
+  T(s, '설치하면', { x:X, y:2.88, w:Wr, h:0.2, fontSize:8.5, color:C.muted });
+  if (FALLBACK) T(s, FB_TEXT, { x:X, y:3.08, w:Wr, h:0.3, fontSize:10, color:C.muted });
+  else [['휠체어 우회', `${V('V6.20.before')} → ${V('V6.20.after')}`],
+        hasR('V6.20.memo') ? ['약국까지 가는 건물 (수혜)', V('V6.20.any')] : [`휠체어 1분 이상 단축 (${TG20()})`, V('V6.20.wheel_n')],   // 20장과 같은 갈래
+        ['1억 원당 수혜 건물', V('V6.20.per100m')]].forEach(([k, v], i) => { const y = 3.06 + i * 0.25;
+    T(s, k, { x:X, y, w:1.75, h:0.25, fontSize:9.5, color:C.text, valign:'middle' });
+    T(s, v, { x:X + 1.7, y, w:Wr - 1.7, h:0.25, fontSize:12, bold:true, color:C.acc, align:'right', valign:'middle' }); });
+  hr(s, X, 3.86, Wr);
+  T(s, '후보 목록 (17장과 같은 순서)', { x:X, y:3.91, w:Wr, h:0.2, fontSize:8.5, color:C.muted });
+  const c24 = CANDT ? [CANDT.find(r => r.kind !== '후보'), ...CANDT.filter(r => r.kind === '후보').slice(0, 3)].filter(Boolean) : [];
+  if (!c24.length) T(s, FALLBACK ? FB_TEXT : '-', { x:X, y:4.1, w:Wr, h:0.25, fontSize:10, color:C.muted });
+  c24.forEach((r, i) => { const y = 4.1 + i * 0.235, site = r.kind !== '후보';
+    const nm = site ? `★ 선정지 · ${r.name.split(' ')[0]}` : `${r.name.replace('후보', '후보 ')} · ${r.loc.split(' ').pop()}`;
+    const rx = site ? ((r.alt && r.alt.wheel) ? `휠체어 접근 효과 (${r.alt.tgt} ${r.alt.wheel})` : r.rx) : ({ '난간·쉼터·계단 정비 + 방문돌봄':'정비 + 방문돌봄' }[r.rx] || r.rx);
+    T(s, nm, { x:X, y, w:1.45, h:0.235, fontSize:9.5, bold:true, color:C.ink, valign:'middle' });
+    T(s, rx, { x:X + 1.4, y, w:Wr - 1.4, h:0.235, fontSize:8.5, color: /큰 시설|바로 정비/.test(rx) ? C.teal : C.muted, align:'right', valign:'middle' }); });
+  src(s, '화면 예시(구상)' + (hasR('V6.24.basemap') ? ` · 배경지도: ${R.fields['V6.24.basemap'].value}` : '') + (FALLBACK ? ` · 격자·시설 효과는 ${FB_TEXT}` : ' · 격자·시설 효과는 14·20장과 같은 값')
+       + ((FALLBACK || hasR('V6.24.grid')) ? '' : ` (격자 ${V('V6.24.grid')})`) + ' / 본선에서는 실제 결과 격자로 동작하는 데모로 시연'); }
 
 // ── 25 확산·한계 ──
 { const s = base('행정 도입 단계', '관악구 시범에서 서울시 사업과 법정계획으로 넓힙니다', { tsize:21 });   // [10/20]

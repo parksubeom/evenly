@@ -10,6 +10,7 @@ tools/make_basemap.py ─ [10/20] 기획서 지도 장(14·19)의 밝은 배경�
           --refresh : data_public/raw 의 OSM 응답(받아 둔 것)을 버리고 다시 받음 (보통은 받아 둔 것으로 다시 그림)
 [결과]  deck/basemap/gwanak_light.png + .json  (관악구 동 경계 범위 + 2km, 5m/화소, 14장 결과 지도용)
         deck/basemap/bongcheon_light.png + .json (봉천 선정지 둘레 ±1.5km, 1.25m/화소, 19장 등시선용)
+        deck/basemap/bongcheon_wide_light.png + .json (봉천 둘레 ±3.5km, 2.5m/화소, 24장 화면 지도용)
         .json = {extent_5186: [x0, x1, y0, y1], m_per_px, attribution, osm_fetched}  ← tools/prepare_deck_data.py 가 읽음
         OSM 응답 원본: data_public/raw/osm_basemap_gwanak.json, osm_buildings_gwanak.json (git 에 넣지 않음)
 """
@@ -164,6 +165,10 @@ def main():
     ext2 = (p[0] - 1500, p[0] + 1500, p[1] - 1500, p[1] + 1500)
     W2, H2 = render(L, ext2, 1.25, os.path.join(OUT, "bongcheon_light.png"), 2.4)
     outs.append(("bongcheon_light", ext2, 1.25, W2, H2))
+    # 3) 봉천 넓게 ±3.5km (24장 화면: 봉천·서울대입구·낙성대역·관악산 북쪽까지): 2.5m/화소
+    ext3 = (p[0] - 3500, p[0] + 3500, p[1] - 3500, p[1] + 3500)
+    W3, H3 = render(L, ext3, 2.5, os.path.join(OUT, "bongcheon_wide_light.png"), 1.6)
+    outs.append(("bongcheon_wide_light", ext3, 2.5, W3, H3))
     for nm, ex, mpp, w_, h_ in outs:
         json.dump({"extent_5186": [round(v, 1) for v in ex], "m_per_px": mpp, "px": [w_, h_], "attribution": ATTR,
                    "_설명": "OSM 자료(ODbL)로 직접 그린 밝은 배경지도 (타일 아님, 글자 없음). tools/make_basemap.py",

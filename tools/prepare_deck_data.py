@@ -616,6 +616,7 @@ def main():
     # ── 그림 ──
     plots = make_plots(B, grid, targets, T0, vs, site_rows, skt_plot, rho, p_rho)
     v6_plots(B, grid, T0, a.bands, R)
+    v6_dash(B, grid, T0, R, source)                       # [10/20] 24장 화면 지도
     for k_, v_ in BASEMAP_USED.items():                  # [10/20] 배경지도를 깐 장만 출처 줄에 표기
         B.fields[f"V6.{k_}.basemap"] = {"value": v_, "label": f"{k_}장 배경지도 출처", "need": [], "optional": True}
     if not plots:
@@ -1281,7 +1282,8 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
                           "benefit": r.get("n_benefit_any", ""), "rx": rx_, "alt": alt_,
                           "per100m": per_ if per_ is not None else ("0.1개 이하" if (not ramp_ and small(r.get("n_benefit_any"))) else ""),   # [10/20] 5채 미만(1~4) ÷ 40 → 0.1 이하
                           "wheel_now": r.get("wheel_now_m", ""), "saved": r.get("mean_saved_min", ""), "elder30": r.get("n_saved_30s", ""), "wheel": r.get("wheel_benefit", ""),
-                          "src": r.get("_src", ""), "memo": bool(r.get("_memo")), "addmed": r.get("add_min_med", ""), "lx_rank": r.get("lx_rank"), "n_cells": r.get("n_cells")})
+                          "src": r.get("_src", ""), "memo": bool(r.get("_memo")), "addmed": r.get("add_min_med", ""), "lx_rank": r.get("lx_rank"), "n_cells": r.get("n_cells"),
+                          "cell_x": r.get("cell_x"), "cell_y": r.get("cell_y")})   # [10/20] 24장 화면 지도의 후보 격자
             if r.get("kind") == "후보" and rx_ in ("큰 시설 검토", "바로 정비"):
                 n_big += rx_ == "큰 시설 검토"
                 n_quick += rx_ == "바로 정비"
@@ -1529,27 +1531,9 @@ BASEMAP_USED = {}                                       # [10/20] {"14": 출처,
 
 
 def draw_basemap(ax, ext, alpha=1.0, zorder=0):
-    """[10/20] deck/basemap/*.png (tools/make_basemap.py, OSM 자료로 직접 그린 밝은 배경지도, 인터넷 필요 없음) 중
-    ext(x0, x1, y0, y1, EPSG:5186)를 다 덮는 것 가운데 가장 촘촘한 것을 맨 아래에 깜. 없으면 None (그림은 배경 없이 그대로)"""
-    import glob as _g
-    best = None
-    for j in sorted(_g.glob(os.path.join(BASEMAP_DIR, "*.json"))):
-        try:
-            m = json.load(open(j, encoding="utf-8"))
-            bx0, bx1, by0, by1 = m["extent_5186"]
-        except Exception:
-            continue
-        png = j[:-5] + ".png"
-        if os.path.exists(png) and bx0 <= ext[0] and bx1 >= ext[1] and by0 <= ext[2] and by1 >= ext[3]:
-            if best is None or m["m_per_px"] < best[0]["m_per_px"]:
-                best = (m, png)
-    if not best:
-        return None
-    import matplotlib.pyplot as _plt
-    m, png = best
-    bx0, bx1, by0, by1 = m["extent_5186"]
-    ax.imshow(_plt.imread(png), extent=(bx0, bx1, by0, by1), origin="upper", interpolation="bilinear", alpha=alpha, zorder=zorder)
-    return m.get("attribution") or "© OpenStreetMap contributors"
+    """[10/20] deck/basemap/ 저장본(OSM 자료로 그린 밝은 배경지도)을 깜. 구현은 tools/dash_map.py (24장과 같은 것)"""
+    from dash_map import draw_basemap as _db
+    return _db(ax, ext, alpha=alpha, zorder=zorder)
 
 
 def draw_iso_one(gpkg, minutes=10):
@@ -1616,6 +1600,50 @@ def draw_iso_one(gpkg, minutes=10):
     os.makedirs(os.path.dirname(out), exist_ok=True)
     fig.savefig(out, bbox_inches="tight", pad_inches=0.03); plt.close(fig)   # 제목은 19장 글자로 (그림 안 글씨가 작아지지 않게)
     return out
+
+
+def v6_dash(B, grid, T0, R, source):
+    """[10/20] 24장 화면 지도 (tools/dash_map.py): 배경지도 + 반투명 격자(14장과 같은 구간) + 동·역·관악산 이름 + 17장 후보 1~3 + 서울 속 관악구.
+    격자 = 반출(grid_hbi.csv). 실제판인데 반출이 아직 없으면(미리 빌드) 공개 계산 격자로 미리 보고 V6.24.grid 를 비워 둠 (22일 반출로 다시 그림)"""
+    try:
+        import dash_map as DM
+    except Exception:
+        return
+    def meta_of(rows):
+        rm = {r["key"]: r["value"] for r in (rows or []) if r.get("key")}
+        try:
+            hb = float((rm.get("hbi_bands") or "").split(",")[0])
+        except ValueError:
+            hb = LO
+        try:
+            RM = float(rm.get("risk_min") or "")
+        except ValueError:
+            RM = 10.0
+        return hb, RM
+    rows, hb, RM, from_export = [g for g in grid if g.get("target") == T0], *meta_of(R("run_meta.csv")), bool(grid)
+    if not rows and source == "real":
+        pd_ = os.path.join(ROOT, "results", "public_rehearsal", "gwanak_v62all08", "all")
+        pg = read_csv(os.path.join(pd_, "grid_hbi.csv")) or []
+        rows = [g for g in pg if g.get("target") == T0]
+        hb, RM = meta_of(read_csv(os.path.join(pd_, "run_meta.csv")))
+    tr = f"share_add{RM:g}m".replace(".", "_")
+    cells = []
+    for g in rows:
+        cx, cy = num(g.get("cell_x")), num(g.get("cell_y"))
+        if cx is None or cy is None or num(g.get("hbi_mean")) is None:
+            continue
+        cells.append((cx, cy, 2 if (num(g.get(tr)) or 0) >= 0.5 else (1 if (num(g.get("hbi_mean")) or 0) >= hb else 0)))
+    ct = (B.tables.get("V6.17.cand") or {}).get("rows") or []
+    cands = [(i, num(r["cell_x"]), num(r["cell_y"])) for i, r in enumerate([r for r in ct if r.get("kind") == "후보"][:3], 1) if num(r.get("cell_x")) is not None]
+    st_ = next((x for x in load_sites() if "봉천" in x["name"]), None)
+    if not st_:
+        return
+    out, bm = DM.draw_dash_map(os.path.join(IMG_DIR, "v6_dash.png"), cells, cands, (st_["x"], st_["y"]))
+    B.img("V6.24.map", "24장 화면 지도 (배경지도 + 격자)", ["grid_hbi.csv", "deck/basemap/"], out)
+    if bm:
+        BASEMAP_USED["24"] = bm
+    B.fields["V6.24.grid"] = {"value": ("반출 격자" if from_export else ("격자" if rows and source != "real" else None)),
+                              "label": "24장 화면 격자 (반출 grid_hbi, 22일 real-day 에서 다시 그림)", "need": ["grid_hbi.csv (반출)"]}
 
 
 def v6_plots(B, grid, T0, bands, R):

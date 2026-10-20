@@ -56,7 +56,20 @@ def main():
     put("V6.16.site_label", "선정지 줄 이름", [], "서울시 선정지 봉천동의 위치 (1차 반출: 관악 일대 격자 중)", optional=True)
     put("V6.16.wheel_label", "휠체어 우회 줄 이름", [], "봉천 계단 휠체어 우회 (서울시: 200m 이상)", optional=True)   # 관악 이야기 (값은 2차)
     put("V6.15.date", "현장실측 날짜", ["deck/inputs.json 의 survey_date"], inp.get("survey_date"), later="2026.10.__")
-    out = {"source": "fallback", "src": os.path.relpath(fv_p, ROOT), "bands": "mix", "fields": F, "images": {}, "tables": tables_}
+    images_ = {}
+    try:                                                # [10/20] 24장 화면 지도: 격자 없이 배경지도·이름만 (1차 반출에는 격자가 없음)
+        import dash_map as DM
+        from evenly_common import to5186, read_csv
+        sites = read_csv(os.path.join(ROOT, "analysis", "hbi", "external", "sites.csv")) or []
+        st_ = next((r for r in sites if "봉천" in r.get("name", "") and r.get("lon")), None)
+        if st_:
+            p_, bm_ = DM.draw_dash_map(os.path.join(DECK, "img", "results", "v6_dash_fallback.png"), [], [], to5186(float(st_["lon"]), float(st_["lat"])))
+            images_["V6.24.map"] = {"path": os.path.relpath(p_, DECK).replace(os.sep, "/"), "label": "24장 화면 지도 (배경지도만)", "need": ["deck/basemap/"]}
+            if bm_:
+                put("V6.24.basemap", "24장 배경지도 출처", [], bm_, optional=True)
+    except Exception as e_:
+        print(f"  24장 화면 지도 생략: {e_}")
+    out = {"source": "fallback", "src": os.path.relpath(fv_p, ROOT), "bands": "mix", "fields": F, "images": images_, "tables": tables_}
     os.makedirs(os.path.join(DECK, "data"), exist_ok=True)
     json.dump(out, open(os.path.join(DECK, "data", "results.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print(f"[fallback] {os.path.relpath(fv_p, ROOT)} → deck/data/results.json (값 {sum(1 for f in F.values() if f['value'] is not None)}/{len(F)}, "
