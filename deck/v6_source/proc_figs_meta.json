@@ -1,0 +1,72 @@
+{
+ "_source": "과정 예시: 공개 자료로 그림 (분석은 LX 자료)",
+ "bundle": "hbi_code v6.2 #ddc743",
+ "data": {
+  "길": "국토지리정보원 연속수치지형도 도로중심선 (공개 대역 도엽)",
+  "계단": "© OpenStreetMap contributors (ODbL)",
+  "높이": "공개 지형 타일 AWS Terrain Tiles terrarium z15 (약 30m) → 5m 격자",
+  "격자": "results/public_rehearsal/gwanak_v62all08 (공개 자료 보행망 계산, 약국)",
+  "터널": "© OpenStreetMap contributors (ODbL), data_public/raw/osm_bridges_gwanak.json"
+ },
+ "win_5186": [
+  194384,
+  195134,
+  542005,
+  542755
+ ],
+ "site_5186": [
+  194758.6,
+  542379.8
+ ],
+ "route": {
+  "origin_node": 40888,
+  "pharmacy_node": 39619,
+  "edge_share": 0.02,
+  "len_slope_m": 580,
+  "len_flat_m": 552,
+  "_설명": "기획서 그림에 숫자를 쓰지 않음. 고른 기준: 두 길이 가장 많이 갈리고 둘 다 창 안"
+ },
+ "grid_color": "관악 격자 hbi_mean 5~95% 범위로 연한 색 → 진한 주황 (숫자 없음)",
+ "p28_cross": {
+  "crossings": [
+   [
+    195056.8,
+    543558.2
+   ],
+   [
+    195069.7,
+    543560.7
+   ]
+  ],
+  "dist_from_site_m": 1216,
+  "candidates": [
+   [
+    195057,
+    543558,
+    1216,
+    true
+   ],
+   [
+    195070,
+    543561,
+    1221,
+    true
+   ]
+  ]
+ },
+ "p28_gap": {
+  "edge": 74534,
+  "length_m": 6.0,
+  "dist_from_site_m": 1088
+ },
+ "p28_stair": {
+  "n_stair_links": 5,
+  "n_stair_connect": 0
+ },
+ "p28_tunnel": {
+  "osm_way": 410982813,
+  "name": "난곡터널",
+  "length_m": 370,
+  "_설명": "공개 지형 5m 단면, 세로는 과장 (축 숫자 없음)"
+ }
+}

@@ -370,14 +370,24 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
   T(s, '약국·지하철 엘리베이터·버스정류소를 목적지로 쓰고, 독거노인 통계로 돌봄이 먼저 필요한 동을, 서울 생활인구·보행노인 사고다발지로 외출과 사고를 봅니다.', { x:0.82, y:3.97, w:8.5, h:0.85, fontSize:12, color:C.text, lineSpacingMultiple:1.1 });
   src(s, '자료별 기간과 형식은 부록 1'); }
 
-// ── 11 방법 ──
+// ── 11 방법 ── [10/20] 다섯 단계를 그림 다섯 칸으로: 공개 자료로 그린 과정 예시 (봉천 선정지 둘레 750m, 같은 범위·같은 축척, 결과 숫자 없음)
+//   그림 = tools/make_process_figs.py → v6_source/proc11_1~5.png (공개 리허설 보행망·v6.2 같은 코드)
 { const s = base('분석 방법', '다섯 단계로 "체감 거리"를 계산합니다');
-  [['길 잇기','길과 계단을 30m 조각으로 나눠 하나의 보행망으로 잇습니다'],['높이 입히기','조각마다 오르막과 내리막 경사를 붙입니다'],['출발과 도착',`${BLDS()}에서 ${DEST()}·역 엘리베이터까지 길을 찾습니다`],['사람마다 시간','어르신은 경사만큼 느려지고, 휠체어는 계단을 지나지 못합니다'],['지수와 효과','평지보다 몇 배 걸리는지, 시설을 놓으면 몇 분 줄어드는지 계산합니다']].forEach((t, i) => {
-    const x = 0.6 + i*1.78; hr(s, x, 1.5, 1.6, C.ink, 2);
-    T(s, String(i+1), { x, y:1.62, w:0.6, h:0.6, fontSize:28, bold:true, color:C.ink });
-    T(s, t[0], { x, y:2.25, w:1.6, h:0.35, fontSize:13.5, bold:true, color:C.ink });
-    T(s, t[1], { x, y:2.65, w:1.58, h:1.4, fontSize:12, color:C.text, lineSpacingMultiple:1.15 }); });
-  src(s, '안심구역 안에서 자동 점검 뒤 실행하고, 250m 격자·행정동 집계만 반출 / 경사 모델은 부록 2, 가정값과 민감도는 부록 3'); }
+  const r_ = (t, o = {}) => ({ text:t, options:o }), k_ = (t, c) => r_(t, { color:c, bold:true });
+  const P11 = [
+    ['수치지형도', [r_('도로중심선('), k_('회색', C.muted), r_(')과 계단('), k_('주황', C.acc), r_(')을 꺼냅니다. 점선 원 = 봉천 선정지')]],
+    ['30m 조각 보행망', [r_('길과 계단을 30m 조각(점 = 노드)으로 나눠 하나의 보행망으로 잇습니다')]],
+    ['조각마다 경사', [r_('조각마다 오르막·내리막 경사를 붙입니다', { breakLine:true }), k_('■', C.teal), r_('평지 '), k_('■', 'E3B23C'), r_('완만 '), k_('■', C.acc), r_('1/12 넘음')]],
+    ['경로 비교', [r_('같은 집(●)에서 약국('), k_('■', C.teal), r_(')까지, 평지 가정 길('), k_('회색', C.muted), r_(')과 경사 반영 길('), k_('주황', C.acc), r_(')이 갈립니다')]],
+    ['250m 격자', [r_('평지보다 몇 배 걸리는지 250m 격자로 모읍니다. 진할수록 부담이 큽니다')]]];
+  P11.forEach((p, i) => { const x = 0.6 + i*1.79;
+    T(s, [r_(`${i+1}  `, { bold:true, color:C.acc }), r_(p[0], { bold:true, color:C.ink })], { x, y:1.36, w:1.72, h:0.3, fontSize:12.5 });
+    s.addImage({ path:img(`proc11_${i+1}.png`), x, y:1.7, w:1.64, h:1.64 });
+    if (i < 4) T(s, '›', { x:x+1.64, y:2.3, w:0.15, h:0.4, fontSize:15, bold:true, color:C.muted, align:'center', valign:'middle' });
+    T(s, p[1], { x, y:3.42, w:1.64, h:0.98, fontSize:10, color:C.text, lineSpacingMultiple:1.1 }); });
+  T(s, '안심구역 안에서 자동 점검 뒤 실행하고, 250m 격자·행정동 집계만 반출합니다. 경사 모델은 부록 2, 가정값과 민감도는 부록 3', { x:0.6, y:4.5, w:8.8, h:0.3, fontSize:10.5, color:C.muted });
+  src(s, '과정 예시: 공개 자료로 그림 (분석은 LX 자료) · 봉천 선정지 둘레 750m, 다섯 칸 같은 축척 (막대 100m) · 길 = 국토지리정보원 연속수치지형도, 계단 = © OpenStreetMap contributors, '
+       + '높이 = 공개 지형 타일, 격자 = 공개 자료 보행망 계산 (약국)'); }
 
 // ── 12 HBI ──
 { const s = base('핵심 지표', '언덕 부담 지수는 "평지보다 몇 배 걸리는가"입니다', { tsize:22 });
@@ -770,13 +780,28 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
   etable(s, rows27, { colW:[0.95,2.05,2.5,1.45,1.85], rowH:[0.32].concat(rows27.slice(1).map(() => 0.31)), fontSize:10 });
   src(s, '선행연구: 이희연 외(2015) 서울도시연구 / 구릉지 고령자 이동취약지역 연구 / 이소민·오성훈(2025) / 강현미·박소현(2009)'); }
 { const s = base('부록 2', '전처리와 경사 모델');
-  [['수치지형도','도로중심선·계단 추출, 교차점 분할, 끊긴 끝점 10m 연결, 30m 링크'],['DEM 5M','좌표계 통일(EPSG:5186), 링크 양 끝 고도, ±40% 초과는 자름, 다리·터널 경사 0'],['건물·필지·대장','건물 중심점 → 필지 → 건축물대장, 주용도로 주거·의료·노유자, 연결률 보고']].forEach((c, i) => { const y = 1.45 + i*1.2; if (i) hr(s, 0.6, y-0.1, 4.4);
-    T(s, c[0], { x:0.6, y, w:4.4, h:0.3, fontSize:13, bold:true, color: i==2 ? C.acc : C.ink }); T(s, c[1], { x:0.6, y:y+0.34, w:4.4, h:0.7, fontSize:11.5, color:C.text }); });
+  // [10/20] 왼쪽 = 전처리 과정 그림 네 칸 (전 → 후, 공개 자료로 그린 실제 예: tools/make_process_figs.py → v6_source/proc28_1~4.png)
+  const PF = (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'v6_source', 'proc_figs_meta.json'), 'utf8')); } catch (e) { return {}; } })();
+  const tn28 = (PF.p28_tunnel && PF.p28_tunnel.name) ? ` (예: ${PF.p28_tunnel.name})` : '';
+  [['교차점 분할', '겹쳐 지나가는 선을 교차점에서 잘라 노드(주황 원)를 만듭니다'],
+   ['끊긴 끝점 10m 연결', '막다른 끝을 10m 안의 다른 길과 이어 줍니다 (주황 점선)'],
+   ['계단', '계단 면 안 링크 = 계단(주황). 고령자 1.2배, 휠체어는 못 지남'],
+   ['다리·터널 경사 0', `땅 높이(주황 점선) 대신 경사 0으로 계산 (초록)${tn28}`]].forEach((c, i) => {
+    const x = 0.6 + (i % 2) * 2.3, y = 1.4 + Math.floor(i / 2) * 1.58;
+    T(s, c[0], { x, y, w:1.5, h:0.22, fontSize:10.5, bold:true, color:C.ink });
+    T(s, '전 → 후', { x:x+1.3, y, w:0.8, h:0.22, fontSize:8, color:C.muted, align:'right' });
+    s.addImage({ path:img(`proc28_${i+1}.png`), x, y:y+0.25, w:2.1, h:0.92 });
+    T(s, c[1], { x, y:y+1.19, w:2.1, h:0.34, fontSize:8.5, color:C.text, lineSpacingMultiple:1.05 }); });
+  T(s, '과정 예시: 공개 자료로 그림 (분석은 LX 자료) · 길 = 국토지리정보원 연속수치지형도, 계단·터널 = © OpenStreetMap contributors, 높이 = 공개 지형 타일',
+    { x:0.6, y:4.54, w:4.45, h:0.36, fontSize:8, color:C.muted, lineSpacingMultiple:1.05 });   // [10/20] 그림 바로 아래 출처
   const xs = [0,2,4,6,8,10,12,14,16,18,20], tob = sl => 6*Math.exp(-3.5*Math.abs(sl+0.05)), flatv = tob(0);
-  s.addChart(pres.charts.LINE, [{ name:'오르막 소요시간 배수', labels:xs.map(x=>x+'%'), values:xs.map(x => +(flatv/tob(x/100)).toFixed(2)) }], { x:5.25, y:1.4, w:4.2, h:2.45, chartColors:[C.acc], lineSize:2.5, lineDataSymbol:'circle', lineDataSymbolSize:5, showTitle:true, title:'오르막 경사별 소요시간 배수', titleFontSize:11, titleColor:C.ink, titleFontFace:F, catAxisLabelColor:C.muted, valAxisLabelColor:C.muted, catAxisLabelFontSize:9, valAxisLabelFontSize:9, valGridLine:{ color:'E8EAE9', size:0.5 }, catGridLine:{ style:'none' }, showLegend:false, valAxisMinVal:1 });
-  T(s, [{ text:'고령자 ', options:{ bold:true, color:C.ink } }, { text:`${SPD()}m/s × Tobler 배수, 내리막은 오르막 부담의 50%, 계단 최소 25%·1.2배`, options:{ breakLine:true } }, { text:'휠체어 ', options:{ bold:true, color:C.teal } }, { text:'1.0m/s, 1/12 초과는 10배(회피), 계단 통행 불가', options:{} }], { x:5.25, y:4.0, w:4.2, h:1.0, fontSize:11, color:C.text, valign:'middle' });
-  T(s, [{ text:'출처·대조군 (16장)  ', options:{ bold:true, color:C.ink } }, { text:(FALLBACK ? '' : `공개 대조군: 서울 도보 네트워크 + 30m 공개 지형 · 계단을 빼면 휠체어 시간 과소 계산 ${V('V6.16.stairs')} · `) + `어르신 ${SPD()}m/s: ${V('V6.16.speed_src')}`, options:{ color:C.muted } }],
-    { x:0.6, y:4.95, w:8.8, h:0.3, fontSize:8.5 });   // [10/14 v11] 16장 출처를 여기로
+  s.addChart(pres.charts.LINE, [{ name:'오르막 소요시간 배수', labels:xs.map(x=>x+'%'), values:xs.map(x => +(flatv/tob(x/100)).toFixed(2)) }], { x:5.25, y:1.4, w:4.2, h:2.2, chartColors:[C.acc], lineSize:2.5, lineDataSymbol:'circle', lineDataSymbolSize:5, showTitle:true, title:'오르막 경사별 소요시간 배수', titleFontSize:11, titleColor:C.ink, titleFontFace:F, catAxisLabelColor:C.muted, valAxisLabelColor:C.muted, catAxisLabelFontSize:9, valAxisLabelFontSize:9, valGridLine:{ color:'E8EAE9', size:0.5 }, catGridLine:{ style:'none' }, showLegend:false, valAxisMinVal:1 });
+  T(s, [{ text:'고령자 ', options:{ bold:true, color:C.ink } }, { text:`${SPD()}m/s × Tobler 배수, 내리막은 오르막 부담의 50%, 계단 최소 25%·1.2배`, options:{ breakLine:true } }, { text:'휠체어 ', options:{ bold:true, color:C.teal } }, { text:'1.0m/s, 1/12 초과는 10배(회피), 계단 통행 불가', options:{} }], { x:5.25, y:3.66, w:4.2, h:0.66, fontSize:10.5, color:C.text, valign:'top' });
+  T(s, [{ text:'DEM 5M  ', options:{ bold:true, color:C.ink } }, { text:'EPSG:5186 통일, 링크 양 끝 고도로 경사, ±40% 넘으면 자름', options:{ color:C.text, breakLine:true } },
+        { text:'건물·필지·대장  ', options:{ bold:true, color:C.acc } }, { text:'건물 중심점 → 필지 → 대장 주용도, 연결률 보고', options:{ color:C.text } }],
+    { x:5.25, y:4.36, w:4.2, h:0.54, fontSize:8.5, lineSpacingMultiple:1.05 });   // [10/20] 왼쪽 그림 자리에서 옮김
+  T(s, [{ text:'출처·대조군 (16장)  ', options:{ bold:true, color:C.ink } }, { text:(FALLBACK ? '' : `공개 대조군: 서울 도보 네트워크 + 30m 공개 지형 · 계단 빼면 휠체어 시간 과소 ${V('V6.16.stairs')} · `) + `어르신 속도: ${V('V6.16.speed_src')}`, options:{ color:C.muted } }],
+    { x:0.6, y:4.92, w:8.8, h:0.3, fontSize:8.5 });   // [10/14 v11] 16장 출처를 여기로   // [10/20] 속도 숫자 겹침 줄임 (출처 글에 이미 있음)
   src(s, 'Tobler 보행함수 v = 6·exp(−3.5·|s+0.05|) km/h / 휠체어 경사 기준: 장애인·노인·임산부 등의 편의증진 보장에 관한 법률 시행규칙'); }
 { const s = base('부록 3', '가정을 바꿔도 결론이 유지되는가');
   const r = (a,b,c2,d) => [B(a), b, c2, d];
