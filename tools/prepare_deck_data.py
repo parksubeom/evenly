@@ -1457,6 +1457,14 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     dm_ = next((r for r in (memo.get("08_sensitivity") or {}).get("rows", []) if r["scenario"].startswith("DEM 1m")), None)
     P("V6.16.dem1m", "DEM 1m 로 다시 계산한 순위상관 (1m 범위 안 집)", ["10/20 현장 메모 (08 민감도)"],
       f"{dm_['rank_corr']:.3f}".rstrip("0").rstrip(".") if dm_ else None, optional=not memo)
+    # [10/20] 16·17장: 같은 봉천 계단 높이 차 — 공개 지형(공개 자료 계산) vs LX DEM 5m·1m (현장 메모 09)
+    bm_ = memo.get("09_bongcheon") or {}
+    rp_ = num(next((r.get("rise_m") for r in (pub.get("bongcheon_public") or {}).values() if num(r.get("rise_m")) is not None), None))
+    if rp_ is not None and bm_.get("rise_m") is not None:
+        P("V6.16.rise_pub", "봉천 계단 높이 차 (공개 지형, 공개 자료 계산)", ["deck/public_calc/public_calc.json bongcheon_public rise_m"], f"{rp_:.1f}m", optional=True)
+        P("V6.16.rise_lx", "봉천 계단 높이 차 (LX DEM 5m, 현장 메모 09)", ["10/20 현장 메모 (09 봉천)"], f"{bm_['rise_m']:.1f}m", optional=True)
+        if bm_.get("rise_dem1m_m") is not None:
+            P("V6.16.rise_1m", "봉천 계단 높이 차 (LX DEM 1m, 현장 메모)", ["10/20 현장 메모 (09 봉천)"], f"{bm_['rise_dem1m_m']:.1f}m", optional=True)
     lr_ = memo.get("check_link_rate") or {}
     hm_ = pub.get("hbi_median_by_mode") or {}
     P("V6.14.mode_note", "모든 건물 기준인 이유·영향", ["10/19 check 화면 (현장 메모)", "공개 자료 계산 (주거만 vs 모든 건물)"],
