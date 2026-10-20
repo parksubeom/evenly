@@ -391,8 +391,7 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
   T(s, '안심구역 안에서 자동 점검 뒤 실행하고, 250m 격자·행정동 집계만 반출합니다. 경사 모델은 부록 2, 가정값과 민감도는 부록 3', { x:0.6, y:4.5, w:8.8, h:0.3, fontSize:10.5, color:C.muted });
   src(s, PFC ? '과정 예시: 공개 자료(연속수치지형도 등고선)로 그림 · 분석은 LX 자료 · 봉천 선정지 둘레 750m, 다섯 칸 같은 축척 (막대 100m) · 길 = 연속수치지형도 도로중심선, '
              + '계단 = © OpenStreetMap contributors, 격자 = 같은 등고선 경사로 계산 (약국)'
-             : PFB ? '과정 예시: 공개 자료로 그림 (분석은 LX 자료) · 봉천 선정지 둘레 750m, 다섯 칸 같은 축척 (막대 100m) · 길·등고선 = 연속수치지형도, 계단 = © OpenStreetMap contributors, '
-             + '경사·격자 = 공개 지형 타일로 계산 (약국)'
+             : PFB ? '과정 예시: 길·등고선 = 연속수치지형도, 경사·격자 = 공개 지형 (분석은 LX 자료) · 계단 = © OpenStreetMap contributors'   // [10/20] (가) 사용자 문구 + OSM 표기(ODbL)
              : '과정 예시: 공개 자료로 그림 (분석은 LX 자료) · 봉천 선정지 둘레 750m, 다섯 칸 같은 축척 (막대 100m) · 길 = 국토지리정보원 연속수치지형도, 계단 = © OpenStreetMap contributors, '
              + '높이 = 공개 지형 타일, 격자 = 공개 자료 보행망 계산 (약국)'); }   // [10/20] 등고선 그림이면 출처 줄이 바뀜
 
@@ -799,7 +798,7 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
     s.addImage({ path:img(`proc28_${i+1}.png`), x, y:y+0.25, w:2.1, h:0.92 });
     T(s, c[1], { x, y:y+1.19, w:2.1, h:0.34, fontSize:8.5, color:C.text, lineSpacingMultiple:1.05 }); });
   T(s, PFC ? '과정 예시: 공개 자료(연속수치지형도 등고선)로 그림 · 분석은 LX 자료 · 길 = 연속수치지형도 도로중심선, 계단·터널 = © OpenStreetMap contributors'
-            : PFB ? '과정 예시: 공개 자료로 그림 (분석은 LX 자료) · 길·등고선 = 연속수치지형도, 터널 단면 높이 = 연속수치지형도 등고선, 계단·터널 = © OpenStreetMap contributors'
+            : PFB ? '과정 예시: 길·등고선 = 연속수치지형도, 경사·격자 = 공개 지형 (분석은 LX 자료) · 계단·터널 = © OpenStreetMap contributors'
             : '과정 예시: 공개 자료로 그림 (분석은 LX 자료) · 길 = 국토지리정보원 연속수치지형도, 계단·터널 = © OpenStreetMap contributors, 높이 = 공개 지형 타일',
     { x:0.6, y:4.54, w:4.45, h:0.36, fontSize:8, color:C.muted, lineSpacingMultiple:1.05 });   // [10/20] 그림 바로 아래 출처
   const xs = [0,2,4,6,8,10,12,14,16,18,20], tob = sl => 6*Math.exp(-3.5*Math.abs(sl+0.05)), flatv = tob(0);

@@ -6,6 +6,7 @@
   "계단": "© OpenStreetMap contributors (ODbL)",
   "높이": "공개 지형 타일 AWS Terrain Tiles terrarium z15 (약 30m) → 5m 격자",
   "격자": "results/public_rehearsal/gwanak_v62all08 (공개 자료 보행망 계산, 약국)",
+  "등고선": "연속수치지형도 등고선 (국토지리정보원): 11장 지도 칸 배경, 28장 터널 단면 높이 (경사 색·경로·격자는 공개 지형)",
   "터널": "© OpenStreetMap contributors (ODbL), data_public/raw/osm_bridges_gwanak.json"
  },
  "win_5186": [
@@ -18,6 +19,56 @@
   194758.6,
   542379.8
  ],
+ "contour": false,
+ "contour_bg": true,
+ "contour_report": {
+  "_설명": "연속수치지형도 등고선(국토지리정보원) 중 관악 범위(공개 대역 DEM + 500m, EPSG:5179) 등고선. zip 이 덜 받아졌거나 손상이면 앞에서부터 읽힌 데까지",
+  "files": {
+   "017": {
+    "zip": "(연속수치지형도)등고선_017.zip",
+    "zip_bytes": 652303926,
+    "shp_expected_bytes": 1043791732,
+    "zip_complete": true,
+    "shp_inflated_bytes": 1043791732,
+    "shp_inflated_share": 1.0,
+    "shp_crc_ok": true,
+    "dbf_records": 100000,
+    "shp_records_read": 100000,
+    "shp_records_share": 1.0,
+    "gwanak_contours": 5336,
+    "상태": "온전"
+   },
+   "018": {
+    "zip": "(연속수치지형도)등고선_018.zip",
+    "zip_bytes": 1057863039,
+    "shp_expected_bytes": 1733515380,
+    "zip_complete": true,
+    "shp_inflated_bytes": 1733515380,
+    "shp_inflated_share": 1.0,
+    "shp_crc_ok": true,
+    "dbf_records": 180000,
+    "shp_records_read": 180000,
+    "shp_records_share": 1.0,
+    "gwanak_contours": 10490,
+    "상태": "온전"
+   },
+   "019": {
+    "zip": "(연속수치지형도)등고선_019.zip",
+    "zip_bytes": 1292345841,
+    "shp_expected_bytes": 2066179804,
+    "zip_complete": true,
+    "shp_inflated_bytes": 2066179804,
+    "shp_inflated_share": 1.0,
+    "shp_crc_ok": true,
+    "dbf_records": 88941,
+    "shp_records_read": 88941,
+    "shp_records_share": 1.0,
+    "gwanak_contours": 0,
+    "상태": "온전"
+   }
+  },
+  "output": "data_public/raw/contour_gwanak.gpkg"
+ },
  "route": {
   "origin_node": 40888,
   "pharmacy_node": 39619,
@@ -67,6 +118,6 @@
   "osm_way": 410982813,
   "name": "난곡터널",
   "length_m": 370,
-  "_설명": "공개 지형 5m 단면, 세로는 과장 (축 숫자 없음)"
+  "_설명": "등고선 5m 격자 단면, 세로는 과장 (축 숫자 없음)"
  }
 }

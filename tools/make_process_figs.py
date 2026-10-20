@@ -44,6 +44,7 @@ SLOPE_BINS = [(0.03, TEAL), (1 / 12, YEL), (9.9, ACC)]   # 경사 |s|: 3% 미만
 SITE_NAME = "봉천동 비안어린이공원 인근"                  # tools/field_fix_v62.py 후보 좌표 표의 선정지 줄 (계단 양 끝 a·b)
 PX = 1.64                                                # 11장 한 칸 그림 크기 (인치, build_v6.js 와 같게)
 CBG = None                                               # [10/20] 등고선 배경 (contour_bg 가 채움)
+CBG_28 = True                                            # 28장 지도 칸에도 등고선 배경 (--bg-only 면 끔: 11장 배경·28장 단면에만)
 CONT_C, CONT_C25 = "#E3DED4", "#CEC6B6"                  # 등고선 색 (주곡선 · 25m 계곡선)
 
 
@@ -266,7 +267,8 @@ def pair(win=None, size=P28, dpi=400):
         if win:
             ax.set_xlim(win[0], win[1]); ax.set_ylim(win[2], win[3]); ax.set_aspect("equal")
             ax.add_patch(Rectangle((win[0], win[2]), win[1] - win[0], win[3] - win[2], fill=False, ec=LINE, lw=0.8, zorder=50))
-            draw_contours(ax, win)
+            if CBG_28:
+                draw_contours(ax, win)
     c = 0.5                                               # 가운데 화살표 (글자 없이)
     fig.add_artist(MPoly([[c - 0.012, 0.40], [c + 0.016, 0.5], [c - 0.012, 0.60]], closed=True, transform=fig.transFigure, color=MUTED))
     return fig, axs
@@ -535,7 +537,7 @@ def main():
     ap.add_argument("--bg-only", action="store_true", help="[10/20] 등고선은 지도 칸 배경과 28장 터널 단면에만 (경사 색·경로·격자는 공개 지형 그대로)")
     ap.add_argument("--out", help="그림 폴더 (기본 deck/v6_source)")
     a = ap.parse_args()
-    global OUT, CBG
+    global OUT, CBG, CBG_28
     if a.out:
         OUT = os.path.abspath(a.out)
     if a.allow_gaps and not a.out:
@@ -572,10 +574,11 @@ def main():
     e = {kk[2:]: d[kk] for kk in d.files if kk.startswith("e_")}
     s5, zuse = d["s5"], d["z5"]
     cdem = None
-    if a.contours and a.bg_only:                                    # [10/20] 배경·터널 단면만 등고선
+    if a.contours and a.bg_only:                                    # [10/20] 11장 배경·28장 터널 단면만 등고선 (28장 지도 칸 배경은 없음)
         CBG = os.path.abspath(a.contours)
+        CBG_28 = False
         cdem = ContourDEM(CBG, win)
-        meta["data"]["등고선"] = "연속수치지형도 등고선 (국토지리정보원): 지도 칸 배경, 28장 터널 단면 높이 (경사 색·경로·격자는 공개 지형)"
+        meta["data"]["등고선"] = "연속수치지형도 등고선 (국토지리정보원): 11장 지도 칸 배경, 28장 터널 단면 높이 (경사 색·경로·격자는 공개 지형)"
         rep_p = os.path.join(os.path.dirname(CBG), "contour_gwanak_report.json")
         meta["contour_report"] = json.load(open(rep_p, encoding="utf-8")) if os.path.exists(rep_p) else None
     elif a.contours:
