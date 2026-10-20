@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <title>10/22 기획서 마감일 절차</title>
 <style>
-@page { size: A4; margin: 5mm 9mm 4mm; }
+@page { size: A4; margin: 4mm 9mm 3mm; }
 * { box-sizing: border-box; }
-body { margin: 0; font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; font-size: 7.7pt; line-height: 1.25; color: #000; background: #fff; }
+body { margin: 0; font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; font-size: 7.3pt; line-height: 1.2; color: #000; background: #fff; }
 .page { width: 192mm; }
 h1 { font-size: 13pt; margin: 0 0 .6mm; }
-h2 { font-size: 9pt; margin: 1.4mm 0 .5mm; border-bottom: 1px solid #000; padding-bottom: .4mm; }
+h2 { font-size: 9pt; margin: 1.1mm 0 .4mm; border-bottom: 1px solid #000; padding-bottom: .4mm; }
 p, ul, ol { margin: 0 0 .6mm; }
 ul, ol { padding-left: 4mm; }
 li { margin: 0 0 .2mm; }
@@ -38,6 +38,7 @@ td.ck, th.ck { text-align: center; }
 <tr><th class="ck">✓</th><th style="width:24%">할 일</th><th>어떻게</th></tr>
 <tr><td class="ck"></td><td>관악 실측 (15·3장)</td><td><code>deck/inputs.json</code>: <code>"survey_date"</code>, <code>"mapapp_min"</code>·<code>"measured_min"</code>(보통 걸음)·<code>"slow_min"</code>(천천히) = <code>{"비안어린이공원": 분, "봉천역": 분, "도림천": 분, "낙성대": 분}</code> (숫자만). 들어오면 15장이 실측 배치(지도앱·보통·모델 성인·천천히·모델 어르신), 13장 현장실측 줄, 3장 '실측 비교는 15장'</td></tr>
 <tr><td class="ck"></td><td>15장 사진 4장</td><td><code>docs/photos/15_1~15_4</code> (1 봉천 계단 · 2 봉천역 오르막 · 3 도림천 · 4 낙성대). 얼굴·번지판·번호판 없는 것. 없으면 실제판은 사진 자리 없이 표를 넓힘</td></tr>
+<tr><td class="ck"></td><td>15장 서울시 사진 2장</td><td><code>docs/photos/gwanak_1·2.jpg</code> (서울 오르락 원문 그대로, git 에 없음 → 이 컴퓨터에서 빌드). 없으면 표만 ("!! 15장" 줄)</td></tr>
 <tr><td class="ck"></td><td>현장 메모·방문일 확인</td><td><code>deck/inputs_memo_1020.json</code> 값이 메모와 같은지 (09 봉천·08 민감도·연결률), 센터 허락 메일 보관. 방문일 <code>visits</code> = 10/02·10/19·10/20 (3일)</td></tr>
 <tr><td class="ck"></td><td>그림 재료 (반영됨)</td><td>11장 등고선 배경·28장 터널 단면 = 연속수치지형도 등고선 (<code>--bg-only</code>) · 14·19장 배경지도 = <code>deck/basemap/</code> 저장본 (OSM 자료로 그림, 인터넷 필요 없음)</td></tr>
 <tr><td class="ck"></td><td><b>18:00 문구 고정</b></td><td>이 시각 뒤로는 장 문구·배치를 바꾸지 않음 (그때의 커밋이 제출 문구). 밤에 오는 실측은 <code>deck/inputs.json</code> 숫자만</td></tr>
@@ -45,12 +46,12 @@ td.ck, th.ck { text-align: center; }
 <tr><td class="ck"></td><td>대비책 판·제출 준비</td><td><code>npm run fallback-pdf</code> → 누락 0·통과 ("반영 예정" 이 장에 남으면 빌드가 멈춤). 개인정보 동의서 서명본, 접수 페이지 로그인·올리는 곳 확인</td></tr>
 </table>
 
-<h2>0-1. 22일에 반출로 채워질 칸 (지금 미리 빌드의 빈칸 30개, 반출이 오면 자동)</h2>
+<h2>0-1. 22일에 반출로 채워질 칸 (지금 미리 빌드의 빈칸 24개, 반출이 오면 자동)</h2>
 <table class="small">
 <tr><th class="ck">✓</th><th style="width:8%">장</th><th style="width:52%">칸</th><th>원천</th></tr>
 <tr><td class="ck"></td><td>2·4·14</td><td>"가까운 동네" 부담 비율 · 고립 위험 건물 수 · 은천동 왕복 추가 중앙값 · 결과 지도 · 가장 급한 동</td><td>반출 summary·grid_hbi·dong_hbi</td></tr>
-<tr><td class="ck"></td><td>15</td><td>네 구간 모델 성인·어르신(0.8) 시간</td><td>반출 validation_routes</td></tr>
-<tr><td class="ck"></td><td>16·28</td><td>봉천 백분위 · 휠체어 우회(모델) · 높이 빼면 바뀌는 상위 10% · 계단 빼면 · 공개 대조군 놓침 %</td><td>반출 validation_* · 공개 대조군 = real-day 가 계산</td></tr>
+<tr><td class="ck"></td><td>15</td><td>(실측이 있을 때만) 네 구간 모델 성인·어르신(0.8) 시간</td><td>반출 validation_routes</td></tr>
+<tr><td class="ck"></td><td>16·28</td><td>봉천 백분위 · 휠체어 우회(모델) · 높이 빼면 바뀌는 상위 10% · 계단 빼면 · 공개 대조군 놓침 % · 2단계 봉천초 인근 격자 백분위 (위치 = deck/seoul_orak.json)</td><td>반출 validation_* · 공개 대조군 = real-day 가 계산</td></tr>
 <tr><td class="ck"></td><td>17</td><td>후보·봉천 격자의 고립 위험 건물·왕복 추가 (+ 각주 "LX 기준 순위: 후보 1 ○위 …")</td><td>반출 grid_hbi</td></tr>
 <tr><td class="ck"></td><td>2·20·24</td><td>설치 전 휠체어 길 (238m 자리) · 24장 화면 지도 격자·범례 (반출 격자만) · 24장 후보 줄 "고립 위험 건물 ○개(LX)"</td><td>반출 validation_routes (봉천 계단) · grid_hbi</td></tr>
 <tr><td class="ck"></td><td>21·22·29</td><td>최우선 방문 동 · 정류장 검토 지역 · 사고다발지 겹침 · 문턱별 상위 3개 동(있는 구간만)</td><td>반출 dong_hbi·grid_hbi + 공개 자료</td></tr>
@@ -70,7 +71,7 @@ npm run real-day -- <받은 zip 또는 폴더></div>
 <tr><td>v6.2 출력: 후보 손 입력 5곳을 17장 표로</td><td>정상 (부담 = LX, 효과 = 공개 계산)</td></tr>
 <tr><td>금지 글자 0곳 · 노트 0장 · 대체 문구 0곳</td><td>정상 (대체 문구가 남으면 판정이 멈춤)</td></tr>
 <tr><td>▶ 실제판 후보</td><td>2. 장별 확인</td></tr>
-<tr><td>▶ 관악 실측 칸만 비었음</td><td>실측 값을 inputs.json 에 → <code>npm run real-day</code>. 실측을 못 했으면 그대로 (15장 = 모델만 배치)</td></tr>
+<tr><td>▶ 관악 실측 칸만 비었음</td><td>실측 값을 inputs.json 에 → <code>npm run real-day</code>. 실측을 못 했으면 그대로 (15장 = 봉천 계단 네 자료 대조)</td></tr>
 <tr><td>▶ 대비책 판 — 이유 …</td><td>이유 메모 → 12:00 에 대비책 판</td></tr>
 </table>
 </div>
@@ -81,11 +82,12 @@ npm run real-day -- <받은 zip 또는 폴더></div>
 <tr><th class="ck">✓</th><th style="width:6%">장</th><th style="width:56%">볼 것</th><th>멈출 신호</th></tr>
 <tr><td class="ck"></td><td>전체</td><td>30장 · <code>___</code> 없음 · 글자 잘림·겹침 없음 · "건물(모든 건물 기준)"·목적지 "약국" 표기 · 출처 줄 (LX 분석 / 공개 자료 보행망 / 해석적 계산)</td><td>하나라도 어긋남</td></tr>
 <tr><td class="ck"></td><td>3·12·1</td><td>0.8m/s: 7·9·14분, 12장 14.3 ÷ 9.4 = 1.52배 · 왕복 26.1 ÷ 18.8 = 1.39배, "420m ÷ 0.8m/s ≈ 편도 약 9분"</td><td></td></tr>
+<tr><td class="ck"></td><td>5·7</td><td>5장 구릉지 40%·이동약자 274만 명 · 7장 30곳·1~4단계·사업기간 '24.8~'30.6 (모두 서울 오르락) · "85곳"·"100곳" 없음 (남으면 빌드가 멈춤)</td><td>출처 줄이 서울 오르락이 아님</td></tr>
 <tr><td class="ck"></td><td>11·28</td><td>과정 그림 (봉천 둘레 750m 다섯 칸·전처리 네 칸, 공개 자료로 그림·숫자 없음) · 출처 "과정 예시: 공개 자료로 그림 (분석은 LX 자료)"·© OpenStreetMap contributors</td><td>그림 빈 칸·글자 겹침</td></tr>
 <tr><td class="ck"></td><td>13</td><td>방문 3일 (10/02·10/19·10/20), 실측 했으면 현장실측 줄</td><td></td></tr>
 <tr><td class="ck"></td><td>14</td><td>지도·고립 위험 건물 수·가장 급한 동, 각주 "연결률(대장 45%·건물 칸 25%) … HBI 중앙값 차이 약 0.01", 어르신 추정 칸 없음</td><td>지도 빈 칸</td></tr>
-<tr><td class="ck"></td><td>15</td><td>실측 배치 또는 모델만 배치, 사진 (얼굴·번지 없음)</td><td>모델이 실측의 절반 아래·두 배 위</td></tr>
-<tr><td class="ck"></td><td>16</td><td>봉천 백분위 · 휠체어 우회 · DEM 1m 순위상관 0.991 · 높이 빼면 % · 공개 대조군 % · 셋째 줄 "같은 봉천 계단 높이 차 5.1m → 11.1m (DEM 1m 11.0m)"</td><td>휠체어 m 이 0·빈 칸</td></tr>
+<tr><td class="ck"></td><td>15</td><td>실측 배치, 또는 네 자료 대조 (10.2 · 11.1 · 11.0 · 5.1m) + 서울시 사진 두 장·출처</td><td>사진 잘림·출처 없음 · 모델이 실측의 절반 아래·두 배 위</td></tr>
+<tr><td class="ck"></td><td>16</td><td>봉천 백분위 · 휠체어 우회 · DEM 1m 순위상관 0.991 · 높이 빼면 % · 공개 대조군 % · 셋째 줄 "같은 봉천 계단 높이 차 5.1m → 11.1m (서울시 공식 10.2m)" · 첫 줄 끝 "2단계 봉천초 인근도/은 상위 ○%"</td><td>휠체어 m 이 0·빈 칸</td></tr>
 <tr><td class="ck"></td><td>17·19</td><td>표 위 "시설 효과는 봉천·후보 모두 공개 자료 보행망으로 같은 방식으로 계산", 봉천 줄 = 공개 계산 (수직 5.1m · 약국 5개 미만 · 역 85개), 각주 "LX 봉천 약국 192개(1억 원당 4.8) … 5.1m · 11.1m (16장)" + LX 순위, 19장 등시선 "공개 보행망"</td><td>위치가 관악 밖</td></tr>
 <tr><td class="ck"></td><td>18·23</td><td>18장 행정 결정 다섯 줄 + 길안내 연계 한 줄 · 23장 법 조문(교통약자법 제7·8·25조)·고시 번호·서울시 단계 출처 줄</td><td>출처 줄이 장 밖으로</td></tr>
 <tr><td class="ck"></td><td>20·2·24</td><td>238m(반출) → 31m, 높이 11.1m, 통과 1.0분, 약국 192개·1억 원당 4.8개, 역 34개 · 2장 "약국까지 가는 건물 192개" · 24장 같은 숫자 · 후보 목록 = 17장 후보를 고립 위험 건물(LX) 많은 순 3곳, 지도 번호와 같음</td><td></td></tr>

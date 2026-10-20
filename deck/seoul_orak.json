@@ -1,0 +1,90 @@
+{
+ "_설명": "서울균형발전포털 「서울 오르락」 공식 값 (5·7·15·16장). 원문에 있는 것만 적고 고치지 않는다. 확인: 2026-10-21 원문 대조",
+ "source": "서울균형발전포털 「서울 오르락」 (서울특별시 균형발전기획관, 2026-08-28 수정, 공공누리 제4유형)",
+ "source_short": "서울 오르락 (서울균형발전포털, 2026-08-28 수정)",
+ "url": "https://uri.seoul.go.kr/web/contents/242.do?mid=1381",
+ "license": "공공누리 제4유형: 출처표시 + 변경불가 + 비상업적 이용만 가능",
+ "period": "'24.8~'30.6",
+ "total": 30,
+ "total_note": "고지대 엘리베이터 등 이동편의시설 설치 30개소 (기추진 15, 예정 15)",
+ "phases": [
+  {
+   "n": 1,
+   "count": 5,
+   "when": "2026 하반기~2027 준공",
+   "open": false
+  },
+  {
+   "n": 2,
+   "count": 10,
+   "when": "2027~2028 준공",
+   "open": false
+  },
+  {
+   "n": 3,
+   "count": 10,
+   "when": "2027 상반기 대상지 발표",
+   "open": true
+  },
+  {
+   "n": 4,
+   "count": 5,
+   "when": "2028 상반기 대상지 발표",
+   "open": true
+  }
+ ],
+ "mobility_impaired": {
+  "value": "274만 명",
+  "year": 2025,
+  "share": "약 29.1%"
+ },
+ "hill_share": {
+  "value": "40%",
+  "def": "해발 40m 이상 구릉지 비율"
+ },
+ "bongcheon1": {
+  "stage": 1,
+  "name": "봉천 비안어린이공원",
+  "rise_m": 10.2,
+  "length_m": 29.5,
+  "slope": "35%",
+  "width_m": 3.4,
+  "type": "수직형 엘리베이터 15인승"
+ },
+ "bongcheon2": {
+  "stage": 2,
+  "name": "봉천초 인근",
+  "addr": "봉천동 62-34",
+  "rise_m": 8.1,
+  "length_m": 18,
+  "slope": "45%",
+  "width": "1.5~6m",
+  "type": "수직형 엘리베이터 15인승",
+  "link": "상부 저층주거지와 서울대입구역 연계",
+  "xy_5186": [
+   196035.1,
+   542610.0
+  ],
+  "cell_5186": [
+   196125.0,
+   542625.0
+  ],
+  "xy_src": "국토정보필지 공개판 (data_public/raw/LX_MAP_SEOUL_202608.zip 의 AL_11620, 2026.08) pnu 1162010100100620034 (봉천동 62-34) 필지 중심, EPSG:5186 → 250m 격자"
+ },
+ "photos": {
+  "files": [
+   "docs/photos/gwanak_1.jpg",
+   "docs/photos/gwanak_2.jpg"
+  ],
+  "labels": [
+   "지금",
+   "엘리베이터 설치 계획 (그림)"
+  ],
+  "from": [
+   "https://uri.seoul.go.kr/resources/morenCMS/site/web/images/stair/gwanak_1.jpg",
+   "https://uri.seoul.go.kr/resources/morenCMS/site/web/images/stair/gwanak_2.jpg"
+  ],
+  "credit": "사진: 서울균형발전포털(서울특별시), 공공누리 제4유형",
+  "_주의": "원본 비율 그대로 (자르기·덧씌우기·색 변경 금지), 바로 아래 출처. git 에 넣지 않음 (docs/photos)"
+ }
+}

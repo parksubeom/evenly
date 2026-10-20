@@ -1031,6 +1031,19 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         lab, val = "서울시 2025 선정지 5곳 중 상위 10%", None
     P("V6.16.site_label", "선정지 줄 이름", [], lab, optional=True)
     P("V6.16.site", "선정지 백분위", ["validation_sites.csv"], val, later="5개 구 결과 후")
+    # [10/21] 서울시 2단계 대상지(봉천초 인근, 서울 오르락)가 든 250m 격자의 백분위 = 그 격자 평균 HBI 보다 낮은 격자의 비율 (반출 grid_hbi, T0).
+    #   위치 = deck/seoul_orak.json bongcheon2.cell_5186 (국토정보필지 공개판 필지 중심). 선정지 백분위(건물 300m 원)와 방식이 달라 장에서 "격자" 로 밝힘
+    s2_ = None
+    try:
+        b2_ = json.load(open(os.path.join(ROOT, "deck", "seoul_orak.json"), encoding="utf-8")).get("bongcheon2") or {}
+        c2_ = tuple(b2_.get("cell_5186") or ())
+        g2_ = [g for g in grid if g.get("target") == T0 and num(g.get("hbi_mean")) is not None]
+        h2_ = next((num(g["hbi_mean"]) for g in g2_ if (num(g.get("cell_x")), num(g.get("cell_y"))) == c2_), None) if len(c2_) == 2 else None
+        if h2_ is not None and g2_:
+            s2_ = f"상위 {max(0.1, (1 - sum(1 for g in g2_ if num(g['hbi_mean']) < h2_) / len(g2_)) * 100):.1f}%"
+    except Exception as ex:
+        print(f"!! 16장 2단계 대상지 격자 백분위 건너뜀: {ex}")
+    P("V6.16.site2", "서울시 2단계 대상지(봉천초 인근) 250m 격자 백분위", ["grid_hbi.csv (반출)", "deck/seoul_orak.json bongcheon2.cell_5186"], s2_)
     dh = next((r for r in routes if "대현산" in r.get("name", "") and num(r.get("wheel_path_m"))), None)
     bc = next((r for r in routes if "봉천 선정지" in r.get("name", "") and num(r.get("wheel_path_m"))), None)
     if dh:
@@ -1142,6 +1155,8 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         P("V6.20.after", "설치 후 (계단 양 끝 직선)", ["validation_routes.csv (반출)" if bc else nm20[0]],
           f"{round(num(bc['straight_m'])):,}m" if (bc and num(bc.get("straight_m"))) else (f"{mb['straight_m']:g}m" if mb.get("straight_m") else None))
         P("V6.20.rise", "높이 차 (DEM 5m)", nm20, f"{mb['rise_m']:.1f}m" if mb.get("rise_m") is not None else None)
+        P("V6.15.lx_straight", "봉천 계단 양 끝 직선 (LX, 현장 메모 09) — 15장 네 자료 대조", nm20,
+          f"{mb['straight_m']:g}m" if mb.get("straight_m") else None, optional=True)   # [10/21] 반출이 와도 메모 값 그대로 (표의 '(10/20 메모)')
         P("V6.20.pass", "통과 시간 (대기 포함)", nm20, f"{mb['pass_min']:.1f}분" if mb.get("pass_min") is not None else None)
         P("V6.20.wait", "대기", nm20, f"{mb['wait_s']:g}초" if mb.get("wait_s") is not None else None, optional=True)
         na20 = num(pick.get("n_benefit_any"))

@@ -28,7 +28,7 @@ const FAKE = R.source === 'fake', REH = R.source === 'rehearsal', REAL = R.sourc
 const FALLBACK = R.source === 'fallback';
 const FB_TEXT = '2차 분석 결과 반영 예정', FBHIT = new Set();
 // [10/21] 모든 판에 쓰지 않는 말 (장 글자·표·노트). 한 곳이라도 나오면 파일을 쓰지 않고 멈춤 (BANHIT)
-const BANNED = ['본선'], BANHIT = [];
+const BANNED = ['본선', '85곳', '100곳'], BANHIT = [];   // [10/21] 85곳·100곳 = 7장 예전 계획 표현
 const banScan = t => { const f = flat(t); for (const w of BANNED) if (f.includes(w)) BANHIT.push(`${page}장 "${w}"`); };
 // [10/13] 청사진 판 (npm run build:blueprint): 공개 대역 리허설 결과로 만드는 보관·발전용 (제출용 build:real 과 섞이지 않게 리허설 결과로만, --out 필수).
 //   오른쪽 위 표시·출처 줄의 '공개 대역' 문구·표지 안내를 빼고(v9 청사진처럼), 결과 장 발표자 노트에 BP_NOTE. 값이 없는 칸(실측·SKT 등)은 리허설 판 표기 그대로
@@ -116,6 +116,9 @@ const MIX17 = () => !!(R.tables['V6.17.cand'] && (R.tables['V6.17.cand'].rows ||
 // [10/20] 11·28장 과정 그림 메타 (tools/make_process_figs.py). contour = 연속수치지형도 등고선으로 그렸는지 → 출처 줄
 const PFM = (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'v6_source', 'proc_figs_meta.json'), 'utf8')); } catch (e) { return {}; } })();
 const PFC = !!PFM.contour, PFB = !!PFM.contour_bg;   // PFB = 등고선은 배경·터널 단면에만 (경사는 공개 지형)
+// [10/21] 서울균형발전포털 「서울 오르락」 공식 값 (deck/seoul_orak.json, 원문 그대로): 5장 통계·7장 단계·15장 봉천 계단·16장 서울시 고저차
+const OR = (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'seoul_orak.json'), 'utf8')); }
+                    catch (e) { console.error('!! deck/seoul_orak.json 을 읽지 못함 (서울 오르락 공식 값)'); process.exit(1); } })();
 const LXS = 'LX 분석', PUBS = '공개 자료 보행망으로 계산 (같은 모델·같은 좌표)', ANAS = '해석적 계산';
 const Q = (key, dflt) => { touch(key); if (has(key)) return String(R.fields[key].value); fb(key, dflt); return dflt; };   // 기본 문구로 말이 되는 보조 값
 function IMG(key) {
@@ -182,7 +185,8 @@ function stat(s, x, y, w, label, value, o={}) {
   T(s, label, { x, y, w, h:0.26, fontSize:11, color:C.muted });
   const v = String(value), later = isLater(v);
   // [10/12 청사진] 대체 문구도 값과 같은 크기·굵기 (색은 회색, laterInk 면 검정)
-  T(s, v, { x, y:y+0.26, w, h:0.46, fontSize:(o.size||20), bold:true, color: later ? (o.laterInk ? C.ink : C.muted) : (o.color||(v.includes('___') ? C.accD : C.ink)), valign:'top' });
+  T(s, o.suffix ? [{ text:v, options:{} }, { text:o.suffix, options:{ fontSize:o.suffixSize || 11, bold:false, color:C.muted } }] : v,   // [10/21] 값 뒤 작은 글자 (16장 서울시 공식)
+    { x, y:y+0.26, w, h:0.46, fontSize:(o.size||20), bold:true, color: later ? (o.laterInk ? C.ink : C.muted) : (o.color||(v.includes('___') ? C.accD : C.ink)), valign:'top' });
 }
 // 자리 상자. key(그림 결과 키)를 주면 그 그림이 빠진 자리: 연한 주황(FFF7F2, check_deck 이 빈칸으로 봄) + 이름표
 // [10/13] 사진을 칸(w×h)에 꽉 차게: 가로·세로 비를 맞춰 가운데를 자름 (jpg·png 머리에서 크기를 읽음)
@@ -305,14 +309,15 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
 
 // ── 5 규모 ──
 { const s = base('문제의 규모', '한 사람의 이야기가 아닙니다');
-  [['31%','서울 면적 중 구릉지','낡은 저층 주택이 많고 시설을 놓기 어려운 땅'],['20.4%','서울 65세 이상 인구 비중','2025년 처음으로 20%를 넘었습니다'],['51곳','구릉지 고령자 이동취약지역','거주 고령인구 16,773명, 25개 구 중 17개 구'],['420m','후기고령자 평균 이동거리','75세 이상 어르신이 걷는 거리의 한계']].forEach((st, i) => {
+  // [10/21] 구릉지·이동약자는 서울 오르락 공식 값 (예전 31%·20.4% 자리, 65세 이상 20.4% 는 설명 줄에 나란히)
+  [[OR.hill_share.value, `서울 ${OR.hill_share.def}`,'낡은 저층 주택이 많고 시설을 놓기 어려운 땅'],[OR.mobility_impaired.value, `서울 이동약자\n(${OR.mobility_impaired.year}, 인구의 ${OR.mobility_impaired.share})`,'65세 이상만 20.4%, 2025년 처음으로 20%를 넘었습니다'],['51곳','구릉지 고령자 이동취약지역','거주 고령인구 16,773명, 25개 구 중 17개 구'],['420m','후기고령자 평균 이동거리','75세 이상 어르신이 걷는 거리의 한계']].forEach((st, i) => {
     const x = 0.6 + (i%2)*4.5, y = 1.45 + Math.floor(i/2)*1.45;
     if (i%2) vr(s, x-0.25, y, 1.2); if (i>=2) hr(s, x, y-0.12, 4.2);
     T(s, st[0], { x, y, w:2.1, h:0.75, fontSize:st[0].length>5?30:36, bold:true, color: i<2 ? C.acc : C.ink, valign:'middle' });
     T(s, st[1], { x:x+2.15, y:y+0.08, w:2.0, h:0.62, fontSize:13, bold:true, color:C.ink, valign:'middle' });
     T(s, st[2], { x, y:y+0.8, w:4.1, h:0.32, fontSize:11.5, color:C.muted }); });
-  takeaway(s, '서울의 3분의 1이 언덕이고, 5명 중 1명이 어르신입니다.', 4.5);
-  src(s, '출처: 구릉지 고령자 이동취약지역 분석 연구(한국공간디자인학회 논문집) / 행정안전부 2025 주민등록 인구통계 / 이소민·오성훈(2025) 토지주택연구 16(1)'); }
+  takeaway(s, `서울의 ${OR.hill_share.value}가 구릉지이고, 시민 10명 중 3명이 이동약자입니다.`, 4.5);   // [10/21] 29.1% ≈ 10명 중 3명
+  src(s, `출처: ${OR.source_short} (구릉지 비율·이동약자 수) / 행정안전부 2025 주민등록 인구통계 (65세 이상) / 구릉지 고령자 이동취약지역 분석 연구(한국공간디자인학회 논문집) / 이소민·오성훈(2025) 토지주택연구 16(1)`); }
 
 // ── 6 현장 사례 ──
 { const s = base('실제 사례', '지도와 현실의 차이는 이미 현장에서 확인됩니다');
@@ -327,17 +332,22 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
   T(s, '휠체어에게 같은 목적지는 약 7배 멀었습니다. 이런 곳을 미리 찾아낼 도구가 필요합니다.', { x:4.95, y:4.0, w:4.45, h:0.75, fontSize:13, bold:true, color:C.ink, valign:'middle' });
   src(s, '출처: 서울시 구릉지 이동편의 개선사업 보도자료(2020.11) / 내 손안에 서울(2025.06.13)'); }
 
-// ── 7 정책 흐름 ── [10/14 v13] 2025.08 '가파른 계단 100곳 무장애 길' 계획 + 단계별 예산 (2020 칸은 뺌). 금액은 단계마다 발표한 출처를 따름
-{ const s = base('정책 흐름', '서울시는 가파른 계단 100곳을 바꾸려 합니다.\n남은 85곳은 어디일까요?', { tsize:19 });
-  hr(s, 0.6, 2.2, 8.8, C.ink, 1.25);
-  [['2018','후암동 108하늘계단,\n서울 첫 경사형\n엘리베이터'],['2024','자치구 전수조사로\n급경사 계단\n후보 25곳 발굴'],['2025.06','1단계 5곳 선정\n총 200억 원'],
-   ['2025.08','"가파른 계단 100곳\n무장애 길" 계획\n(2030년까지)'],['2026.02','2단계 10곳 선정\n총 400억 원\n(무악동 85계단 포함)'],['2027','1단계 5곳\n준공 목표']].forEach((t, i) => {
-    const x = 0.6 + i*1.48, hot = (i==3);
-    s.addShape(pres.shapes.RECTANGLE, { x, y:2.13, w:0.14, h:0.14, fill:{color: hot?C.acc:C.ink}, line:{color: hot?C.acc:C.ink} });
-    T(s, t[0], { x, y:1.55, w:1.4, h:0.45, fontSize: t[0].length > 4 ? 17 : 19, bold:true, color: hot?C.acc:C.ink });
-    T(s, t[1], { x, y:2.45, w:1.35, h:1.35, fontSize:11.5, color: hot?C.ink:C.text, bold:hot, lineSpacingMultiple:1.12 }); });
-  takeaway(s, '남은 85곳을 같은 기준으로 비교하고, 효과를 미리 계산할 도구가 필요합니다.', 4.2);
-  src(s, '출처: 내 손안에 서울(2023, 2025.08.22 100곳 계획), 서울시 보도자료(2025.06 1단계 200억), 아주경제(2025.02.20), 쿠키뉴스(2026.02.12 2단계 400억), 경향신문(2026.02.24) · 남은 85곳 = 100 − 1단계 5 − 2단계 10'); }
+// ── 7 정책 흐름 ── [10/21] 서울 오르락(서울균형발전포털, 2026-08-28): 30곳·4단계·사업기간. 3·4단계는 대상지 발표 전.
+//   1·2단계 예산(200억·400억)은 단계마다 발표한 출처 (19·29장 비용 가정과 같음)
+{ const ph7 = OR.phases, n34 = ph7.filter(p => p.open).reduce((a, p) => a + p.count, 0);
+  const s = base('정책 흐름', `서울시는 2030년까지 ${OR.total}곳에 엘리베이터를 놓습니다.\n${ph7.filter(p => p.open).map(p => p.n).join('·')}단계 ${n34}곳은 아직 정해지지 않았습니다.`, { tsize:19 });
+  T(s, [{ text:'사업기간  ', options:{ bold:true, color:C.muted } }, { text:OR.period, options:{ bold:true, color:C.ink } }, { text:`   ·   ${OR.total_note}`, options:{ color:C.muted } }],
+    { x:0.6, y:1.42, w:8.8, h:0.28, fontSize:11 });
+  hr(s, 0.6, 2.0, 8.8, C.ink, 1.25);
+  const note7 = { 1:'봉천 비안어린이공원 포함\n총 200억 원', 2:'봉천초 인근 포함\n총 400억 원' };
+  ph7.forEach((p, i) => { const x = 0.6 + i * 2.25, open = p.open;
+    s.addShape(pres.shapes.RECTANGLE, { x, y:1.93, w:0.14, h:0.14, fill:{ color: open ? C.acc : C.ink }, line:{ color: open ? C.acc : C.ink } });
+    T(s, `${p.n}단계`, { x, y:2.2, w:2.1, h:0.3, fontSize:13, bold:true, color: open ? C.acc : C.ink });
+    T(s, `${p.count}곳`, { x, y:2.5, w:2.1, h:0.6, fontSize:30, bold:true, color: open ? C.acc : C.ink, valign:'middle' });
+    T(s, p.when, { x, y:3.14, w:2.1, h:0.28, fontSize:11.5, bold:true, color:C.text });
+    T(s, open ? '대상지 아직 정해지지 않음' : (note7[p.n] || ''), { x, y:3.44, w:2.1, h:0.5, fontSize:10.5, color: open ? C.accD : C.muted, lineSpacingMultiple:1.1 }); });
+  takeaway(s, `다음 ${n34}곳을 같은 기준으로 비교하고, 효과를 미리 계산할 도구가 필요합니다.`, 4.3);
+  src(s, `${OR.source_short} · 1단계 200억 원: 서울시 보도자료(2025.06) · 2단계 400억 원: 쿠키뉴스(2026.02.12)`); }
 
 // ── 8 문제 정의 ──
 { const s = base('문제 정의', '서울시는 가파른 "계단"을 찾았고, 우리는 가파른 "일상"을 찾습니다', { tsize:20 });
@@ -502,7 +512,34 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
       + (hasR('V6.14.basemap') ? ` · 배경지도: ${R.fields['V6.14.basemap'].value} 자료로 그림` : '')); } }   // [10/20] 저장된 배경지도 (tools/make_basemap.py)
 
 // ── 15 현장실측 ── [10/20] 실측(10/21, inputs.json 보통·천천히·지도앱) 있으면 실측 vs 모델(반출 성인·어르신), 없으면 모델만 (대비 배치)
-{ const meas15 = hasR('V6.15.has_meas');
+// [10/21] 실제판·대비책 판에서 실측이 없으면: 봉천 선정지 계단, 네 자료 대조 (서울 오르락 공식 · LX DEM 5m·1m · 공개 지형 30m) + 서울시 사진 두 장 (원본 비율, 바로 아래 출처)
+if (!hasR('V6.15.has_meas') && (REAL || FALLBACK)) {
+  const s = base('서울시 공식 자료와 대조', '봉천 선정지 계단, 네 자료 대조', { tsize:24 });
+  const b1 = OR.bongcheon1;
+  etable(s, [['자료', '높이 차', '길이'],
+    [B('서울시 공식'), B(`${b1.rise_m}m`), `연장 ${b1.length_m}m (경사도 ${b1.slope}, 폭 ${b1.width_m}m)`],
+    [B('LX DEM 5m'), B(V('V6.16.rise_lx'), { color:C.acc }), `양 끝 직선 ${V('V6.15.lx_straight')} (10/20 메모)`],
+    [B('LX DEM 1m'), B(V('V6.16.rise_1m'), { color:C.acc }), '- (10/20 메모)'],
+    [B('공개 지형 30m'), B(V('V6.16.rise_pub'), { color:C.muted }), '- (공개 계산)']],
+    { x:0.6, y:1.45, w:4.75, colW:[1.3, 0.85, 2.6], rowH:[0.4, 0.55, 0.55, 0.55, 0.55], fontSize:11 });
+  // 사진: 원본 비율 그대로 (자르기·덧씌우기 없음), 이름표·출처는 사진 아래. 두 장이 다 있을 때만 (없으면 표만)
+  const pf = (OR.photos.files || []).map(f => path.join('..', f));
+  if (pf.length === 2 && pf.every(f => fs.existsSync(f))) {
+    const pw = 1.9, gp = 0.1, x0 = 5.5;   // 5.5~9.4
+    let yb = 1.45;
+    pf.forEach((f, i) => { const z = imgSize(f), ph = z && z.w ? pw * z.h / z.w : pw * 0.75, x = x0 + i * (pw + gp);
+      s.addImage({ path:f, x, y:1.45, w:pw, h:ph });
+      T(s, OR.photos.labels[i], { x, y:1.45 + ph + 0.04, w:pw, h:0.2, fontSize:9, color:C.ink });
+      yb = Math.max(yb, 1.45 + ph + 0.26); });
+    T(s, OR.photos.credit, { x:x0, y:yb, w:pw * 2 + gp, h:0.2, fontSize:8.5, color:C.muted });
+    T(s, `서울시 ${b1.stage}단계 대상지 (${b1.name})\n${b1.type} 계획`, { x:x0, y:yb + 0.36, w:pw * 2 + gp, h:0.4, fontSize:9.5, color:C.text, lineSpacingMultiple:1.05 });
+  } else console.error('!! 15장: 서울시 사진 두 장(deck/seoul_orak.json photos.files)이 없어 표만 넣음');
+  takeaway(s, 'LX 자료는 서울시 공식 고저차와 1m 안쪽으로 맞고, 공개 지형은 절반으로 잡습니다.', 4.4);
+  { const n_ = k => Number(String(hasR(k) ? R.fields[k].value : '').replace(/[^0-9.]/g, '')), r0 = b1.rise_m;   // 결론 문장이 값과 맞는지 (값이 바뀌면 멈춤)
+    const ok = [n_('V6.16.rise_lx'), n_('V6.16.rise_1m')].every(v => v && Math.abs(v - r0) < 1) && n_('V6.16.rise_pub') && Math.abs(n_('V6.16.rise_pub') / r0 - 0.5) < 0.05;
+    if (!ok) { console.error('!! 15장 결론 문장("1m 안쪽"·"절반")이 값과 맞지 않음 — 문장을 고칠 것'); process.exitCode = 1; } }
+  src(s, `서울시 공식 = ${OR.source_short} · LX DEM 5m·1m = ${LXS} (10/20 현장 메모) · 공개 지형 30m = 공개 자료 계산`);
+} else { const meas15 = hasR('V6.15.has_meas');
   const s = base('직접 걸어 본 관악구', FALLBACK ? (meas15 ? '관악 네 구간을 직접 걸어서 확인했습니다' : '관악 네 구간을 직접 걸어서 확인합니다')   // [10/20] 대비책 판: 모델(10/19 반출) 없이
                                        : meas15 ? '모델이 말한 시간을 직접 걸어서 확인했습니다' : '관악 네 구간, 성인과 어르신의 걸음 차이', { tsize:22 });
   // [10/13] 사진: tools/prep_photos.py 가 docs/photos/15_1~15_4 를 바로 세우고 촬영 정보(GPS)를 지운 사본 docs/photos/_deck/15_N.jpg 가 있으면 넣고
@@ -546,21 +583,30 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
   T(s, '이 결과를 믿어도 되나', { x:0.6, y:1.45, w:4, h:0.32, fontSize:13.5, bold:true, color:C.ink }); hr(s, 0.6, 1.82, 4.1, C.ink, 1.25);
   const sl16 = Q('V6.16.site_label', '서울시 2025 선정지 5곳 중 상위 10%'), wl16 = Q('V6.16.wheel_label', '대현산 휠체어 우회 (서울시: 약 770m)');
   const g16 = FALLBACK ? 1.0 : 0.8;   // [10/20] 대비책 판: 휠체어 우회·높이 뺀 변화·공개 놓침(10/19 반출)을 빼고 두 줄씩
-  (FALLBACK ? [['서울시가 고른 봉천동은 관악 일대 격자 중 (1차 반출)', V('V6.16.site')], ['DEM 1m 로 다시 계산해도 (1m 범위 안 집)', `순위상관 ${V('V6.16.dem1m')}`]]
-   : [[/봉천/.test(sl16) ? `서울시가 고른 봉천동은 ${Q('V6.scope', '관악구')} 격자 중` : sl16, V('V6.16.site')],
+  // [10/21] 첫 줄 끝: 서울시 2단계 대상지(봉천초 인근)가 든 250m 격자의 백분위 (반출 격자). 반출 전(미리 빌드) = 빈칸, 대비책 판 = 없음
+  //   값을 먼저 읽어야 빈칸 짝(선정지 → 2단계)이 같은 줄에 맞음
+  const site16 = V('V6.16.site');
+  const s2v16 = FALLBACK ? '' : hasR('V6.16.site2') ? String(R.fields['V6.16.site2'].value) : ((REAL && !hasR('V6.24.grid')) ? V('V6.16.site2') : '');
+  const n16 = Number((/상위\s*([0-9.]+)%/.exec(s2v16) || [])[1]);   // "도" 는 상위 30% 안일 때만, 아니면 받침에 맞춰 은/는
+  const jb16 = (w => { const c = w.charCodeAt(w.length - 1) - 0xAC00; return c >= 0 && c <= 11171 && c % 28 !== 0; })(OR.bongcheon2.name);
+  const pt16 = (isNaN(n16) || n16 <= 30) ? '도' : (jb16 ? '은' : '는');
+  (FALLBACK ? [['서울시가 고른 봉천동은 관악 일대 격자 중 (1차 반출)', site16], ['DEM 1m 로 다시 계산해도 (1m 범위 안 집)', `순위상관 ${V('V6.16.dem1m')}`]]
+   : [[/봉천/.test(sl16) ? `서울시가 고른 봉천동은 ${Q('V6.scope', '관악구')} 격자 중` : sl16, site16],
    [/봉천/.test(wl16) ? '봉천 계단을 피하는 휠체어 길 (서울시 발표 200m 이상)' : wl16, V('V6.16.wheel')],
-   hasR('V6.16.dem1m') ? ['DEM 1m 로 다시 계산해도 (1m 범위 안 집)', `순위상관 ${R.fields['V6.16.dem1m'].value}`] : ['직접 걸은 4구간, 모델 예측과 실측의 상관', V('V6.16.meas_r')]]).forEach((r, i) => stat(s, 0.6, 1.95+i*g16, 4.1, r[0], r[1], { size:18, color:C.ink }));   // [10/20] 실측 상관 대신 DEM 1m (현장 메모)
+   hasR('V6.16.dem1m') ? ['DEM 1m 로 다시 계산해도 (1m 범위 안 집)', `순위상관 ${R.fields['V6.16.dem1m'].value}`] : ['직접 걸은 4구간, 모델 예측과 실측의 상관', V('V6.16.meas_r')]])
+    .forEach((r, i) => stat(s, 0.6, 1.95+i*g16, 4.1, r[0], r[1], Object.assign({ size:18, color:C.ink }, (i === 0 && s2v16) ? { suffix:`  · 2단계 ${OR.bongcheon2.name}${pt16} ${s2v16}` } : {})));   // [10/20] 실측 상관 대신 DEM 1m (현장 메모)
   T(s, '왜 LX 자료여야 하나', { x:5.3, y:1.45, w:4, h:0.32, fontSize:13.5, bold:true, color:C.ink }); hr(s, 5.3, 1.82, 4.1, C.ink, 1.25);
   const rz16 = has('V6.16.rise_pub') ? [`같은 봉천 계단 높이 차: 공개 지형 → LX${has('V6.16.rise_1m') ? ` (DEM 1m ${R.fields['V6.16.rise_1m'].value})` : ''}`, `${R.fields['V6.16.rise_pub'].value} → ${R.fields['V6.16.rise_lx'].value}`, FALLBACK ? C.acc : C.ink, 18] : null;   // [10/20] LX 필요성 근거
   const np16 = ['자동차전용도로·단독/공동주택 구분', '공개 자료에는 없음', C.ink, 15];
   (FALLBACK ? [rz16, np16].filter(Boolean) : (() => { const d16 = V('V6.16.dem_top10');
     return [[`5m 높이를 빼면, 가장 급한 상위 10% 중 바뀌는 ${BLDS()}`, has('V6.16.dem_missed') ? `${d16} (${R.fields['V6.16.dem_missed'].value})` : d16, C.acc, 18],
             ['공개 지형(30m)과 공개 보행망만 쓰면 놓치는 부담 구간', V('V6.16.pub_miss'), C.ink, 18], rz16 || np16]; })())
-    .forEach((r, i) => stat(s, 5.3, 1.95+i*g16, 4.1, r[0], r[1], { size:r[3], color:r[2] }));
+    .forEach((r, i) => stat(s, 5.3, 1.95+i*g16, 4.1, r[0], r[1], Object.assign({ size:r[3], color:r[2] }, r === rz16 ? { suffix:`  (서울시 공식 ${OR.bongcheon1.rise_m}m)` } : {})));   // [10/21] 서울 오르락 고저차
   takeaway(s, '그래서 이 결과는 믿을 만하고, 이 계산에는 LX의 5m 높이가 꼭 필요합니다.', 4.55);
   const notes16 = [has('V6.16.wheel_note') ? R.fields['V6.16.wheel_note'].value : null, has('V6.16.daehyun_note') ? R.fields['V6.16.daehyun_note'].value : null].filter(Boolean).join(' · ');
-  src(s, FALLBACK ? `선정지 백분위 = 1차 반출(10/2) 값 · DEM 1m 순위상관·봉천 높이 차 LX = ${LXS} (10/20 현장 메모) · 공개 지형 높이 차 = 공개 자료 계산 · 보행속도 출처는 부록 2`
-    : (REH ? '공개 대역(리허설) 값 · ' : '') + (ALLM() ? `${LXS} (10/19 반출·10/20 현장 메모 DEM 1m) · 공개 대조군 = ${PUBS} · ` + (has('V6.16.rise_pub') ? '봉천 높이 차: 공개 지형 = 공개 자료 계산, LX = 현장 메모(09) · ' : '') : '') + '선정지 백분위: 반경 300m 원 평균 비교 · 대조군·계단·보행속도 출처는 부록 2'); }   // [10/14 v11] 한 줄만, 나머지는 부록 2
+  src(s, FALLBACK ? `선정지 백분위 = 1차 반출(10/2) 값 · DEM 1m 순위상관·봉천 높이 차 LX = ${LXS} (10/20 현장 메모) · 공개 지형 높이 차 = 공개 자료 계산 · 서울시 공식 = 서울 오르락 · 보행속도 출처는 부록 2`
+    : (REH ? '공개 대역(리허설) 값 · ' : '') + (ALLM() ? `${LXS} (10/19 반출·10/20 현장 메모 DEM 1m) · 공개 대조군 = 공개 자료 보행망 · ` + (has('V6.16.rise_pub') ? '봉천 높이 차: 공개 = 공개 자료 계산, LX = 현장 메모(09), 서울시 = 서울 오르락 · ' : '') : '') + '선정지 백분위 = 반경 300m 원 평균'
+    + (s2v16 ? `, 2단계 = 그 250m 격자 (위치: 국토정보필지 공개판)` : '') + ' · 대조군·계단·보행속도 출처는 부록 2'); }   // [10/14 v11] 한 줄만, 나머지는 부록 2   // [10/21] 2단계 대상지
 
 // ── 17 우선 검토 후보 ──
 const NCAND = () => V('V6.17.n_cand');
