@@ -39,7 +39,7 @@ td.ck, th.ck { text-align: center; }
 <tr><td class="ck"></td><td>관악 실측 (15·3장)</td><td><code>deck/inputs.json</code>: <code>"survey_date"</code>, <code>"mapapp_min"</code>·<code>"measured_min"</code>(보통 걸음)·<code>"slow_min"</code>(천천히) = <code>{"비안어린이공원": 분, "봉천역": 분, "도림천": 분, "낙성대": 분}</code> (숫자만). 들어오면 15장이 실측 배치(지도앱·보통·모델 성인·천천히·모델 어르신), 13장 현장실측 줄, 3장 '실측 비교는 15장'</td></tr>
 <tr><td class="ck"></td><td>15장 사진 4장</td><td><code>docs/photos/15_1~15_4</code> (1 봉천 계단 · 2 봉천역 오르막 · 3 도림천 · 4 낙성대). 얼굴·번지판·번호판 없는 것. 없으면 실제판은 사진 자리 없이 표를 넓힘</td></tr>
 <tr><td class="ck"></td><td>현장 메모·방문일 확인</td><td><code>deck/inputs_memo_1020.json</code> 값이 메모와 같은지 (09 봉천·08 민감도·연결률), 센터 허락 메일 보관. 방문일 <code>visits</code> = 10/02·10/19·10/20 (3일)</td></tr>
-<tr><td class="ck"></td><td>등고선 그림 (반영됨)</td><td>(가) 10/20: 등고선 = 11장 배경·28장 터널 단면만, 경사 색·경로·격자 = 공개 지형. 다시 만들 때 <code>node py.js ../tools/make_process_figs.py --contours ../data_public/raw/contour_gwanak.gpkg --bg-only</code> (017·018·019 온전본, 관악은 017·018)</td></tr>
+<tr><td class="ck"></td><td>그림 재료 (반영됨)</td><td>11장 등고선 배경·28장 터널 단면 = 연속수치지형도 등고선 (<code>--bg-only</code>) · 14·19장 배경지도 = <code>deck/basemap/</code> 저장본 (OSM 자료로 그림, 인터넷 필요 없음)</td></tr>
 <tr><td class="ck"></td><td><b>18:00 문구 고정</b></td><td>이 시각 뒤로는 장 문구·배치를 바꾸지 않음 (그때의 커밋이 제출 문구). 밤에 오는 실측은 <code>deck/inputs.json</code> 숫자만</td></tr>
 <tr><td class="ck"></td><td>미리 빌드 다시 (실측 넣은 뒤)</td><td><code>cd ~/Downloads/evenly/deck</code> → <code>npm run build:real</code> → <code>node py.js ../tools/check_deck.py ../deliverables/언덕위우리동네_기획서_final.pptx --missing data/missing.txt</code> (반출 칸만 빈칸이면 정상)</td></tr>
 <tr><td class="ck"></td><td>대비책 판·제출 준비</td><td><code>npm run fallback-pdf</code> → 누락 0·통과. 개인정보 동의서 서명본, 접수 페이지 로그인·올리는 곳 확인</td></tr>

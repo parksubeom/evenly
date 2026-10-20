@@ -465,7 +465,8 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
   const nt = has('V6.14.elderly_note') ? ` (${R.fields['V6.14.elderly_note'].value})` : '';
   src(s, FALLBACK ? `제목: ${Q('V6.fb.limits', '1차 반출(10/2) 값')} / 지도·건물·어르신·동 = 2차 분석 결과 반영 예정`
     : (REH ? '공개 대역(리허설) 값 · ' : '') + (ALLM() ? `${LXS} (모든 건물 기준) · ` : '') + (has('V6.14.near_min') ? `가까운 동네 = 평지 기준 왕복 ${R.fields['V6.14.near_min'].value}분(격자 중앙값) 안에 ${DEST()}이 있는 250m 격자 · ` : '')
-      + (ALLM() ? Q('V6.14.mode_note', '건물 용도 연결률이 낮아 모든 건물을 출발점으로 계산') : `어르신은 행정동 65세 이상 인구를 주거 연면적으로 나눈 추정${nt} (행정안전부 주민등록 인구통계)`)); }
+      + (ALLM() ? Q('V6.14.mode_note', '건물 용도 연결률이 낮아 모든 건물을 출발점으로 계산') : `어르신은 행정동 65세 이상 인구를 주거 연면적으로 나눈 추정${nt} (행정안전부 주민등록 인구통계)`)
+      + (hasR('V6.14.basemap') ? ` · 배경지도: ${R.fields['V6.14.basemap'].value} 자료로 그림` : '')); }   // [10/20] 저장된 배경지도 (tools/make_basemap.py)
 
 // ── 15 현장실측 ── [10/20] 실측(10/21, inputs.json 보통·천천히·지도앱) 있으면 실측 vs 모델(반출 성인·어르신), 없으면 모델만 (대비 배치)
 { const meas15 = hasR('V6.15.has_meas');
@@ -617,12 +618,12 @@ if (CANDT) {
     T(s, t[1], { x:2.3, y, w:3.0, h:0.62, fontSize:11.5, color:C.text, valign:'middle' }); });
   const iso = IMG('V6.iso');
   if (iso && /iso_one/.test(iso)) {   // [10/14 v11] 봉천 하나만 크게: 제목은 글자로, 그림은 칸을 꽉 채움
-    T(s, '봉천 선정지에서 10분 안에 걸어 닿는 범위 (★ = 시설)' + (hasR('V6.iso_src') ? ' · 공개 보행망' : ''), { x:5.5, y:1.38, w:3.95, h:0.28, fontSize:10.5, bold:true, color:C.ink });
+    T(s, '봉천 선정지에서 10분 안에 닿는 범위 (★ 시설)' + (hasR('V6.iso_src') ? ' · 공개 보행망' : ''), { x:5.5, y:1.38, w:3.95, h:0.28, fontSize:10, bold:true, color:C.ink });   // [10/20] 글자 8% 키워도 한 줄
     s.addImage({ path:iso, x:5.5, y:1.7, w:3.95, h:2.8, sizing:{ type:'contain', w:3.95, h:2.8 } }); }
   else if (iso) s.addImage({ path:iso, x:5.6, y:1.42, w:3.85, h:3.05, sizing:{ type:'contain', w:3.85, h:3.05 } });
   else slot(s, 5.6, 1.42, 3.85, 3.05, '등시선 그림 자리\n선정지에서 10분 안에 걸어 닿는 범위\n평지 가정 vs 경사 반영 vs 휠체어', 'V6.iso');
   takeaway(s, '"민원이 많은 곳"이 아니라 "효과가 큰 곳"부터 설치할 근거를 줍니다.', 4.62);
-  src(s, '비용 가정: 엘리베이터 1곳 약 40억 원 (서울시 5곳 200억 원, 무악동 1곳 40억 원), 높이 차 3m 이하는 경사로로 바로 정비 (부록 3)' + (iso ? ` / 등시선: ${Q('V6.iso_src', '12_isochrone 결과')}` : '')); }
+  src(s, '비용 가정: 엘리베이터 1곳 약 40억 원 (서울시 5곳 200억 원, 무악동 1곳 40억 원), 높이 차 3m 이하는 경사로로 바로 정비 (부록 3)' + (iso ? ` / 등시선: ${Q('V6.iso_src', '12_isochrone 결과')}` : '') + (hasR('V6.19.basemap') ? ` · 배경지도: ${R.fields['V6.19.basemap'].value}` : '')); }   // [10/20]
 
 // ── 20 한 사람에게 돌아가는 변화 ──
 if (Q('V6.20.mode', 'example') === 'wheel') {

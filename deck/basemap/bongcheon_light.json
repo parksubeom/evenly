@@ -1,0 +1,16 @@
+{
+ "extent_5186": [
+  193258.6,
+  196258.6,
+  540879.8,
+  543879.8
+ ],
+ "m_per_px": 1.25,
+ "px": [
+  2400,
+  2400
+ ],
+ "attribution": "© OpenStreetMap contributors",
+ "_설명": "OSM 자료(ODbL)로 직접 그린 밝은 배경지도 (타일 아님, 글자 없음). tools/make_basemap.py",
+ "osm_fetched": "2026-10-20 13:22"
+}

@@ -616,6 +616,8 @@ def main():
     # ── 그림 ──
     plots = make_plots(B, grid, targets, T0, vs, site_rows, skt_plot, rho, p_rho)
     v6_plots(B, grid, T0, a.bands, R)
+    for k_, v_ in BASEMAP_USED.items():                  # [10/20] 배경지도를 깐 장만 출처 줄에 표기
+        B.fields[f"V6.{k_}.basemap"] = {"value": v_, "label": f"{k_}장 배경지도 출처", "need": [], "optional": True}
     if not plots:
         for k, lab, need in [("map", "결과 지도", ["grid_hbi.csv", "matplotlib"]), ("ranks", "순위 역전 산점도", ["grid_hbi.csv", "matplotlib"]),
                              ("sites", "선정지 백분위 막대", ["validation_sites.csv", "matplotlib"]), ("skt", "외출 지수 산점도", ["points_SKT_*_dong.csv", "pop60.csv", "matplotlib"])]:
@@ -1522,6 +1524,34 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
           f"시설 효과에만 영향: 봉천 휠체어 수혜 {' → '.join(f_int(mw_[k]) for k in ks_)}개 (약국)")
 
 
+BASEMAP_DIR = os.path.join(DECK, "basemap")
+BASEMAP_USED = {}                                       # [10/20] {"14": 출처, "19": 출처} → V6.14.basemap·V6.19.basemap
+
+
+def draw_basemap(ax, ext, alpha=1.0, zorder=0):
+    """[10/20] deck/basemap/*.png (tools/make_basemap.py, OSM 자료로 직접 그린 밝은 배경지도, 인터넷 필요 없음) 중
+    ext(x0, x1, y0, y1, EPSG:5186)를 다 덮는 것 가운데 가장 촘촘한 것을 맨 아래에 깜. 없으면 None (그림은 배경 없이 그대로)"""
+    import glob as _g
+    best = None
+    for j in sorted(_g.glob(os.path.join(BASEMAP_DIR, "*.json"))):
+        try:
+            m = json.load(open(j, encoding="utf-8"))
+            bx0, bx1, by0, by1 = m["extent_5186"]
+        except Exception:
+            continue
+        png = j[:-5] + ".png"
+        if os.path.exists(png) and bx0 <= ext[0] and bx1 >= ext[1] and by0 <= ext[2] and by1 >= ext[3]:
+            if best is None or m["m_per_px"] < best[0]["m_per_px"]:
+                best = (m, png)
+    if not best:
+        return None
+    import matplotlib.pyplot as _plt
+    m, png = best
+    bx0, bx1, by0, by1 = m["extent_5186"]
+    ax.imshow(_plt.imread(png), extent=(bx0, bx1, by0, by1), origin="upper", interpolation="bilinear", alpha=alpha, zorder=zorder)
+    return m.get("attribution") or "© OpenStreetMap contributors"
+
+
 def draw_iso_one(gpkg, minutes=10):
     """[10/14 v11] 등시선 한 칸: 평지 가정·고령자 경사 반영·휠체어의 minutes 분 범위를 겹쳐 그림 → deck/img/results/iso_one.png (실패하면 None)"""
     try:
@@ -1569,6 +1599,10 @@ def draw_iso_one(gpkg, minutes=10):
         return None
     cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
     ax.set_xlim(min(xs) - 15, max(xs) + 15); ax.set_ylim(min(ys) - 45, max(ys) + 15); ax.set_aspect("equal"); ax.axis("off")
+    bm = draw_basemap(ax, (min(xs) - 15, max(xs) + 15, min(ys) - 45, max(ys) + 15), alpha=0.6)   # [10/20] 19장: 배경지도 옅게
+    if bm:
+        BASEMAP_USED["19"] = bm
+        ax.set_xlim(min(xs) - 15, max(xs) + 15); ax.set_ylim(min(ys) - 45, max(ys) + 15)
     st_ = [p for p in polys.get("wheel", [[]])[0]] if polys.get("wheel") else []
     sx, sy = (sum(p[0] for p in st_) / len(st_), sum(p[1] for p in st_) / len(st_)) if st_ else (cx, cy)
     ax.plot([sx], [sy], marker="*", markersize=13, color="#1C2321")
@@ -1629,22 +1663,26 @@ def v6_plots(B, grid, T0, bands, R):
     plt.rcParams["font.family"] = next((f for f in ["Malgun Gothic", "Apple SD Gothic Neo", "AppleGothic", "NanumGothic"] if f in names), "sans-serif")
     fig = plt.figure(figsize=(W, H), dpi=220)
     ax = fig.add_axes([0, 0, 1, 1]); ax.set_facecolor("#FFFFFF"); fig.patch.set_facecolor("#FFFFFF")
+    bm14 = draw_basemap(ax, (x0, x1, y0, y1))                   # [10/20] 저장된 배경지도 (OSM 자료로 그림). 격자는 그 위에 반투명
+    if bm14:
+        BASEMAP_USED["14"] = bm14
+    GA = 0.72 if bm14 else 1.0
     ax.add_collection(LineCollection([r for d in alld if d["gu"] not in gus for r in d["rings"]], colors="#E4E8E6", linewidths=0.35))
     rects = [Rectangle((num(g["cell_x"]) - 125, num(g["cell_y"]) - 125), 250, 250) for g in cells]
     V6C = ["#8CB8A0", "#F2B134", "#E4572E", "#9E2A2B"]
     if bands == "mix":                               # 10/12 판정: 체감 부담 = HBI, 고립 위험 = 왕복 추가 분 (고립 위험이 우선)
         cls = [2 if (num(g.get(tr)) or 0) >= 0.5 else (1 if (num(g.get("hbi_mean")) or 0) >= hb else 0) for g in cells]
-        pc = PatchCollection(rects, facecolors=[V6C[k] for k in cls], linewidths=0)
-        leg = [Patch(color=V6C[0], label=f"평지 수준 (HBI {hb:g} 미만)"), Patch(color=V6C[1], label=f"체감 부담 (HBI {hb:g} 이상)"),
-               Patch(color=V6C[2], label=f"고립 위험 (집 절반 이상이 왕복 {RM:g}분 이상 더)")]
+        pc = PatchCollection(rects, facecolors=[V6C[k] for k in cls], linewidths=0, alpha=GA)
+        leg = [Patch(color=V6C[0], alpha=GA, label=f"평지 수준 (HBI {hb:g} 미만)"), Patch(color=V6C[1], alpha=GA, label=f"체감 부담 (HBI {hb:g} 이상)"),
+               Patch(color=V6C[2], alpha=GA, label=f"고립 위험 (집 절반 이상이 왕복 {RM:g}분 이상 더)")]
         cap = "250m 격자"
     elif bands == "min":
         cls = [2 if (num(g.get(tr)) or 0) >= 0.5 else (1 if (num(g.get(ts)) or 0) >= 0.5 else 0) for g in cells]
-        pc = PatchCollection(rects, facecolors=[V6C[k] for k in cls], linewidths=0)
+        pc = PatchCollection(rects, facecolors=[V6C[k] for k in cls], linewidths=0, alpha=GA)
         leg = [Patch(color=V6C[0], label=f"왕복 {SM:g}분 미만 더"), Patch(color=V6C[1], label=f"{SM:g}~{RM:g}분 더"), Patch(color=V6C[2], label=f"{RM:g}분 이상 더")]
         cap = "250m 격자 · 집 절반 이상이 넘는 왕복 추가 시간"
     else:
-        pc = PatchCollection(rects, cmap=LinearSegmentedColormap.from_list("v6", V6C), linewidths=0)
+        pc = PatchCollection(rects, cmap=LinearSegmentedColormap.from_list("v6", V6C), linewidths=0, alpha=GA)
         pc.set_array([num(g["hbi_mean"]) for g in cells]); pc.set_clim(1.0, 2.2)
         leg = [Patch(color=V6C[0], label=f"1.0~{hb:g} 평지 수준"), Patch(color=V6C[1], label=f"{hb:g}~{HI:g} 체감 부담"), Patch(color=V6C[2], label=f"{HI:g} 이상 고립 위험")]
         cap = "250m 격자 평균 언덕 부담 지수(HBI)"
