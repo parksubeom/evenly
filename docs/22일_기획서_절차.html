@@ -42,7 +42,7 @@ td.ck, th.ck { text-align: center; }
 <tr><td class="ck"></td><td>그림 재료 (반영됨)</td><td>11장 등고선 배경·28장 터널 단면 = 연속수치지형도 등고선 (<code>--bg-only</code>) · 14·19장 배경지도 = <code>deck/basemap/</code> 저장본 (OSM 자료로 그림, 인터넷 필요 없음)</td></tr>
 <tr><td class="ck"></td><td><b>18:00 문구 고정</b></td><td>이 시각 뒤로는 장 문구·배치를 바꾸지 않음 (그때의 커밋이 제출 문구). 밤에 오는 실측은 <code>deck/inputs.json</code> 숫자만</td></tr>
 <tr><td class="ck"></td><td>미리 빌드 다시 (실측 넣은 뒤)</td><td><code>cd ~/Downloads/evenly/deck</code> → <code>npm run build:real</code> → <code>node py.js ../tools/check_deck.py ../deliverables/언덕위우리동네_기획서_final.pptx --missing data/missing.txt</code> (반출 칸만 빈칸이면 정상)</td></tr>
-<tr><td class="ck"></td><td>대비책 판·제출 준비</td><td><code>npm run fallback-pdf</code> → 누락 0·통과. 개인정보 동의서 서명본, 접수 페이지 로그인·올리는 곳 확인</td></tr>
+<tr><td class="ck"></td><td>대비책 판·제출 준비</td><td><code>npm run fallback-pdf</code> → 누락 0·통과 ("반영 예정" 이 장에 남으면 빌드가 멈춤). 개인정보 동의서 서명본, 접수 페이지 로그인·올리는 곳 확인</td></tr>
 </table>
 
 <h2>0-1. 22일에 반출로 채워질 칸 (지금 미리 빌드의 빈칸 30개, 반출이 오면 자동)</h2>

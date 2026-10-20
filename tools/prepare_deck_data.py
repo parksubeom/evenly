@@ -169,7 +169,14 @@ def main():
                          " 문턱은 결과의 run_meta.csv (mapping 의 hbi_band·extra_min_bands)")
     ap.add_argument("--memo", help="[10/20] 현장 메모 값 (deck/inputs_memo_1020.json, 출처 '현장 메모(센터 허락, 10/20)'). 반출에 없는 09·08 자리에만 씀")
     ap.add_argument("--public", help="[10/20] 공개 자료 계산 값 (deck/public_calc/public_calc.json, tools/extract_public_calc.py). 후보 시설 효과·등시선·두 방식 HBI 비교")
+    ap.add_argument("--no-export", action="store_true",
+                    help="[10/20] 반출 없이 (현장 메모·공개 계산만): --src 대신 빈 폴더 deck/data/_no_export 를 쓰고 results/ 밖 결과도 읽지 않음. 대비책 판(prepare_fallback_deck.py)이 씀")
     a = ap.parse_args()
+    if a.no_export:
+        a.src = os.path.join(ROOT, "deck", "data", "_no_export")
+        os.makedirs(a.src, exist_ok=True)
+        if os.listdir(a.src):
+            raise SystemExit(f"!! {os.path.relpath(a.src, ROOT)} 가 비어 있지 않음 → --no-export 는 반출 없이 만듦")
     src = os.path.abspath(a.src)
     if not os.path.isdir(src):
         raise SystemExit(f"결과 폴더가 없습니다: {src}")
@@ -207,7 +214,7 @@ def main():
         raise SystemExit("!! results/raw_export 에 공개 대역 표지가 있습니다 → 실제 반출 폴더에 리허설 결과가 섞였는지 확인하세요")
     if a.expect == "rehearsal" and not rehearsal:
         raise SystemExit("!! --expect rehearsal 인데 공개 대역 표지(_source.txt=public_rehearsal)가 없습니다")
-    if not fake and not rehearsal and not is_raw:
+    if not fake and not rehearsal and not is_raw and not a.no_export:
         raise SystemExit(f"!! 가짜 표지가 없는데 폴더가 results/raw_export 가 아닙니다: {os.path.relpath(src, ROOT)}\n"
                          "   실제 결과는 results/raw_export 에서만 빌드합니다. 시험이면 make_fake_results.py 로 만든 폴더를 쓰세요")
     if a.expect == "fake" and not fake:
@@ -374,7 +381,7 @@ def main():
     # ── 밖 도구 결과 (있을 때만, 없으면 표시 안 함) ──
     #   가짜 결과는 <src> 안에서만, 실제 결과는 <src> → results/ 순서로 찾음 (가짜가 실제 기획서에 섞이지 않도록)
     def opt_file(rel):
-        for base in ([src] if test else [src, os.path.join(ROOT, "results")]):
+        for base in ([src] if (test or a.no_export) else [src, os.path.join(ROOT, "results")]):   # [10/20] --no-export 는 밖 결과도 안 읽음
             pth = os.path.join(base, rel)
             if os.path.exists(pth):
                 return pth
