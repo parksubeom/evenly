@@ -532,6 +532,7 @@ def main():
     ap.add_argument("--grid-run", default="gwanak_v62all08")
     ap.add_argument("--contours", help="[10/20] 연속수치지형도 등고선 (tools/extract_contours.py 의 contour_gwanak.gpkg)")
     ap.add_argument("--allow-gaps", action="store_true", help="등고선 빠진 곳이 있어도 그림 (시험용, --out 과 함께만)")
+    ap.add_argument("--bg-only", action="store_true", help="[10/20] 등고선은 지도 칸 배경과 28장 터널 단면에만 (경사 색·경로·격자는 공개 지형 그대로)")
     ap.add_argument("--out", help="그림 폴더 (기본 deck/v6_source)")
     a = ap.parse_args()
     global OUT, CBG
@@ -561,14 +562,23 @@ def main():
     win = (round(sx - hw), round(sx + hw), round(sy - hw), round(sy + hw))
     meta["win_5186"] = win
     meta["site_5186"] = [round(sx, 1), round(sy, 1)]
-    meta["contour"] = bool(a.contours)
+    meta["contour"] = bool(a.contours) and not a.bg_only
+    meta["contour_bg"] = bool(a.contours) and a.bg_only
+    if a.bg_only and not a.contours:
+        raise SystemExit("--bg-only 는 --contours 와 함께")
 
     d = np.load(os.path.join(H6, "work", "network.npz"))
     N, giant = d["nodes"], d["giant"]
     e = {kk[2:]: d[kk] for kk in d.files if kk.startswith("e_")}
     s5, zuse = d["s5"], d["z5"]
     cdem = None
-    if a.contours:
+    if a.contours and a.bg_only:                                    # [10/20] 배경·터널 단면만 등고선
+        CBG = os.path.abspath(a.contours)
+        cdem = ContourDEM(CBG, win)
+        meta["data"]["등고선"] = "연속수치지형도 등고선 (국토지리정보원): 지도 칸 배경, 28장 터널 단면 높이 (경사 색·경로·격자는 공개 지형)"
+        rep_p = os.path.join(os.path.dirname(CBG), "contour_gwanak_report.json")
+        meta["contour_report"] = json.load(open(rep_p, encoding="utf-8")) if os.path.exists(rep_p) else None
+    elif a.contours:
         src = os.path.abspath(a.contours)
         share, ngap, nneed = contour_gaps(src, win)
         meta["contour_gaps_11"] = {"share": round(share, 3), "cells": ngap, "relief_cells": nneed}
@@ -674,7 +684,7 @@ def main():
 
     # ⑤ 250m 격자 색 (공개 자료 보행망, 약국) — 연할수록 부담 적음. 숫자 없음
     cells = []
-    if cdem is not None:
+    if cdem is not None and not a.bg_only:
         cells = grid_from_slopes(N, e, s5, giant, (sx, sy), dn["pharmacy"])
         meta["data"]["격자"] = "같은 등고선 경사로 다시 계산 (번들 lib/model.run_scenario, 약국, 건물 → 60m 안 가장 가까운 노드, 250m 칸 건물 5개 이상)"
     else:
