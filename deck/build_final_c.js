@@ -293,7 +293,7 @@ PNAME[27] = '부록 1 · 전처리와 경사 모델'; PNAME[28] = '부록 2 · �
   T(s, '언덕 위 우리동네', { x:0.8, y:1.4, w:8.6, h:0.95, fontSize:46, bold:true, color:'FFFFFF' });
   T(s, '경사 반영 이동편의시설 입지 지도', { x:0.8, y:2.35, w:8.6, h:0.5, fontSize:22, color:C.onDark });
   s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x:0.8, y:3.2, w:6.4, h:0.5, rectRadius:0.2, fill:{ color:C.teal }, line:{ color:C.teal } });
-  T(s, `지도앱의 ${Math.round(EX().adult)}분이, 누군가에게는 ${Math.round(EX().slope)}분입니다.`, { x:1.05, y:3.2, w:6.1, h:0.5, fontSize:17, bold:true, color:'FFFFFF', valign:'middle' });
+  T(s, '어디에, 무엇을, 먼저. 언덕까지 계산해 정합니다.', { x:1.05, y:3.2, w:6.1, h:0.5, fontSize:17, bold:true, color:'FFFFFF', valign:'middle' });
   T(s, `정책 도구 evenly   |   팀명 ${team()}   |   2026.10`, { x:0.8, y:4.8, w:7, h:0.3, fontSize:12, color:C.onDark });
   SLIDES[page] = s; }
 // ── C2 목차 겸 한 장 요약 ──
