@@ -403,7 +403,7 @@ setSec(1, '기획 배경');
   T(s, [{ text:'지금의 발굴 기준 (2024 서울시 전수조사)   ', options:{ bold:true, color:C.muted } }, { text:'경사 20도·폭 2.5m·길이 30m 이상 계단 + 민원', options:{ bold:true, color:C.ink } }], { x:0.6, y:1.36, w:8.8, h:0.28, fontSize:11 });
   const O = { text:'O', options:{ bold:true, color:C.teal, align:'center' } }, X = { text:'X', options:{ color:'A9B4C6', align:'center' } }, N = { text:'-', options:{ color:'A9B4C6', align:'center' } };
   const E = { text:'O', options:{ bold:true, color:C.acc, align:'center' } }, H = t => ({ text:t, options:{ align:'center' } });
-  etable(s, [['구분', H('서울시 전수조사\n(2024)'), H('서울동행맵\n(2024.11~)'), H('선행연구'), H('2024 경진대회\n최우수상'), { text:'evenly', options:{ align:'center', color:C.acc } }],
+  etable(s, [['공개 자료로 확인한 기능 비교', H('서울시 전수조사\n(2024)'), H('서울동행맵\n(2024.11~)'), H('선행연구'), H('2024 경진대회\n최우수상'), { text:'evenly', options:{ align:'center', color:C.acc } }],
     [B('계단 없는 급경사 길까지 봄'), X, O, O, N, E],
     [B('집집마다(건물 단위) 계산'), X, X, X, N, E],
     [B('집 → 필수시설 일상 경로 기준'), X, O, X, O, E],
@@ -707,8 +707,7 @@ if (CANDT) {
   const memoRow = CANDT.some(r => r.memo);
   // [10/21] 표 위: 후보 고르는 순서 (24장 '후보 고르는 기준' 칸과 같은 순서)
   // [C안] 과정 네 단계는 18장에 따로
-  if (mixed) T(s, memoRow ? '시설 효과(고령자·휠체어·1억 원당)는 후보 = 공개 자료 보행망 시뮬레이션 · 봉천 = LX 현장 메모'
-                          : '시설 효과는 봉천·후보 모두 공개 자료 보행망으로 같은 방식으로 계산',   // [10/20] 한 출처 안에서만 비교
+  if (mixed) T(s, [{ text:'이 표는 같은 잣대로 후보를 비교하는 방법을 보여 주는 예시입니다  ·  ', options:{ bold:true, color:C.ink } }, { text: memoRow ? '시설 효과(고령자·휠체어·1억 원당)는 후보 = 공개 자료 보행망 시뮬레이션 · 봉천 = LX 현장 메모' : '시설 효과는 봉천·후보 모두 공개 자료 보행망으로 같은 방식으로 계산', options:{ bold:false, color:C.text } }],   // [C안] 표 위 한 줄   // [10/20] 한 출처 안에서만 비교
                { x:0.6, y:1.36, w:8.8, h:0.22, fontSize:9, bold:true, color:C.ink });
   rows[0] = rows[0].map(t => typeof t === 'string' ? { text:t, options:{ fontSize:9 } } : t);   // [B안] 머리 글자 9
   etable(s, rows, { y: mixed ? 1.64 : 1.55, colW:cw, rowH:[0.36].concat(CANDT.map(() => 0.255)), fontSize:9 });   // [10/14 v14] 맑은 고딕(줄 높이 큼)에서도 막대와 띄움   // [10/21] 순서 줄만큼 내림
@@ -763,7 +762,7 @@ if (CANDT) {
 // ── 19 활용 ① 시설 입지 ──
 { const s = base('어디에 쓰나', '이동편의시설, 후보 발굴부터 예산 효과까지 한 번에 비교합니다', { tsize:20 });   // [10/13 v9]
   const sc19 = (sc => /^[가-힣]{1,3}구$/.test(sc) ? sc.slice(0, -1) : sc)(Q('V6.scope', '관악구'));
-  [['후보 발굴', (CANDT ? `계단 기준 밖까지 넓혀 부담이 큰 곳을 찾습니다. ${CANDT.some(r => r.src) ? '공개 자료로 미리 고른' : '자동으로 찾은'} 후보 ${CANDT.filter(r => r.kind === '후보').length}곳 중 ${V('V6.17.n_facility')}이 앞섭니다.`   // [10/14 v14]
+  [['후보 발굴', (CANDT ? `계단 기준 밖까지 넓혀 부담이 큰 곳을 찾습니다. ${LXTOP ? `LX로 보면 고립 위험이 몰린 곳은 ${LXTOP.dong} 두 곳입니다.` : `${CANDT.some(r => r.src) ? '공개 자료로 미리 고른' : '자동으로 찾은'} 후보 ${CANDT.filter(r => r.kind === '후보').length}곳 중 ${V('V6.17.n_facility')}이 앞섭니다.`}`   // [10/14 v14]
                           : `계단 기준 밖까지 넓혀 부담이 큰 곳을 찾습니다. ${sc19}에서는 ${NCAND()}곳입니다.`)],['설치 여지','주변 필지에 도로·공원이 얼마나 있는지로 놓을 자리부터 봅니다.'],['효과 비교',`시설 하나로 ${BLDS()} 몇 개가, 몇 분씩 편해지는지 계산합니다.`],['예산 검토','1억 원당 혜택 보는 건물 수로 순서를 정할 수 있습니다.']].forEach((t, i) => {
     const y = 1.45 + i*0.78; if (i) hr(s, 0.6, y-0.07, 4.7);
     T(s, String(i+1), { x:0.6, y, w:0.4, h:0.62, fontSize:20, bold:true, color:C.ink, valign:'middle' });
@@ -982,9 +981,11 @@ setSec(4, '활용과 도입');
     s.addShape(pres.shapes.RECTANGLE, { x, y:1.55, w:0.14, h:0.14, fill:{color: hot?C.acc:C.ink}, line:{color: hot?C.acc:C.ink} });
     T(s, String(i+1) + '단계', { x, y:1.8, w:1.6, h:0.25, fontSize:10.5, color:C.muted });
     T(s, t, { x, y:2.05, w:1.65, h:0.6, fontSize:12, bold:true, color: hot?C.acc:C.ink, valign:'top' }); });
-  [['사업','후보 선정의 공통 기준, 예산 효과의 사전 근거'],['계획','증진계획의 보행환경 실태·지역 특성 자료 (23장)'],['확산','같은 LX 데이터로 부산 산복도로 등 전국 구릉지']].forEach((e, i) => { const x = 0.6 + i*2.97;
-    bar(s, x, 2.75, 0.75, i==0 ? C.acc : C.ink); T(s, e[0], { x:x+0.22, y:2.75, w:2.6, h:0.3, fontSize:13, bold:true, color: i==0 ? C.acc : C.ink });
-    T(s, e[1], { x:x+0.22, y:3.07, w:2.55, h:0.5, fontSize:11.5, color:C.text }); });
+  // [C안] 시기 (제안): 서울 오르락 일정(3단계 대상지 발표 2027 상반기, 4단계 2028 상반기)·교통약자법 제7조(5년 단위, 서울 제4차 2023~2027)에 맞춤
+  T(s, '시기 (제안)', { x:0.6, y:2.68, w:3, h:0.26, fontSize:12, bold:true, color:C.ink });
+  [['2단계', '후보 검토 자료 제공: 2026 하반기~2027 상반기 (서울시 3단계 대상지 발표 2027 상반기 전)'], ['3단계', '4단계 대상지 (2028 상반기 발표) 비교'], ['4단계', '다음 지방교통약자 이동편의 증진계획 (2028년부터) 실태 자료로']].forEach(([k, v], i) => { const y = 2.97 + i * 0.21;
+    T(s, k, { x:0.6, y, w:0.7, h:0.21, fontSize:9.5, bold:true, color:C.teal, valign:'middle' });
+    T(s, v, { x:1.3, y, w:8.1, h:0.21, fontSize:9.5, color:C.text, valign:'middle' }); });
   // [B안] 운영 구조도: 계산은 플랫폼 안, 밖으로는 집계와 후보 목록, 건물 단위는 권한을 받은 자치구만
   T(s, '운영 구조 (제안)', { x:0.6, y:3.66, w:3, h:0.26, fontSize:12, bold:true, color:C.ink });
   [['LX·서울시 데이터 플랫폼', '경사 보행망·HBI·시설 효과 계산 (안심구역)', C.ink, 'FFFFFF'], ['반출 (집계만)', '250m 격자·행정동 지표, 후보 목록 (건물 5개 미만 칸 제외)', C.soft, C.ink], ['서울시·자치구', '후보 검토 → 사업 선정 → 법정계획 (건물 단위는 권한을 받아 열람)', C.soft, C.ink]].forEach(([k, v, f, c], i) => { const x = 0.6 + i * 3.0;
@@ -992,17 +993,19 @@ setSec(4, '활용과 도입');
     T(s, k, { x:x + 0.15, y:4.04, w:2.4, h:0.3, fontSize:11.5, bold:true, color:c });
     T(s, v, { x:x + 0.15, y:4.34, w:2.4, h:0.6, fontSize:9.5, color: c === 'FFFFFF' ? 'E3EAF6' : C.text, lineSpacingMultiple:1.08 });
     if (i < 2) s.addShape(pres.shapes.LINE, { x:x + 2.68, y:4.48, w:0.29, h:0, line:{ color:C.teal, width:2, endArrowType:'triangle' } }); });
-  src(s, '단계 2~4 는 서울시 사업 절차(23장)와 교통약자 이동편의 증진계획에 맞춘 제안 · 한계와 다음 단계는 26장'); }
+  src(s, '단계 2~4 는 서울시 사업 절차(23장)와 교통약자 이동편의 증진계획에 맞춘 제안 · 시기: 서울 오르락 일정(3단계 대상지 발표 2027 상반기, 4단계 2028 상반기), 교통약자법 제7조(5년 단위, 서울 제4차 2023~2027) · 한계와 다음 단계는 26장'); }
 // ── B26 기대효과 3칸 + 한계·다음 단계 (A안 25장 한계) ──
 { const s = base('기대효과', '숨은 부담을 드러내고, 같은 기준으로 고르고, 전국으로 넓힙니다', { tsize:20 });
   [['people', '사회', '숨은 부담을 드러냅니다', '평지 지도가 "가깝다"던 동네의 오르막 부담을 보이게 하고, 언덕 위 혼자 사는 어르신을 돌봄 대상으로 먼저 찾을 수 있습니다.'],
    ['chart', '행정', '같은 기준으로 고릅니다', '입지 근거(같은 잣대 비교), 예산 효율(1억 원당 수혜), 교통약자 이동편의 증진계획과 연계할 수 있습니다.'],
    ['grid', '기술', '전국 구릉지에 쓸 수 있습니다', '건물 단위 경사 보행망, 서울시 공식 고저차와 맞춘 LX 자료 검증, 같은 LX 자료로 전국 구릉지에 넓힐 수 있습니다.']].forEach(([ic, k, h, b], i) => { const x = 0.6 + i * 3.0, y = 1.45, dk = i === 1;
-    s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x, y, w:2.8, h:2.3, rectRadius:0.1, fill:{ color: dk ? C.ink : C.soft }, line:{ color: dk ? C.ink : C.soft } });
+    s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x, y, w:2.8, h:2.08, rectRadius:0.1, fill:{ color: dk ? C.ink : C.soft }, line:{ color: dk ? C.ink : C.soft } });
     icon(s, ic, x + 0.2, y + 0.2, 0.5, dk ? C.teal : C.ink);
     T(s, k, { x:x + 0.82, y:y + 0.2, w:1.8, h:0.5, fontSize:17, bold:true, color: dk ? 'FFFFFF' : C.ink, valign:'middle' });
     T(s, h, { x:x + 0.2, y:y + 0.85, w:2.45, h:0.35, fontSize:12.5, bold:true, color: dk ? 'FFFFFF' : C.ink });
-    T(s, b, { x:x + 0.2, y:y + 1.22, w:2.45, h:1.0, fontSize:10.5, color: dk ? 'E3EAF6' : C.text, lineSpacingMultiple:1.12 }); });
+    T(s, b, { x:x + 0.2, y:y + 1.22, w:2.45, h:0.82, fontSize:10.5, color: dk ? 'E3EAF6' : C.text, lineSpacingMultiple:1.12 }); });
+  T(s, [{ text:'산업  ', options:{ bold:true, color:C.ink } }, { text:'LX 공간정보 플랫폼의 지자체 대상 분석 서비스로 확장, 대중교통·돌봄·부동산 등 접근성 지표가 필요한 분야로 넓힐 수 있습니다 (제안)', options:{ color:C.text } }],
+    { x:0.6, y:3.57, w:8.8, h:0.33, fontSize:9.5, valign:'middle' });   // [C안] 산업적 효과 (제안)
   hr(s, 0.6, 3.92, 8.8);
   T(s, '한계와 다음 단계', { x:0.6, y:3.98, w:4, h:0.26, fontSize:11.5, bold:true, color:C.muted });
   const nx26 = [ALLM() ? '건축물대장 연결 개선(주거 기준)' : '', '사고·유동인구 원자료 결합', SPD() > 0.75 ? '현행 보행속도 0.7m/s 적용' : ''].filter(Boolean).join(', ');
