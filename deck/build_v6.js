@@ -444,6 +444,8 @@ const team = () => has('team_display') ? String(R.fields['team_display'].value) 
   const vis13 = ((R.tables['V6.13.visits'] && R.tables['V6.13.visits'].rows) || []).filter(r => !((REAL || FALLBACK) && r.optional && !r.done));   // 제출 후보 판(실제·대비책)에는 다녀온 예비 날만
   T(s, '안심구역 방문', { x:0.6, y:1.45, w:2.3, h:0.3, fontSize:12.5, bold:true, color:C.muted });
   T(s, [{ text:'총 ', options:{ fontSize:18, color:C.ink } }, { text:V('V6.13.n_visits', '___일'), options:{ fontSize:36, color:C.acc } }], { x:0.6, y:1.72, w:2.3, h:0.66, bold:true, valign:'bottom' });
+  const n5_13 = hasR('V6.13.n_bld5') ? [{ text:'대상 5개 구 분석', options:{ bold:true, color:C.ink, breakLine:true } }, { text:`(${Q('V6.13.gus5', '종로·중구·관악·광진·강서')}, ${R.fields['V6.13.n_bld5'].value} 건물)`, options:{ color:C.muted } }] : null;   // [10/21] 갈래 A
+  if (n5_13 && !hasR('V6.15.has_meas')) T(s, n5_13, { x:0.6, y:2.55, w:2.3, h:0.62, fontSize:10.5, lineSpacingMultiple:1.1 });
   if (!(REAL || FALLBACK) || hasR('V6.15.has_meas')) {   // [10/20] 실제판·대비책 판은 10/21 실측이 들어왔을 때만
     T(s, [{ text:'현장실측  ', options:{ bold:true, color:C.ink } }, { text:V('V6.15.date', '2026.10.___'), options:{ color:C.ink } }], { x:0.6, y:2.55, w:2.3, h:0.28, fontSize:11 });
     T(s, FALLBACK ? '관악 4구간을 직접 걸어 지도앱 시간과 비교' : '관악 4구간을 직접 걸어 모델 예측과 비교', { x:0.6, y:2.84, w:2.3, h:0.42, fontSize:10, color:C.muted }); }
@@ -518,7 +520,7 @@ if (!hasR('V6.15.has_meas') && (REAL || FALLBACK)) {
   const b1 = OR.bongcheon1;
   etable(s, [['자료', '높이 차', '길이'],
     [B('서울시 공식'), B(`${b1.rise_m}m`), `연장 ${b1.length_m}m (경사도 ${b1.slope}, 폭 ${b1.width_m}m)`],
-    [B('LX DEM 5m'), B(V('V6.16.rise_lx'), { color:C.acc }), `양 끝 직선 ${V('V6.15.lx_straight')} (10/20 메모)`],
+    [B('LX DEM 5m'), B(V('V6.16.rise_lx'), { color:C.acc }), `양 끝 직선 ${V('V6.15.lx_straight')} (${hasR('V6.lxexp') ? '반출' : '10/20 메모'})`],   // [10/21] 반출 값이면 출처 반출
     [B('LX DEM 1m'), B(V('V6.16.rise_1m'), { color:C.acc }), '- (10/20 메모)'],
     [B('공개 지형 30m'), B(V('V6.16.rise_pub'), { color:C.muted }), '- (공개 계산)']],
     { x:0.6, y:1.45, w:4.75, colW:[1.3, 0.85, 2.6], rowH:[0.4, 0.55, 0.55, 0.55, 0.55], fontSize:11 });
@@ -538,7 +540,7 @@ if (!hasR('V6.15.has_meas') && (REAL || FALLBACK)) {
   { const n_ = k => Number(String(hasR(k) ? R.fields[k].value : '').replace(/[^0-9.]/g, '')), r0 = b1.rise_m;   // 결론 문장이 값과 맞는지 (값이 바뀌면 멈춤)
     const ok = [n_('V6.16.rise_lx'), n_('V6.16.rise_1m')].every(v => v && Math.abs(v - r0) < 1) && n_('V6.16.rise_pub') && Math.abs(n_('V6.16.rise_pub') / r0 - 0.5) < 0.05;
     if (!ok) { console.error('!! 15장 결론 문장("1m 안쪽"·"절반")이 값과 맞지 않음 — 문장을 고칠 것'); process.exitCode = 1; } }
-  src(s, `서울시 공식 = ${OR.source_short} · LX DEM 5m·1m = ${LXS} (10/20 현장 메모) · 공개 지형 30m = 공개 자료 계산`);
+  src(s, `서울시 공식 = ${OR.source_short} · ` + (hasR('V6.lxexp') ? `LX DEM 5m = ${LXS} (반출) · DEM 1m = ${LXS} (10/20 현장 메모)` : `LX DEM 5m·1m = ${LXS} (10/20 현장 메모)`) + ' · 공개 지형 30m = 공개 자료 계산');
 } else { const meas15 = hasR('V6.15.has_meas');
   const s = base('직접 걸어 본 관악구', FALLBACK ? (meas15 ? '관악 네 구간을 직접 걸어서 확인했습니다' : '관악 네 구간을 직접 걸어서 확인합니다')   // [10/20] 대비책 판: 모델(10/19 반출) 없이
                                        : meas15 ? '모델이 말한 시간을 직접 걸어서 확인했습니다' : '관악 네 구간, 성인과 어르신의 걸음 차이', { tsize:22 });
@@ -577,6 +579,8 @@ if (!hasR('V6.15.has_meas') && (REAL || FALLBACK)) {
     if (FALLBACK) { const f16 = /상위\s*([0-9.]+)%/.exec(String(V('V6.16.site')));   // [10/20] 대비책 판: 1차 반출 백분위 + 봉천 계단 높이 차 (공개 계산·10/20 메모)
       return `서울시가 고른 봉천은 1차 분석에서도 상위 ${f16 ? Math.round(Number(f16[1])) : V('V6.16.site')}%였고,\n`
            + (has('V6.16.rise_pub') ? `봉천 계단 높이를 공개 지형은 ${R.fields['V6.16.rise_pub'].value}, LX 는 ${R.fields['V6.16.rise_lx'].value}로 잡습니다` : '이 계산에는 LX 의 5m 높이가 필요합니다'); }
+    if (hasR('V6.16.sites_n') && Q('V6.16.sites_top3', 'no') === 'yes')   // [10/21] 갈래 A (5개 구): 서울시 1단계 선정지 계산된 곳 모두 상위 3분의 1
+      return `서울시 1단계 선정지 ${['', '한', '두', '세', '네'][Number(R.fields['V6.16.sites_n'].value)] || R.fields['V6.16.sites_n'].value} 곳 모두 우리 모델에서 상위 3분의 1 안`;
     const m16 = hasR('V6.16.site') ? /상위\s*([0-9.]+)%/.exec(String(R.fields['V6.16.site'].value)) : null;
     return (m16 && /봉천/.test(Q('V6.16.site_label', ''))) ? `서울시가 고른 봉천은 모델에서도 상위 ${Math.round(Number(m16[1]))}%였고,\n높이를 빼면 ${V('V6.16.dem_top10')}가 바뀝니다`
                                                          : `서울시의 선택을 다시 찾아냈고, 높이를 빼면 ${V('V6.16.dem_top10')}가 바뀝니다`; }, { tsize:19 });
@@ -586,7 +590,7 @@ if (!hasR('V6.15.has_meas') && (REAL || FALLBACK)) {
   // [10/21] 첫 줄 끝: 서울시 2단계 대상지(봉천초 인근)가 든 250m 격자의 백분위 (반출 격자). 반출 전(미리 빌드) = 빈칸, 대비책 판 = 없음
   //   값을 먼저 읽어야 빈칸 짝(선정지 → 2단계)이 같은 줄에 맞음
   const site16 = V('V6.16.site');
-  const s2v16 = FALLBACK ? '' : hasR('V6.16.site2') ? String(R.fields['V6.16.site2'].value) : ((REAL && !hasR('V6.24.grid')) ? V('V6.16.site2') : '');
+  const s2v16 = (FALLBACK || hasR('V6.16.sites_n')) ? '' : hasR('V6.16.site2') ? String(R.fields['V6.16.site2'].value) : ((REAL && !hasR('V6.24.grid')) ? V('V6.16.site2') : '');
   const n16 = Number((/상위\s*([0-9.]+)%/.exec(s2v16) || [])[1]);   // "도" 는 상위 30% 안일 때만, 아니면 받침에 맞춰 은/는
   const jb16 = (w => { const c = w.charCodeAt(w.length - 1) - 0xAC00; return c >= 0 && c <= 11171 && c % 28 !== 0; })(OR.bongcheon2.name);
   const pt16 = (isNaN(n16) || n16 <= 30) ? '도' : (jb16 ? '은' : '는');
@@ -594,18 +598,21 @@ if (!hasR('V6.15.has_meas') && (REAL || FALLBACK)) {
    : [[/봉천/.test(sl16) ? `서울시가 고른 봉천동은 ${Q('V6.scope', '관악구')} 격자 중` : sl16, site16],
    [/봉천/.test(wl16) ? '봉천 계단을 피하는 휠체어 길 (서울시 발표 200m 이상)' : wl16, V('V6.16.wheel')],
    hasR('V6.16.dem1m') ? ['DEM 1m 로 다시 계산해도 (1m 범위 안 집)', `순위상관 ${R.fields['V6.16.dem1m'].value}`] : ['직접 걸은 4구간, 모델 예측과 실측의 상관', V('V6.16.meas_r')]])
-    .forEach((r, i) => stat(s, 0.6, 1.95+i*g16, 4.1, r[0], r[1], Object.assign({ size:18, color:C.ink }, (i === 0 && s2v16) ? { suffix:`  · 2단계 ${OR.bongcheon2.name}${pt16} ${s2v16}` } : {})));   // [10/20] 실측 상관 대신 DEM 1m (현장 메모)
+    .forEach((r, i) => stat(s, 0.6, 1.95+i*g16, 4.1, r[0], r[1], Object.assign({ size:(i === 0 && hasR('V6.16.sites_n')) ? 14 : 18, color:C.ink }, (i === 0 && s2v16) ? { suffix:`  · 2단계 ${OR.bongcheon2.name}${pt16} ${s2v16}` } : {})));   // [10/20] 실측 상관 대신 DEM 1m (현장 메모)
   T(s, '왜 LX 자료여야 하나', { x:5.3, y:1.45, w:4, h:0.32, fontSize:13.5, bold:true, color:C.ink }); hr(s, 5.3, 1.82, 4.1, C.ink, 1.25);
   const rz16 = has('V6.16.rise_pub') ? [`같은 봉천 계단 높이 차: 공개 지형 → LX${has('V6.16.rise_1m') ? ` (DEM 1m ${R.fields['V6.16.rise_1m'].value})` : ''}`, `${R.fields['V6.16.rise_pub'].value} → ${R.fields['V6.16.rise_lx'].value}`, FALLBACK ? C.acc : C.ink, 18] : null;   // [10/20] LX 필요성 근거
   const np16 = ['자동차전용도로·단독/공동주택 구분', '공개 자료에는 없음', C.ink, 15];
   (FALLBACK ? [rz16, np16].filter(Boolean) : (() => { const d16 = V('V6.16.dem_top10');
-    return [[`5m 높이를 빼면, 가장 급한 상위 10% 중 바뀌는 ${BLDS()}`, has('V6.16.dem_missed') ? `${d16} (${R.fields['V6.16.dem_missed'].value})` : d16, C.acc, 18],
+    return [[`5m 높이를 빼면, 가장 급한 상위 10% 중 바뀌는 ${BLDS()}${hasR('V6.13.n_bld5') ? ' (5개 구)' : ''}`, has('V6.16.dem_missed') ? `${d16} (${R.fields['V6.16.dem_missed'].value})` : d16, C.acc, 18],
             ['공개 지형(30m)과 공개 보행망만 쓰면 놓치는 부담 구간', V('V6.16.pub_miss'), C.ink, 18], rz16 || np16]; })())
-    .forEach((r, i) => stat(s, 5.3, 1.95+i*g16, 4.1, r[0], r[1], Object.assign({ size:r[3], color:r[2] }, r === rz16 ? { suffix:`  (서울시 공식 ${OR.bongcheon1.rise_m}m)` } : {})));   // [10/21] 서울 오르락 고저차
+    .forEach((r, i) => stat(s, 5.3, 1.95+i*g16, 4.1, r[0], r[1], Object.assign({ size:r[3], color:r[2] },
+      r === rz16 ? { suffix:`  (서울시 공식 ${OR.bongcheon1.rise_m}m)` } : (i === 1 && !FALLBACK && hasR('V6.13.n_bld5')) ? { suffix:'  (5개 구 공통 격자)' } : {})));   // [10/21] 서울 오르락 고저차 · 5개 구 비교
   takeaway(s, '그래서 이 결과는 믿을 만하고, 이 계산에는 LX의 5m 높이가 꼭 필요합니다.', 4.55);
   const notes16 = [has('V6.16.wheel_note') ? R.fields['V6.16.wheel_note'].value : null, has('V6.16.daehyun_note') ? R.fields['V6.16.daehyun_note'].value : null].filter(Boolean).join(' · ');
   src(s, FALLBACK ? `선정지 백분위 = 1차 반출(10/2) 값 · DEM 1m 순위상관·봉천 높이 차 LX = ${LXS} (10/20 현장 메모) · 공개 지형 높이 차 = 공개 자료 계산 · 서울시 공식 = 서울 오르락 · 보행속도 출처는 부록 2`
-    : (REH ? '공개 대역(리허설) 값 · ' : '') + (ALLM() ? `${LXS} (10/19 반출·10/20 현장 메모 DEM 1m) · 공개 대조군 = 공개 자료 보행망 · ` + (has('V6.16.rise_pub') ? '봉천 높이 차: 공개 = 공개 자료 계산, LX = 현장 메모(09), 서울시 = 서울 오르락 · ' : '') : '') + '선정지 백분위 = 반경 300m 원 평균'
+    : (REH ? '공개 대역(리허설) 값 · ' : '') + (ALLM() ? `${LXS} (${hasR('V6.lxexp') ? '반출' : '10/19 반출·10/20 현장 메모 DEM 1m'}) · 공개 대조군 = 공개 자료 보행망 · `
+      + (has('V6.16.rise_pub') ? `봉천 높이 차: 공개 = 공개 자료 계산, LX = ${hasR('V6.lxexp') ? '반출(09)·DEM 1m = 현장 메모' : '현장 메모(09)'}, 서울시 = 서울 오르락 · ` : '') : '') + '선정지 백분위 = 반경 300m 원 평균'
+      + (hasR('V6.16.sites_n') ? ` (5개 구${hasR('V6.16.sites_na') ? `, ${R.fields['V6.16.sites_na'].value}은 자료 가장자리라 계산 안 됨` : ''})` : '')
     + (s2v16 ? `, 2단계 = 그 250m 격자 (위치: 국토정보필지 공개판)` : '') + ' · 대조군·계단·보행속도 출처는 부록 2'); }   // [10/14 v11] 한 줄만, 나머지는 부록 2   // [10/21] 2단계 대상지
 
 // ── 17 우선 검토 후보 ──
@@ -752,7 +759,7 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
     : has('V6.20.before') && has('V6.20.after')   // [v6.3] 정책 발견: 선정지도 고령자 시간 단축은 작고 휠체어 접근 효과가 큼 → 선정 기준에 휠체어 우회 거리
     ? `짧은 계단 하나가 휠체어에게는 ${R.fields['V6.20.before'].value} 우회입니다. 같은 예산을 비교할 때 '휠체어 우회 거리'를 더하자고 제안합니다.`   // [10/13 v9] 첫 문장은 v9, 둘째는 v6.3 지시 (v9 의 '5개 구에서는 고령자 단축이 더해짐'은 계산 전이라 넣지 않음)
     : '짧은 계단 하나가 휠체어에게는 먼 길 우회입니다. 선정 기준에 \'휠체어 우회 거리\'를 넣자고 제안합니다.', memo20 ? 4.56 : 4.68);
-  src(s, (REH ? '공개 대역(리허설) 값 · ' : '') + (memo20 ? `${LXS} (${FALLBACK ? '높이·설치 후 길·통과·수혜' : '설치 전 길 = 10/19 반출, 높이·통과·수혜'} = 10/20 현장 메모, 높이는 DEM 5m) · ` : '') + '수혜 = 고령자 30초 이상 또는 휠체어 1분 이상 단축(새 도달 포함) · 1곳 40억 원 가정 · 위치는 서울시 사업대상지 위치도 기준'
+  src(s, (REH ? '공개 대역(리허설) 값 · ' : '') + (memo20 ? (hasR('V6.lxexp') ? `${LXS} (반출: 설치 전 길·높이·통과·수혜, 높이는 DEM 5m) · ` : `${LXS} (${FALLBACK ? '높이·설치 후 길·통과·수혜' : '설치 전 길 = 10/19 반출, 높이·통과·수혜'} = 10/20 현장 메모, 높이는 DEM 5m) · `) : '') + '수혜 = 고령자 30초 이상 또는 휠체어 1분 이상 단축(새 도달 포함) · 1곳 40억 원 가정 · 위치는 서울시 사업대상지 위치도 기준'
     + (has('V6.16.wheel_note') ? ' · 설치 전 경로 1,000m 초과: 공개 대역 계단 면 왜곡일 수 있음' : ''));
 } else {
   const s = base('한 사람에게 돌아가는 변화', '엘리베이터 한 대가 바꾸는 김순자 할머니의 귀갓길', { tsize:21 });
@@ -906,7 +913,7 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
 // ── 25 확산·한계 ──
 { const s = base('행정 도입 단계', '관악구 시범에서 서울시 사업과 법정계획으로 넓힙니다', { tsize:21 });   // [10/20]
   hr(s, 0.6, 1.62, 8.8, C.ink, 1.25);
-  ['관악구 시범','자치구 후보 검토','서울시 사업 선정 기준 반영','교통약자 이동편의 증진계획 연계','전국 구릉지'].forEach((t, i) => { const x = 0.6 + i*1.78, hot = i==4;   // [10/20] 행정 도입 단계
+  [hasR('V6.13.n_bld5') ? '관악구 시범 · 5개 구 분석' : '관악구 시범','자치구 후보 검토','서울시 사업 선정 기준 반영','교통약자 이동편의 증진계획 연계','전국 구릉지'].forEach((t, i) => { const x = 0.6 + i*1.78, hot = i==4;   // [10/20] 행정 도입 단계
     s.addShape(pres.shapes.RECTANGLE, { x, y:1.55, w:0.14, h:0.14, fill:{color: hot?C.acc:C.ink}, line:{color: hot?C.acc:C.ink} });
     T(s, String(i+1) + '단계', { x, y:1.8, w:1.6, h:0.25, fontSize:10.5, color:C.muted });
     T(s, t, { x, y:2.05, w:1.65, h:0.6, fontSize:12, bold:true, color: hot?C.acc:C.ink, valign:'top' }); });
@@ -985,7 +992,7 @@ if (Q('V6.20.mode', 'example') === 'wheel') {
     r('반출 최소 건물 수','5개','비식별 기준','해당 없음')];
   const rh29 = [0.3,0.3,0.28,0.28,0.28,0.52,0.36,0.4,0.28];
   etable(s, rows29.filter(Boolean), { colW:[1.6,1.75,2.65,2.8], rowH:rh29.filter((_, i) => rows29[i]), fontSize:10 });   // [10/14 v14] 맑은 고딕에서도 장 안에
-  src(s, (ALLM() ? `${LXS} (민감도·대기 = 10/20 현장 메모${FALLBACK ? '' : ', 문턱 = 10/19 반출'}) · 보행속도 환산 = ${ANAS} · ` : '') + '순위상관이 0.9 이상이면 "누가 더 취약한가"의 순서가 가정에 크게 흔들리지 않는다는 뜻'); }
+  src(s, (ALLM() ? `${LXS} (${hasR('V6.lxexp') ? '반출, 민감도는 5개 구' : `민감도·대기 = 10/20 현장 메모${FALLBACK ? '' : ', 문턱 = 10/19 반출'}`}) · 보행속도 환산 = ${ANAS} · ` : '') + '순위상관이 0.9 이상이면 "누가 더 취약한가"의 순서가 가정에 크게 흔들리지 않는다는 뜻'); }
 { const s = base('부록 4', '경사 비용 계산 (발췌)');
   const code = ['def tobler(s):                       # 경사 s → 보행속도 km/h','    return 6.0 * np.exp(-3.5 * np.abs(s + 0.05))','FLAT = tobler(0.0)','','def elder_time(length, s, stair):    # 고령자 링크 통과 시간(초)','    s = np.where(stair, np.sign(s + 1e-9) * np.maximum(np.abs(s), 0.25), s)','    up = FLAT / tobler(np.abs(s))','    down = 1 + C.DOWNHILL_WEIGHT * (up - 1)   # 내리막은 오르막 부담의 일부','    factor = np.where(s >= 0, FLAT / tobler(s), down)','    t = length / C.ELDER_SPEED * factor','    return np.where(stair, t * C.STAIR_FACTOR, t)','','def wheel_time(length, s, stair):    # 휠체어: 1/12 초과는 사실상 회피, 계단 불가','    up = np.maximum(s, 0)','    t = length / (C.WHEEL_SPEED * np.maximum(0.4, 1 - 5 * up))','    t = np.where(np.abs(s) > C.WHEEL_LIMIT, t * C.WHEEL_STEEP_PENALTY, t)','    return np.where(stair, np.inf, t)'].join('\n');
   box(s, 0.6, 1.4, 8.8, 3.7, C.soft);

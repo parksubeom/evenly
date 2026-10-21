@@ -230,6 +230,31 @@ def main():
         print(f"!! matplotlib 없음 ({sys.executable}) → 그림은 누락으로 처리하고 계속 (가짜 빌드라 경고만)")
     S = lambda n: os.path.join(src, n)
     R = lambda n: read_csv(S(n))
+    # [10/21] 갈래 A 실제 반출 = 대상 5개 구 (run_meta target_gu). 관악 장(2·4·14·17·20·21·22·24)은 관악 동·격자만:
+    #   dong_hbi = adm_cd 11620…, grid_hbi·intervention_grid = 격자 가운데가 든 공개 행정동(dong 경계)이 관악구.
+    #   그 밖 파일(validation_sites·sensitivity·ablation 등)은 그대로 = 5개 구 (16·29장에서 "5개 구"로 밝힘)
+    rmS = {r["key"]: r["value"] for r in (read_csv(S("run_meta.csv")) or []) if r.get("key")}
+    tgS = [g.strip() for g in (rmS.get("target_gu") or "").split(",") if g.strip()]
+    SCOPE = "관악구" if (source == "real" and not a.no_export and "관악구" in tgS and len(tgS) > 1) else None
+    if SCOPE:
+        _dongs, _gc, _R5 = load_dongs(None), {}, R
+        def _in_scope(g):
+            k = (g.get("cell_x"), g.get("cell_y"))
+            if k not in _gc:
+                cx, cy = num(k[0]), num(k[1])
+                d = dong_of(cx, cy, _dongs) if cx is not None and cy is not None else None
+                _gc[k] = bool(d and d.get("gu") == SCOPE)
+            return _gc[k]
+        def R(n):
+            rows = _R5(n)
+            if rows is None:
+                return None
+            if n == "dong_hbi.csv":
+                return [r for r in rows if str(r.get("adm_cd", "")).startswith("11620")]
+            if n in ("grid_hbi.csv", "intervention_grid.csv"):
+                return [g for g in rows if _in_scope(g)]
+            return rows
+        print(f"[10/21] 대상 {len(tgS)}개 구 반출 ({', '.join(tgS)}) → 관악 장은 {SCOPE} 동·격자만 (dong_hbi adm_cd 11620, 격자 = 공개 행정동 경계)")
     B = Box()
     os.makedirs(IMG_DIR, exist_ok=True)
     for f in os.listdir(IMG_DIR):                     # 지난 실행의 그림이 남아 섞이지 않도록
@@ -245,6 +270,20 @@ def main():
     abl = {(r["scenario"].strip(), r["metric"].strip()): num(r["value"]) for r in (R("validation_ablation.csv") or [])}
     targets = [t for t in ["medical", "bus", "elderly", "station", "station_ev", "pharmacy"] if t in sm or any(g["target"] == t for g in grid)]
     T0 = "medical" if "medical" in targets else (targets[0] if targets else "medical")
+    if SCOPE:                                          # [10/21] summary(5개 구 합)의 T0 건물 수·왕복 추가 문턱별 수·비율을 관악 동 합으로 다시 (다시 셀 수 없는 값은 뺌)
+        N5 = (sm.get(T0) or {}).get("분석 건물 수")
+        dhS = R("dong_hbi.csv") or []
+        nbS = sum(num(r.get("n_bld")) or 0 for r in dhS)
+        mS = {"분석 건물 수": nbS}
+        for b_ in (3, 5, 10, 15):
+            if any(f"n_add{b_}m" in r for r in dhS):
+                c_ = sum(num(r.get(f"n_add{b_}m")) or 0 for r in dhS)
+                mS[f"왕복 추가 {b_}분 이상 건물 수"], mS[f"왕복 추가 {b_}분 이상 비율"] = c_, (c_ / nbS if nbS else None)
+        sm[T0] = mS
+        B.fields["V6.13.n_bld5"] = {"value": (f"{int(N5) // 10000}만 {int(N5) % 10000:,}개" if int(N5) % 10000 else f"{int(N5) // 10000}만 개") if N5 else None,
+                                    "label": "13장: 5개 구 분석 건물 수 (summary 분석 건물 수, 다시 계산 전)", "need": ["summary.csv"], "optional": True}
+        B.fields["V6.13.gus5"] = {"value": "·".join(g[:-1] if g.endswith("구") and len(g) > 2 else g for g in tgS), "label": "13장: 대상 구", "need": ["run_meta.csv target_gu"], "optional": True}
+        print(f"[10/21] 관악 다시 계산: 동 {len(dhS)}곳 · 건물 {int(nbS):,} · 왕복 +10분 {int(mS.get('왕복 추가 10분 이상 건물 수') or 0):,} (5개 구 {int(N5 or 0):,})")
     # [10/20] 실제판 = (가) 반출 + (나) 현장 메모 + (다) 공개 자료 계산. 메모·공개 계산은 반출에 없는 파일 자리에만 (반출 값이 있으면 반출)
     MEMO = json.load(open(a.memo, encoding="utf-8")) if a.memo and os.path.exists(a.memo) else None
     PUB = json.load(open(a.public, encoding="utf-8")) if a.public and os.path.exists(a.public) else None
@@ -252,9 +291,48 @@ def main():
     ALLMODE = (rm0.get("rep_mode") or attr_mode or (MEMO or {}).get("mode") or "") == "all"
     if ALLMODE and "medical" not in targets and "pharmacy" in targets:   # all 방식: 의료시설이 건물로 안 잡혀 약국 점만 → 기준 목적지 = 약국
         T0 = "pharmacy"
+    # [10/21] 실제 반출에 09(봉천 시설)·08(민감도)이 있으면 메모 자리 값을 반출 값으로 (같은 장 배치, 출처 = 반출 → V6.lxexp).
+    #   DEM 1m 높이 차(rise_dem1m_m)는 반출에 없어 메모 그대로. 연결률 = 반출 check_report.txt
+    LXX = False
+    if MEMO and source == "real" and not a.no_export:
+        xs_ = R("intervention_summary.csv") or []
+        fb_ = lambda tg: next((r for r in xs_ if "봉천" in (r.get("facility") or "") and r.get("target") == tg), None)
+        bm9 = fb_(T0) or fb_("pharmacy") or fb_("medical")
+        if bm9 and num(bm9.get("rise_m")) is not None and num(bm9.get("pass_s")) is not None:
+            MEMO = json.loads(json.dumps(MEMO))
+            b9 = MEMO.setdefault("09_bongcheon", {})
+            nv = lambda v: num(v) if num(v) is not None else v
+            b9.update(rise_m=num(bm9["rise_m"]), pass_min=num(bm9["pass_s"]) / 60)
+            b9["pharmacy"] = {k: nv(bm9.get(k, "")) for k in ("n_benefit", "n_benefit_any", "mean_saved_min", "wheel_cut_n", "wheel_cut_p50_m")}
+            bs9 = fb_("station")
+            if bs9:
+                b9["station"] = {k: nv(bs9.get(k, "")) for k in ("n_benefit", "n_benefit_any", "mean_saved_min")}
+            xw_ = [r for r in (R("intervention_wait.csv") or []) if "봉천" in (r.get("facility") or "") and r.get("target") == bm9.get("target")]
+            w_ = next(((num(r["wait_s"]), num(r["pass_s"])) for r in xw_ if num(r.get("wait_s")) is not None and num(r.get("pass_s")) is not None), None)
+            if w_:
+                b9["wait_s"] = round(num(bm9["pass_s"]) - (w_[1] - w_[0]))           # 기본 대기 = 통과(기본) − (통과(대기 w) − w)
+            if xw_:
+                b9["wait_pharmacy_wheel"] = {f"{num(r['wait_s']):g}": num(r["wheel_benefit"]) for r in xw_ if num(r.get("wait_s")) is not None and num(r.get("wheel_benefit")) is not None}
+            vr9 = next((r for r in (R("validation_routes.csv") or []) if "봉천 선정지" in (r.get("name") or "")), None)
+            if vr9 and num(vr9.get("straight_m")) is not None:
+                b9["straight_m"] = num(vr9["straight_m"])
+            xsen = R("sensitivity.csv") or []
+            if xsen:
+                bs_ = next((r for r in xsen if (r.get("scenario") or "").strip() == "기본값"), None)
+                MEMO["08_sensitivity"] = {"base_median": num(bs_.get("hbi_median")) if bs_ else None,
+                                          "rows": [{"scenario": r["scenario"].strip(), "rank_corr": num(r.get("rank_corr_vs_base")), "top10_match_pct": (num(r.get("top10_overlap")) or 0) * 100}
+                                                   for r in xsen if (r.get("scenario") or "").strip() != "기본값" and num(r.get("rank_corr_vs_base")) is not None]}
+            crp = os.path.join(base, "check_report.txt")
+            if os.path.exists(crp):
+                lk_ = dict(re.findall(r"^\s*(layer|register)\s+연결률\s+([0-9.]+%)", open(crp, encoding="utf-8-sig", errors="replace").read(), flags=re.M))
+                if lk_:
+                    MEMO["check_link_rate"] = {**(MEMO.get("check_link_rate") or {}), **lk_}
+            LXX = True
+            print(f"[10/21] 메모 자리 = 반출 값 (09 봉천 {bm9.get('target')}·역, 08 민감도 {len(xsen)}줄, 연결률 check_report) · DEM 1m 높이 차만 메모")
     SYN = syn_files(MEMO, PUB, T0) if (MEMO or PUB) else {}
     R0 = R
-    R = lambda n: (lambda rows: rows if rows is not None else SYN.get(n))(R0(n))
+    # [10/21] 반출 09 를 메모 갈래로 쓸 때는 intervention_summary 도 SYN (봉천 = 반출 값 줄 + 후보 = 공개 계산 줄)
+    R = lambda n: SYN[n] if (LXX and n == "intervention_summary.csv" and SYN.get(n)) else (lambda rows: rows if rows is not None else SYN.get(n))(R0(n))
     if SYN:
         print(f"[10/20] 반출에 없으면 메모·공개 계산으로: {', '.join(f'{k} {len(v)}줄' for k, v in SYN.items())}"
               f" · all 방식 {'예' if ALLMODE else '아니오'} · 기준 목적지 {T0}")
@@ -404,6 +482,7 @@ def main():
     optional("ABL.pub_miss", "공개데이터로 놓치는 LX 1.3 이상 격자 비율", ["results/public_baseline/compare_station.csv"], f_pct(miss_pub, 0))
     optional("ABL.pub_note", "공개데이터 대조군 비고", ["results/public_baseline/compare_station.csv"], cmpd.get("비고") or None)
     optional("ABL.pub_n", "공통 격자 수", ["results/public_baseline/compare_station.csv"], cmpd.get("공통 격자 수") or None)
+    optional("ABL.pub_hi_n", "LX HBI 1.3 이상 공통 격자 수", ["results/public_baseline/compare_station.csv"], cmpd.get("LX HBI 1.3 이상 격자 수") or None)   # [10/21] 칸이 적으면 % 대신 곳 수
     dj = opt_file("dong_joined.csv")
     if dj and not test and os.path.dirname(os.path.abspath(dj)) != src:
         # [v6.1] 실제 빌드에서 밖(results/)의 dong_joined.csv 는 outside_join_dong.py 가 실제 반출(raw_export)로 만든 것만 받음
@@ -618,7 +697,8 @@ def main():
             skt_by_code[code] = v
     kcb_by_code = {r["adm_cd"]: num(r.get(kcb_key)) for r in (kcb_rows or []) if num(r.get(kcb_key)) is not None} if (kcb_rows and KCB_EXPECT in (kcb_key or "")) else {}
     v6_keys(B, S, R, sm, grid, T0, source, a.bands, routes, site_rows, ew, isum, opt_file,
-            {"skt_by_code": skt_by_code, "kcb_by_code": kcb_by_code, "inputs": inp, "abl": abl, "memo": MEMO, "pub": PUB, "allmode": ALLMODE})
+            {"skt_by_code": skt_by_code, "kcb_by_code": kcb_by_code, "inputs": inp, "abl": abl, "memo": MEMO, "pub": PUB, "allmode": ALLMODE,
+             "lxexp": LXX, "scope": SCOPE})
 
     # ── 그림 ──
     plots = make_plots(B, grid, targets, T0, vs, site_rows, skt_plot, rho, p_rho)
@@ -1029,6 +1109,15 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
         lab, val = "서울시 선정지 " + "·".join(x["name"].split()[-1] for x in done) + f"의 위치 ({gu16} 격자 중)", " · ".join(x["top_text"] for x in done)
     else:
         lab, val = "서울시 2025 선정지 5곳 중 상위 10%", None
+    if extra.get("scope") and 2 <= len(done) < 5:       # [10/21] 갈래 A (5개 구): 서울시 1단계 선정지 중 계산된 곳을 순위대로 (같은 반경 원끼리 비교한 백분위)
+        dn_ = sorted(done, key=lambda x: -x["percentile"])
+        sn_ = lambda x: next((w[:-1] for w in x["name"].split() if w.endswith("동")), x["name"])
+        lab = "서울시 1단계 선정지, 5개 구 격자 중 상위"
+        val = " · ".join(f"{sn_(x)} {x['top_text'].replace('상위 ', '')}" for x in dn_)
+        P("V6.16.sites_n", "16장: 백분위를 낸 1단계 선정지 수", ["validation_sites.csv"], str(len(done)), optional=True)
+        P("V6.16.sites_top3", "16장: 계산된 선정지가 모두 상위 3분의 1 안", ["validation_sites.csv"], "yes" if all((1 - x["percentile"]) <= 1 / 3 for x in done) else "no", optional=True)
+        P("V6.16.sites_na", "16장: 계산 안 된 선정지 (자료 가장자리)", ["validation_sites.csv (n_bld 0)"],
+          "·".join(lb.split()[-1][:-1] for k_, lb in SITE_SHORT if not any(k_ in x["name"] for x in done)) or None, optional=True)
     P("V6.16.site_label", "선정지 줄 이름", [], lab, optional=True)
     P("V6.16.site", "선정지 백분위", ["validation_sites.csv"], val, later="5개 구 결과 후")
     # [10/21] 서울시 2단계 대상지(봉천초 인근, 서울 오르락)가 든 250m 격자의 백분위 = 그 격자 평균 HBI 보다 낮은 격자의 비율 (반출 grid_hbi, T0).
@@ -1058,7 +1147,11 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     P("V6.16.daehyun_note", "대현산 줄", [], "대현산(서울시 약 770m)은 5개 구 결과 후" if bc and not dh else None, optional=True)
     gv = lambda k: (B.fields.get(k) or {}).get("value")
     P("V6.16.meas_r", "현장실측 예측 vs 실측 r", ["validation_routes.csv (measured_min 3개 이상)"], f"r = {gv('VALID.meas_r')}" if gv("VALID.meas_r") else None, later="실측 후")
-    P("V6.16.pub_miss", "공개데이터만 쓰면 놓치는 체감 부담 구간", ["results/public_baseline/compare_station.csv (실제 LX 결과와 비교)"], gv("ABL.pub_miss"), later="실제 결과 후")
+    hn_, pm_ = num(gv("ABL.pub_hi_n")), num(str(gv("ABL.pub_miss") or "").rstrip("%"))
+    pmv_ = gv("ABL.pub_miss")
+    if hn_ is not None and pm_ is not None and hn_ < 20:     # [10/21] 비교 칸이 20곳 미만이면 비율 대신 "n곳 중 m곳" (5개 구 공통 격자)
+        pmv_ = f"{int(hn_)}곳 중 {int(round(hn_ * pm_ / 100))}곳"
+    P("V6.16.pub_miss", "공개데이터만 쓰면 놓치는 체감 부담 구간", ["results/public_baseline/compare_station.csv (실제 LX 결과와 비교)"], pmv_, later="실제 결과 후")
     dmiss = next((r.get("value") for r in (R("validation_ablation.csv") or []) if r.get("metric", "").startswith("그 건물 수 (평지 지도가 놓친")), None)
     P("V6.16.dem_missed", "평지 지도가 놓친 취약 건물 수 (경사 반영 상위 10% 중 평지 기준 상위 10% 밖)", ["validation_ablation.csv (04, v6.3)"],
       f"{f_int(num(dmiss))}개" if num(dmiss) is not None else ((dmiss or "").replace("채", "개") or None), optional=True)
@@ -1488,6 +1581,7 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     # ── [10/20] 실제판: all 방식 표기, 현장 메모·공개 계산 칸 ──
     memo, pub, allm = extra.get("memo") or {}, extra.get("pub") or {}, bool(extra.get("allmode"))
     P("V6.allmode", "모든 건물 기준(all 방식)", ["run_meta.csv rep_mode 또는 현장 메모"], "yes" if allm else None, optional=True)
+    P("V6.lxexp", "메모 자리 값이 반출(09·08)에서 옴 → 출처 '반출'", ["intervention_summary.csv·sensitivity.csv (반출)"], "yes" if extra.get("lxexp") else None, optional=True)   # [10/21]
     P("V6.dest", "기준 목적지 이름", [], "약국" if allm else "병원·약국", optional=True)
     dm_ = next((r for r in (memo.get("08_sensitivity") or {}).get("rows", []) if r["scenario"].startswith("DEM 1m")), None)
     P("V6.16.dem1m", "DEM 1m 로 다시 계산한 순위상관 (1m 범위 안 집)", ["10/20 현장 메모 (08 민감도)"],
@@ -1550,7 +1644,7 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
       f"시설 효과만: 고령자 {agg('n_benefit')} · 휠체어 {agg('wheel_benefit')}" if wr else None, later="실제 결과 후")   # [10/14] 단위는 칸마다 (5개 미만)
     P("V6.29.facility_w", "대기시간 비교 문턱", [], "·".join(f"{w:g}" for w in ws_) + "초" if ws_ else None, optional=True)
     mw_ = ((extra.get("memo") or {}).get("09_bongcheon") or {}).get("wait_pharmacy_wheel")
-    if not wr and mw_:                                     # [10/20] 09 대기 비교 = 현장 메모 (봉천, 약국)
+    if mw_ and (not wr or extra.get("lxexp")):             # [10/20] 09 대기 비교 = 현장 메모 (봉천, 약국)   # [10/21] 반출 값이면 같은 문장 (출처 반출)
         ks_ = sorted(mw_, key=float)
         P("V6.29.facility_w", "대기시간 비교 문턱", ["10/20 현장 메모"], "·".join(ks_) + "초", optional=True)
         P("V6.29.facility_txt", "대기시간 비교 문장", ["10/20 현장 메모 (09 봉천, 약국)"],
