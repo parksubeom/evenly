@@ -604,13 +604,13 @@ if (!hasR('V6.15.has_meas') && (REAL || FALLBACK)) {
   const np16 = ['자동차전용도로·단독/공동주택 구분', '공개 자료에는 없음', C.ink, 15];
   (FALLBACK ? [rz16, np16].filter(Boolean) : (() => { const d16 = V('V6.16.dem_top10');
     return [[`5m 높이를 빼면, 가장 급한 상위 10% 중 바뀌는 ${BLDS()}${hasR('V6.13.n_bld5') ? ' (5개 구)' : ''}`, has('V6.16.dem_missed') ? `${d16} (${R.fields['V6.16.dem_missed'].value})` : d16, C.acc, 18],
-            ['공개 지형(30m)과 공개 보행망만 쓰면 놓치는 부담 구간', V('V6.16.pub_miss'), C.ink, 18], rz16 || np16]; })())
+            ['500m로 묶어 평균 내면 가려지는 부담 큰 건물 (HBI 1.8 이상)', V('V6.16.agg500'), C.ink, 18], rz16 || np16]; })())   // [10/21] 공개 대조 줄 대신 500m 집계 (validation_ablation)
     .forEach((r, i) => stat(s, 5.3, 1.95+i*g16, 4.1, r[0], r[1], Object.assign({ size:r[3], color:r[2] },
-      r === rz16 ? { suffix:`  (서울시 공식 ${OR.bongcheon1.rise_m}m)` } : (i === 1 && !FALLBACK && hasR('V6.13.n_bld5')) ? { suffix:'  (5개 구 공통 격자)' } : {})));   // [10/21] 서울 오르락 고저차 · 5개 구 비교
+      r === rz16 ? { suffix:`  (서울시 공식 ${OR.bongcheon1.rise_m}m)` } : (i === 1 && REAL) ? { suffix: hasR('V6.13.n_bld5') ? '  (LX, 5개 구)' : '  (LX)' } : {})));   // [10/21] 서울 오르락 고저차 · 500m 집계 출처
   takeaway(s, '그래서 이 결과는 믿을 만하고, 이 계산에는 LX의 5m 높이가 꼭 필요합니다.', 4.55);
   const notes16 = [has('V6.16.wheel_note') ? R.fields['V6.16.wheel_note'].value : null, has('V6.16.daehyun_note') ? R.fields['V6.16.daehyun_note'].value : null].filter(Boolean).join(' · ');
   src(s, FALLBACK ? `선정지 백분위 = 1차 반출(10/2) 값 · DEM 1m 순위상관·봉천 높이 차 LX = ${LXS} (10/20 현장 메모) · 공개 지형 높이 차 = 공개 자료 계산 · 서울시 공식 = 서울 오르락 · 보행속도 출처는 부록 2`
-    : (REH ? '공개 대역(리허설) 값 · ' : '') + (ALLM() ? `${LXS} (${hasR('V6.lxexp') ? '반출' : '10/19 반출·10/20 현장 메모 DEM 1m'}) · 공개 대조군 = 공개 자료 보행망 · `
+    : (REH ? '공개 대역(리허설) 값 · ' : '') + (ALLM() ? `${LXS} (${hasR('V6.lxexp') ? '반출' : '10/19 반출·10/20 현장 메모 DEM 1m'}) · `
       + (has('V6.16.rise_pub') ? `봉천 높이 차: 공개 = 공개 자료 계산, LX = ${hasR('V6.lxexp') ? '반출(09)·DEM 1m = 현장 메모' : '현장 메모(09)'}, 서울시 = 서울 오르락 · ` : '') : '') + '선정지 백분위 = 반경 300m 원 평균'
       + (hasR('V6.16.sites_n') ? ` (5개 구${hasR('V6.16.sites_na') ? `, ${R.fields['V6.16.sites_na'].value}은 자료 가장자리라 계산 안 됨` : ''})` : '')
     + (s2v16 ? `, 2단계 = 그 250m 격자 (위치: 국토정보필지 공개판)` : '') + ' · 대조군·계단·보행속도 출처는 부록 2'); }   // [10/14 v11] 한 줄만, 나머지는 부록 2   // [10/21] 2단계 대상지
@@ -656,10 +656,17 @@ if (CANDT) {
                { x:0.6, y:1.5, w:8.8, h:0.22, fontSize:9, bold:true, color:C.ink });
   etable(s, rows, { y: mixed ? 1.76 : 1.55, colW:cw, rowH:[0.38].concat(CANDT.map(() => 0.27)), fontSize:9.5 });   // [10/14 v14] 맑은 고딕(줄 높이 큼)에서도 막대와 띄움   // [10/21] 순서 줄만큼 내림
   const lxb = mixed && !memoRow && hasR('V6.17.lx_bong');   // [10/20] 각주 (LX 봉천) 자리
+  // [10/21] 표 아래 한 줄: LX 반출로 본 고립 위험 = 후보 1·2(은천동)가 크고 3~5 는 작음. 반출 값이 이 문장과 맞을 때만 (안 맞으면 빌드 멈춤)
+  const lx17 = (() => { if (!(REAL && mixed && !noLx && hasR('V6.17.lx_ranks'))) return false;
+    const nr = r => Number(r.n_risk) || 0, cs = CANDT.filter(r => r.kind === '후보'), t2 = cs.filter(r => ['후보1', '후보2'].includes(r.name)), rest = cs.filter(r => !t2.includes(r));
+    const ok = t2.length === 2 && t2.every(r => /은천/.test(r.loc)) && rest.every(r => nr(r) < 0.1 * Math.min(...t2.map(nr)));
+    if (!ok) { console.error('!! 17장 "후보 1·2(은천동)" 한 줄이 반출 값과 맞지 않음 — 문장을 고칠 것'); process.exitCode = 1; }
+    return ok; })();
   const yb17 = mixed ? 4.0 : 4.06, hb17 = mixed ? 0.78 : 1.04;   // [10/21] mixed = 각주(LX 봉천·후보 순위) + 출처 자리: 막대를 줄임 (경사로 줄은 처방 규칙·표에 이미 있음)
   bar(s, 0.6, yb17, hb17);
   T(s, [{ text:'처방 규칙  ', options:{ bold:true, color:C.ink } }, { text:Q('V6.17.cand_rule', '500m 안 기존 시설 → 기존 시설 연계 / 높이 차 3m 이하 → 바로 정비 (경사로) / 엘리베이터 1억 원당 수혜 건물 5개 이상 → 큰 시설 검토 / 미만 → 정비 + 방문돌봄 (엘리베이터 1곳 40억 원)'), options:{ color:C.text, breakLine:true } },
         ...((has('V6.17.ramp_note') && !mixed) ? [{ text:R.fields['V6.17.ramp_note'].value, options:{ color:C.ink, breakLine:true } }] : []),   // [10/14 v12] 경사로 분리 한 줄
+        ...(lx17 ? [{ text:'LX 자료로 다시 보면 고립 위험이 큰 곳은 후보 1·2(은천동)이고, 후보 3~5는 시설보다 작은 정비가 맞을 수 있습니다.', options:{ color:C.accD, bold:true, breakLine:true } }] : []),   // [10/21]
         { text: (mixed && !memoRow) ? '이 표는 서울시 선정(봉천)을 뒤집자는 것이 아니라, 같은 예산의 비교 근거를 더합니다. 봉천의 시설 효과는 20장(LX 자료)에서 봅니다.'
               : hasR('V6.20.memo') ? '서울시 선정지(봉천)는 휠체어가 약국 가는 길을 크게 줄여 주는 곳입니다. 이 표는 선정을 뒤집자는 것이 아니라, 같은 예산의 비교 근거를 더합니다.'
                                    : '서울시 선정지(봉천)는 역까지 가는 휠체어 접근 효과가 큰 곳입니다. 이 표는 선정을 뒤집자는 것이 아니라, 같은 예산의 비교 근거를 더합니다.', options:{ color:C.ink, bold:true } }],

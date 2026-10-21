@@ -1156,6 +1156,9 @@ def v6_keys(B, S, R, sm, grid, T0, source, bands, routes, site_rows, ew, isum, o
     P("V6.16.dem_missed", "평지 지도가 놓친 취약 건물 수 (경사 반영 상위 10% 중 평지 기준 상위 10% 밖)", ["validation_ablation.csv (04, v6.3)"],
       f"{f_int(num(dmiss))}개" if num(dmiss) is not None else ((dmiss or "").replace("채", "개") or None), optional=True)
     P("V6.16.dem_top10", "높이(DEM)를 빼면 바뀌는 상위 10%", ["validation_ablation.csv"], gv("ABL.dem_top10"))
+    a5_ = (extra.get("abl") or {}).get(("500m 격자 평균으로 집계", "HBI 1.8 이상 건물 중 평균이 1.3 미만인 격자에 가려진 비율"))   # [10/21] 16장: 500m 로 묶으면 가려지는 부담 큰 건물
+    P("V6.16.agg500", "500m 격자로 묶어 평균 내면 가려지는 부담 큰 건물 (HBI 1.8 이상 중 평균 1.3 미만 격자)", ["validation_ablation.csv (500m 격자 평균으로 집계)"],
+      f"{a5_ * 100:.0f}%" if a5_ is not None else None)
     st_ = (extra.get("abl") or {}).get(("계단 레이어 제외", "계단을 통행가능으로 잘못 가정할 때 휠체어 시간 과소추정 비율(평균)"))
     P("V6.16.stairs", "계단을 빼면 휠체어 시간 과소 계산", ["validation_ablation.csv"], f"평균 {f_pct(st_, 1)}" if st_ is not None else None)
 
